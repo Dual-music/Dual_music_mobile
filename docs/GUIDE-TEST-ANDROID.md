@@ -41,6 +41,38 @@ Option simple (depuis Android Studio) :
 - S'il propose **Trust Project** → **Trust**.
 - S'il propose d'installer un composant SDK manquant → **accepte**.
 
+## Alternative — Tester sur un émulateur (sans téléphone)
+
+Comme avec Flutter, Android Studio inclut un **émulateur** (téléphone virtuel sur le PC).
+Tu peux donc tester **sans téléphone physique**. Deux façons de faire :
+
+- **Option A** — sur ton **téléphone** (Étapes 4-5 ci-dessous) : meilleur pour la vidéo/les
+  cadeaux (matériel réel).
+- **Option B** — sur l'**émulateur** (ci-dessous) : pratique au quotidien, aucun téléphone requis.
+
+### Créer et lancer un émulateur
+
+1. Dans Android Studio : icône **Device Manager** (à droite) ou **Tools → Device Manager**.
+2. **Create Device** → choisis un modèle (ex. **Pixel 7**) → **Next**.
+3. Choisis une image système (ex. **API 35**, télécharge-la si besoin) → **Next** → **Finish**.
+4. Clique le **▶** à côté de l'émulateur : un téléphone virtuel s'ouvre sur ton écran.
+5. Ensuite, sélectionne cet émulateur dans le sélecteur d'appareil et clique **▶ Run** —
+   l'app s'installe dedans.
+
+### ⚠️ À savoir sur l'émulateur
+
+- **Virtualisation requise** : l'émulateur a besoin que la **virtualisation soit activée
+  dans le BIOS** (Intel VT-x / AMD-V). S'il refuse de démarrer, active-la dans le BIOS, ou
+  active *« Plateforme d'hyperviseur Windows »* dans *« Activer/désactiver des
+  fonctionnalités Windows »*.
+- **Vidéo / cadeaux GPU** : l'émulateur est **parfait pour l'UI et les flux** (connexion,
+  feed, navigation), mais **faible pour la vidéo live et les shaders GPU** (émulés, donc
+  lents). Pour tester le **live et les cadeaux animés**, préfère le **téléphone physique**.
+- **iOS** : il n'existe **aucun émulateur iOS sur Windows** (le simulateur iOS est réservé à
+  macOS). Cette alternative ne concerne qu'Android.
+
+> Si tu utilises l'émulateur, tu peux **sauter les Étapes 4 et 5** ci-dessous.
+
 ## Étape 4 — Préparer le téléphone
 
 1. **Paramètres → À propos du téléphone** → tape **7 fois** sur **Numéro de build** →
