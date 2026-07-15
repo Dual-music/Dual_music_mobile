@@ -1,0 +1,40 @@
+# --- Général ---
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+
+# --- iOS / Xcode / SwiftPM ---
+ios/**/.build/
+ios/**/DerivedData/
+ios/**/*.xcuserstate
+ios/**/xcuserdata/
+ios/**/.swiftpm/
+*.ipa
+*.dSYM.zip
+
+# --- Android / Gradle ---
+.gradle/
+**/build/
+local.properties
+*.apk
+*.aab
+*.keystore
+!debug.keystore
+android/**/.cxx/
+
+# --- KMM / Kotlin ---
+shared-domain/build/
+**/*.klib
+
+# --- IDE ---
+.idea/
+*.iml
+.vscode/
+
+# --- Fastlane ---
+**/fastlane/report.xml
+**/fastlane/Preview.html
+**/fastlane/screenshots/**/*.png
+**/fastlane/test_output/
