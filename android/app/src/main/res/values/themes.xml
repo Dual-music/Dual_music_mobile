@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Thème d'amorçage de l'Activity (avant que Compose prenne la main).
+      Fond sombre = cohérent avec le thème par défaut Dual Music ; sans barre d'action.
+    -->
+    <style name="Theme.DualMusic" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#141119</item>
+        <item name="android:navigationBarColor">#141119</item>
+        <item name="android:windowBackground">#141119</item>
+    </style>
+</resources>
