@@ -35,6 +35,11 @@ android {
 
 dependencies {
     implementation(project(":core:ui"))
+    // Lot connexion : écran d'auth + fondation (tirée transitivement).
+    implementation(project(":feature:auth"))
+    implementation(project(":core:network"))
+    implementation(project(":core:auth"))
+    implementation(project(":shared-domain"))
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
@@ -42,5 +47,9 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
+    // ViewModel + collecte d'état lifecycle-aware dans Compose.
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

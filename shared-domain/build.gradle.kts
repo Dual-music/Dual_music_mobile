@@ -22,10 +22,14 @@ kotlin {
     }
 
     // Cibles iOS → un framework Objective-C consommable depuis Swift.
-    listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach { target ->
-        target.binaries.framework {
-            baseName = "SharedDomain"
-            isStatic = true
+    // Déclarées UNIQUEMENT sur macOS : le compilateur Kotlin/Native iOS n'existe pas sous
+    // Windows/Linux, donc on évite de configurer ces cibles pour un build Android.
+    if (System.getProperty("os.name").startsWith("Mac", ignoreCase = true)) {
+        listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach { target ->
+            target.binaries.framework {
+                baseName = "SharedDomain"
+                isStatic = true
+            }
         }
     }
 

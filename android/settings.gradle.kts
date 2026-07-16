@@ -26,7 +26,13 @@ rootProject.name = "DualMusicMobile"
 include(":app")
 include(":core:ui")
 
-// Modules disponibles, à activer quand on branche les écrans réels :
-// include(":shared-domain") ; project(":shared-domain").projectDir = file("../shared-domain")
-// include(":core:network", ":core:realtime", ":core:auth", ":core:media")
-// include(":feature:auth", ":feature:live", ":feature:feed")
+// Lot « connexion » : fondation réseau/auth + shared-domain + écrans d'auth.
+// shared-domain vit HORS du dossier android/ (mono-repo) → on mappe son projectDir.
+include(":shared-domain")
+project(":shared-domain").projectDir = file("../shared-domain")
+include(":core:network")
+include(":core:auth")
+include(":feature:auth")
+
+// À activer aux lots suivants (feed / live / vidéo) :
+// include(":core:realtime", ":core:media", ":feature:live", ":feature:feed")
