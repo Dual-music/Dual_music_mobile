@@ -14,7 +14,9 @@ let package = Package(
         .library(name: "CoreUI", targets: ["CoreUI"]),
     ],
     targets: [
-        .target(name: "CoreUI"),
+        // `resources: [.process(...)]` embarque le logo web (Resources/dm_logo.png),
+        // accessible via `Bundle.module`.
+        .target(name: "CoreUI", resources: [.process("Resources")]),
         .testTarget(name: "CoreUITests", dependencies: ["CoreUI"]),
     ]
 )

@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
+import com.dualmusic.core.ui.components.DMLogo
 import com.dualmusic.core.ui.theme.DualMusicTheme
 
 /**
@@ -50,10 +51,9 @@ fun SignInScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.lg),
     ) {
-        Text(
-            "Dual Music",
-            color = colors.foreground,
-            textAlign = TextAlign.Center,
+        // Logo officiel (identique au web) en en-tête.
+        DMLogo(
+            height = 72.dp,
             modifier = Modifier.padding(top = DualMusicTheme.spacing.xxl),
         )
         Text("Connecte-toi pour rejoindre les lives", color = colors.mutedForeground)
