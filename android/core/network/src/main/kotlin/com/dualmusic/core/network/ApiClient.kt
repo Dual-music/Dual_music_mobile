@@ -20,6 +20,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 
@@ -51,8 +52,13 @@ class ApiClient(
 
     // MARK: API publique
 
-    /** Exécute une requête et renvoie `data` typé. */
-    suspend fun <T> request(endpoint: Endpoint, dataSerializer: DeserializationStrategy<T>): T {
+    /**
+     * Exécute une requête et renvoie `data` typé.
+     * `dataSerializer` doit être un [KSerializer] (et non un simple [DeserializationStrategy]) :
+     * `ApiResponse.serializer(...)` généré exige un `KSerializer<T>` pour construire le
+     * sérialiseur de l'enveloppe.
+     */
+    suspend fun <T> request(endpoint: Endpoint, dataSerializer: KSerializer<T>): T {
         val raw = executeWithRefresh(endpoint)
         return unwrap(raw, ApiResponse.serializer(dataSerializer))
     }
