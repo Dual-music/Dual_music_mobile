@@ -65,12 +65,14 @@ class ProfileViewModel(private val repository: ProfileRepository) : ViewModel() 
  *
  * @param viewModel source d'état.
  * @param onOpenWallet ouvre le portefeuille.
+ * @param onOpenNotifications ouvre le centre de notifications.
  * @param onSignOut déconnexion (efface la session).
  */
 @Composable
 fun ProfileScreen(
     viewModel: ProfileViewModel,
     onOpenWallet: () -> Unit,
+    onOpenNotifications: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
@@ -115,6 +117,7 @@ fun ProfileScreen(
         ))
 
         DMButton("Mon portefeuille", onClick = onOpenWallet)
+        DMButton("Notifications", style = DMButtonStyle.SECONDARY, onClick = onOpenNotifications)
         DMButton("Se déconnecter", style = DMButtonStyle.OUTLINE, onClick = onSignOut)
     }
 }

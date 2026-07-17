@@ -65,6 +65,9 @@ import com.dualmusic.feature.feed.FeedScreen
 import com.dualmusic.feature.feed.FeedViewModel
 import com.dualmusic.feature.live.LiveRepository
 import com.dualmusic.feature.live.LiveViewModel
+import com.dualmusic.feature.notifications.NotificationRepository
+import com.dualmusic.feature.notifications.NotificationsScreen
+import com.dualmusic.feature.notifications.NotificationsViewModel
 import com.dualmusic.feature.profile.ProfileRepository
 import com.dualmusic.feature.profile.ProfileScreen
 import com.dualmusic.feature.profile.ProfileViewModel
@@ -115,6 +118,9 @@ class AppContainer(context: Context) {
     // --- Lot profil ---
     private val profileRepository = ProfileRepository(api)
 
+    // --- Lot notifications ---
+    private val notificationRepository = NotificationRepository(api)
+
     // --- Lot duels ---
     private val duelRepository = DuelRepository(api)
 
@@ -130,6 +136,10 @@ class AppContainer(context: Context) {
 
     /** Nouveau ViewModel de profil (identité + statistiques). */
     fun makeProfileViewModel(): ProfileViewModel = ProfileViewModel(profileRepository)
+
+    /** Nouveau ViewModel du centre de notifications (in-app + temps réel). */
+    fun makeNotificationsViewModel(): NotificationsViewModel =
+        NotificationsViewModel(notificationRepository, realtimeClient)
 
     /** Nouveau ViewModel du catalogue de duels. */
     fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository)
@@ -286,28 +296,47 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                     }
                 }
                 else -> {
-                    // Onglet Profil ; le portefeuille s'ouvre par-dessus, avec un retour.
-                    var showWallet by remember { mutableStateOf(false) }
-                    if (showWallet) {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            DMButton(
-                                "← Retour au profil",
-                                style = DMButtonStyle.OUTLINE,
-                                modifier = Modifier.padding(DualMusicTheme.spacing.md),
-                            ) { showWallet = false }
+                    // Onglet Profil ; portefeuille et notifications s'ouvrent par-dessus (retour).
+                    // 0 = profil · 1 = portefeuille · 2 = notifications
+                    var sub by remember { mutableIntStateOf(0) }
+                    when (sub) {
+                        1 -> SubScreen(onBack = { sub = 0 }) {
                             val walletVm: WalletViewModel = viewModel { container.makeWalletViewModel() }
                             WalletScreen(viewModel = walletVm)
                         }
-                    } else {
-                        val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
-                        ProfileScreen(
-                            viewModel = profileVm,
-                            onOpenWallet = { showWallet = true },
-                            onSignOut = onSignOut,
-                        )
+                        2 -> SubScreen(onBack = { sub = 0 }) {
+                            val notifVm: NotificationsViewModel = viewModel { container.makeNotificationsViewModel() }
+                            NotificationsScreen(viewModel = notifVm)
+                        }
+                        else -> {
+                            val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
+                            ProfileScreen(
+                                viewModel = profileVm,
+                                onOpenWallet = { sub = 1 },
+                                onOpenNotifications = { sub = 2 },
+                                onSignOut = onSignOut,
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * Enveloppe une sous-vue (portefeuille, notifications) avec une barre « ← Retour ».
+ * Évite de dupliquer la logique de retour et de modifier les écrans concernés.
+ */
+@Composable
+private fun SubScreen(onBack: () -> Unit, content: @Composable () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        DMButton(
+            "← Retour",
+            style = DMButtonStyle.OUTLINE,
+            modifier = Modifier.padding(DualMusicTheme.spacing.md),
+            onClick = onBack,
+        )
+        content()
     }
 }

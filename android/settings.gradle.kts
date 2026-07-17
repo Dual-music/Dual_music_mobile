@@ -55,3 +55,6 @@ include(":feature:competition")
 
 // Lot « profil » : identité, rôles, statistiques, accès portefeuille.
 include(":feature:profile")
+
+// Lot « notifications » : centre in-app + temps réel (push FCM = lot séparé, requiert Firebase).
+include(":feature:notifications")

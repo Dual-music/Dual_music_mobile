@@ -65,6 +65,8 @@ dependencies {
     implementation(project(":feature:competition"))
     // Lot profil.
     implementation(project(":feature:profile"))
+    // Lot notifications (in-app).
+    implementation(project(":feature:notifications"))
     implementation("androidx.compose.material:material-icons-extended")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
