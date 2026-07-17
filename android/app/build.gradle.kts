@@ -58,6 +58,8 @@ dependencies {
     implementation(project(":core:realtime"))
     // Lot portefeuille.
     implementation(project(":feature:wallet"))
+    // Lot duels.
+    implementation(project(":feature:duel"))
     implementation("androidx.compose.material:material-icons-extended")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")

@@ -45,3 +45,6 @@ include(":feature:feed")
 
 // Lot « portefeuille » : solde, historiques dépenses/revenus, débits (vote/cadeau).
 include(":feature:wallet")
+
+// Lot « duels » : catalogue + room (vidéo, votes payants, minuteur, chat, cadeaux).
+include(":feature:duel")

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -19,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -31,11 +33,17 @@ import com.dualmusic.core.media.LiveRoomClient
 import com.dualmusic.core.network.ApiClient
 import com.dualmusic.core.realtime.RealtimeClient
 import com.dualmusic.core.ui.theme.DualMusicTheme
+import com.dualmusic.domain.model.Duel
 import com.dualmusic.domain.model.Live
 import com.dualmusic.feature.auth.AuthRepository
 import com.dualmusic.feature.auth.AuthState
 import com.dualmusic.feature.auth.AuthViewModel
 import com.dualmusic.feature.auth.SignInScreen
+import com.dualmusic.feature.duel.DuelRepository
+import com.dualmusic.feature.duel.DuelRoomScreen
+import com.dualmusic.feature.duel.DuelViewModel
+import com.dualmusic.feature.duel.DuelsListScreen
+import com.dualmusic.feature.duel.DuelsListViewModel
 import com.dualmusic.feature.feed.FeedRepository
 import com.dualmusic.feature.feed.FeedScreen
 import com.dualmusic.feature.feed.FeedViewModel
@@ -85,11 +93,33 @@ class AppContainer(context: Context) {
     // --- Lot portefeuille ---
     private val walletRepository = WalletRepository(api)
 
+    // --- Lot duels ---
+    private val duelRepository = DuelRepository(api)
+
     /** Nouveau ViewModel de feed (liste des lives + prefetch des tokens LiveKit). */
     fun makeFeedViewModel(): FeedViewModel = FeedViewModel(feedRepository, tokenService)
 
     /** Nouveau ViewModel de portefeuille (solde + historiques). */
     fun makeWalletViewModel(): WalletViewModel = WalletViewModel(walletRepository)
+
+    /** Nouveau ViewModel du catalogue de duels. */
+    fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository)
+
+    /**
+     * Fabrique un ViewModel de room de duel (une connexion SFU par duel ouvert).
+     * Le vote payant est délégué au portefeuille (procédure atomique serveur).
+     */
+    fun makeDuelViewModel(duel: Duel): DuelViewModel {
+        val media = LiveRoomClient(appContext, tokenService, appScope)
+        return DuelViewModel(
+            duelId = duel.id,
+            roomName = duel.roomId ?: "duel:${duel.id}",
+            media = media,
+            realtime = realtimeClient,
+            repository = duelRepository,
+            wallet = walletRepository,
+        )
+    }
 
     /**
      * Fabrique un ViewModel de live pour un item du feed. Chaque room a son propre
@@ -142,6 +172,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun MainShell(container: AppContainer) {
     var tab by remember { mutableIntStateOf(0) }
+    // Duel actuellement ouvert (null = on affiche le catalogue).
+    var openDuel by remember { mutableStateOf<Duel?>(null) }
     val colors = DualMusicTheme.colors
 
     Scaffold(
@@ -155,7 +187,13 @@ private fun MainShell(container: AppContainer) {
                 )
                 NavigationBarItem(
                     selected = tab == 1,
-                    onClick = { tab = 1 },
+                    onClick = { tab = 1; openDuel = null },
+                    icon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) },
+                    label = { Text("Duels") },
+                )
+                NavigationBarItem(
+                    selected = tab == 2,
+                    onClick = { tab = 2 },
                     icon = { Icon(Icons.Filled.AccountBalanceWallet, contentDescription = null) },
                     label = { Text("Portefeuille") },
                 )
@@ -167,6 +205,17 @@ private fun MainShell(container: AppContainer) {
                 0 -> {
                     val feedVm: FeedViewModel = viewModel { container.makeFeedViewModel() }
                     FeedScreen(viewModel = feedVm, makeLiveViewModel = container::makeLiveViewModel)
+                }
+                1 -> {
+                    val duel = openDuel
+                    if (duel == null) {
+                        val listVm: DuelsListViewModel = viewModel { container.makeDuelsListViewModel() }
+                        DuelsListScreen(viewModel = listVm, onOpen = { openDuel = it })
+                    } else {
+                        // Clé = id du duel → un ViewModel (et une room SFU) par duel ouvert.
+                        val duelVm: DuelViewModel = viewModel(key = duel.id) { container.makeDuelViewModel(duel) }
+                        DuelRoomScreen(viewModel = duelVm)
+                    }
                 }
                 else -> {
                     val walletVm: WalletViewModel = viewModel { container.makeWalletViewModel() }

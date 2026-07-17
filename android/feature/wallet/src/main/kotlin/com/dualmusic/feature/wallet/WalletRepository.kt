@@ -9,6 +9,8 @@ import com.dualmusic.domain.wallet.SpendItem
 import com.dualmusic.domain.wallet.VoteRequest
 import com.dualmusic.domain.wallet.WalletBalance
 import com.dualmusic.domain.wallet.WalletEndpoints
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 import java.util.UUID
 
 /**
@@ -17,12 +19,18 @@ import java.util.UUID
  * Lectures (solde, historiques) et débits (vote, cadeau). Les débits sont **idempotents** :
  * on envoie une clé d'idempotence pour qu'un rejeu réseau ne débite jamais deux fois.
  *
+ * Convention de `Endpoint` : le corps est une **chaîne JSON déjà sérialisée** — on encode
+ * donc les DTOs ici via [json].
+ *
  * @property api client HTTP partagé (enveloppe + Bearer + refresh gérés en amont).
  */
 class WalletRepository(private val api: ApiClient) {
 
+    private val json = Json { explicitNulls = false }
+
     /** Solde courant en crédits + contre-valeur € (calculée serveur, fait foi). */
-    suspend fun balance(): WalletBalance = api.request(Endpoint.get(WalletEndpoints.BALANCE))
+    suspend fun balance(): WalletBalance =
+        api.request(Endpoint.get(WalletEndpoints.BALANCE), WalletBalance.serializer())
 
     /**
      * Revenus agrégés par événement source (ce que l'utilisateur a gagné).
@@ -34,10 +42,12 @@ class WalletRepository(private val api: ApiClient) {
                 WalletEndpoints.REVENUES,
                 query = since?.let { mapOf("since" to it) } ?: emptyMap(),
             ),
+            ListSerializer(RevenueEvent.serializer()),
         )
 
     /** Dépenses du caller (cadeaux envoyés, votes, tickets…), les plus récentes d'abord. */
-    suspend fun spending(): List<SpendItem> = api.request(Endpoint.get(WalletEndpoints.SPENDING))
+    suspend fun spending(): List<SpendItem> =
+        api.request(Endpoint.get(WalletEndpoints.SPENDING), ListSerializer(SpendItem.serializer()))
 
     /**
      * Vote payant pour un artiste dans un duel (débit atomique côté serveur).
@@ -49,13 +59,11 @@ class WalletRepository(private val api: ApiClient) {
         amount: Double,
         idempotencyKey: String = UUID.randomUUID().toString(),
     ) {
-        api.request<Unit>(
-            Endpoint.post(
-                WalletEndpoints.VOTE,
-                body = VoteRequest(duelId = duelId, artistId = artistId, amount = amount),
-                idempotencyKey = idempotencyKey,
-            ),
+        val body = json.encodeToString(
+            VoteRequest.serializer(),
+            VoteRequest(duelId = duelId, artistId = artistId, amount = amount),
         )
+        api.request<Unit>(Endpoint.post(WalletEndpoints.VOTE, body, idempotencyKey = idempotencyKey))
     }
 
     /** Envoie un cadeau de l'inventaire dans un contexte d'événement (duel/live/concert). */
@@ -63,9 +71,8 @@ class WalletRepository(private val api: ApiClient) {
         request: SendGiftRequest,
         idempotencyKey: String = UUID.randomUUID().toString(),
     ) {
-        api.request<Unit>(
-            Endpoint.post(WalletEndpoints.GIFTS_SEND, body = request, idempotencyKey = idempotencyKey),
-        )
+        val body = json.encodeToString(SendGiftRequest.serializer(), request)
+        api.request<Unit>(Endpoint.post(WalletEndpoints.GIFTS_SEND, body, idempotencyKey = idempotencyKey))
     }
 
     /** Achète des cadeaux dans l'inventaire (débit du solde). */
@@ -74,12 +81,10 @@ class WalletRepository(private val api: ApiClient) {
         quantity: Int = 1,
         idempotencyKey: String = UUID.randomUUID().toString(),
     ) {
-        api.request<Unit>(
-            Endpoint.post(
-                WalletEndpoints.GIFTS_PURCHASE,
-                body = PurchaseGiftRequest(giftId = giftId, quantity = quantity),
-                idempotencyKey = idempotencyKey,
-            ),
+        val body = json.encodeToString(
+            PurchaseGiftRequest.serializer(),
+            PurchaseGiftRequest(giftId = giftId, quantity = quantity),
         )
+        api.request<Unit>(Endpoint.post(WalletEndpoints.GIFTS_PURCHASE, body, idempotencyKey = idempotencyKey))
     }
 }
