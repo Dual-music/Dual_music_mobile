@@ -56,6 +56,9 @@ dependencies {
     implementation(project(":feature:live"))
     implementation(project(":core:media"))
     implementation(project(":core:realtime"))
+    // Lot portefeuille.
+    implementation(project(":feature:wallet"))
+    implementation("androidx.compose.material:material-icons-extended")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)

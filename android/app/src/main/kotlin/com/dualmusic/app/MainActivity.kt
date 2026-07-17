@@ -5,8 +5,23 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dualmusic.core.auth.AuthRefresher
@@ -26,6 +41,9 @@ import com.dualmusic.feature.feed.FeedScreen
 import com.dualmusic.feature.feed.FeedViewModel
 import com.dualmusic.feature.live.LiveRepository
 import com.dualmusic.feature.live.LiveViewModel
+import com.dualmusic.feature.wallet.WalletRepository
+import com.dualmusic.feature.wallet.WalletScreen
+import com.dualmusic.feature.wallet.WalletViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -44,7 +62,7 @@ private const val API_BASE_URL = "http://10.0.2.2:4000"
 /**
  * Conteneur d'injection minimal (sans framework DI, pour rester simple et lisible).
  * Construit le graphe complet : stockage sécurisé → refresh → client HTTP → repositories,
- * puis les services temps réel (Socket.IO) et média (LiveKit) du lot feed/live.
+ * puis les services temps réel (Socket.IO) et média (LiveKit).
  * Un seul exemplaire, porté par l'[MainActivity].
  */
 class AppContainer(context: Context) {
@@ -64,8 +82,14 @@ class AppContainer(context: Context) {
     // Le fournisseur de JWT alimente le handshake Socket.IO à chaud (token courant).
     private val realtimeClient = RealtimeClient(API_BASE_URL, jwtProvider = { tokenStore.accessToken() })
 
+    // --- Lot portefeuille ---
+    private val walletRepository = WalletRepository(api)
+
     /** Nouveau ViewModel de feed (liste des lives + prefetch des tokens LiveKit). */
     fun makeFeedViewModel(): FeedViewModel = FeedViewModel(feedRepository, tokenService)
+
+    /** Nouveau ViewModel de portefeuille (solde + historiques). */
+    fun makeWalletViewModel(): WalletViewModel = WalletViewModel(walletRepository)
 
     /**
      * Fabrique un ViewModel de live pour un item du feed. Chaque room a son propre
@@ -84,8 +108,8 @@ class AppContainer(context: Context) {
 }
 
 /**
- * Activité principale. Affiche la connexion ; une fois connecté, le **feed vertical**
- * (scroll style TikTok) des lives.
+ * Activité principale. Affiche la connexion ; une fois connecté, la coque applicative
+ * (feed vertical + portefeuille).
  */
 class MainActivity : ComponentActivity() {
 
@@ -102,12 +126,51 @@ class MainActivity : ComponentActivity() {
 
                 val authState by vm.authState.collectAsStateWithLifecycle()
                 when (authState) {
-                    is AuthState.SignedIn -> {
-                        // Feed vertical des lives (le cœur de l'app).
-                        val feedVm: FeedViewModel = viewModel { container.makeFeedViewModel() }
-                        FeedScreen(viewModel = feedVm, makeLiveViewModel = container::makeLiveViewModel)
-                    }
+                    is AuthState.SignedIn -> MainShell(container)
                     else -> SignInScreen(viewModel = vm, onGoogle = { /* TODO(lot suivant): OAuth Google + deeplink */ })
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Coque de l'app connectée : barre de navigation basse + écran courant.
+ * Onglets : **Lives** (feed vertical) et **Portefeuille**. Les autres features
+ * (duels, concerts, compétitions, profil) s'ajouteront ici au fil des lots.
+ */
+@Composable
+private fun MainShell(container: AppContainer) {
+    var tab by remember { mutableIntStateOf(0) }
+    val colors = DualMusicTheme.colors
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar(containerColor = colors.card) {
+                NavigationBarItem(
+                    selected = tab == 0,
+                    onClick = { tab = 0 },
+                    icon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
+                    label = { Text("Lives") },
+                )
+                NavigationBarItem(
+                    selected = tab == 1,
+                    onClick = { tab = 1 },
+                    icon = { Icon(Icons.Filled.AccountBalanceWallet, contentDescription = null) },
+                    label = { Text("Portefeuille") },
+                )
+            }
+        },
+    ) { padding ->
+        Box(modifier = Modifier.padding(padding)) {
+            when (tab) {
+                0 -> {
+                    val feedVm: FeedViewModel = viewModel { container.makeFeedViewModel() }
+                    FeedScreen(viewModel = feedVm, makeLiveViewModel = container::makeLiveViewModel)
+                }
+                else -> {
+                    val walletVm: WalletViewModel = viewModel { container.makeWalletViewModel() }
+                    WalletScreen(viewModel = walletVm)
                 }
             }
         }

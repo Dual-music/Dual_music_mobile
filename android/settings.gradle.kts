@@ -42,3 +42,6 @@ include(":core:realtime")
 include(":core:media")
 include(":feature:live")
 include(":feature:feed")
+
+// Lot « portefeuille » : solde, historiques dépenses/revenus, débits (vote/cadeau).
+include(":feature:wallet")
