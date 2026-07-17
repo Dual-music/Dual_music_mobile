@@ -12,7 +12,7 @@ import com.dualmusic.domain.auth.VerifyOtpRequest
 import kotlinx.serialization.json.Json
 
 /**
- * Accès aux opérations d'authentification `/auth/*`.
+ * Accès aux opérations d'authentification `/auth/…`.
  *
  * Orchestre [ApiClient] (REST) et [TokenStore] (persistance). Après login/register,
  * persiste la session ; après logout, l'efface.

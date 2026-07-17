@@ -6,12 +6,12 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /*
- * DTOs d'authentification — partagés iOS/Android, alignés sur le backend `/auth/*`.
+ * DTOs d'authentification — partagés iOS/Android, alignés sur le backend `/auth/…`.
  *
  * Rappel du modèle réel (≠ « phone passwordless » du doc initial) :
  *  - Auth primaire = **email + mot de passe** (`/auth/login`, `/auth/register`).
  *  - `/auth/refresh` échange le refresh token.
- *  - OTP téléphone = **vérification post-login** du numéro (`/auth/otp/phone/*`), authentifié.
+ *  - OTP téléphone = **vérification post-login** du numéro (`/auth/otp/phone/…`), authentifié.
  *  - Google = flux **redirect web** (`/auth/oauth/google`) — voir note « Google natif ».
  */
 

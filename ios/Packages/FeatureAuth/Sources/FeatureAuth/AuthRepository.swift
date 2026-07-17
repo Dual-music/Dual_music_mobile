@@ -2,7 +2,7 @@ import Foundation
 import CoreNetwork
 import CoreAuth
 
-/// Accès aux opérations d'authentification du backend `/auth/*`.
+/// Accès aux opérations d'authentification du backend `/auth/…`.
 ///
 /// Orchestre `HTTPClient` (appels REST) et `TokenStore` (persistance des jetons). Après
 /// login/register, persiste la session ; après logout, l'efface.
