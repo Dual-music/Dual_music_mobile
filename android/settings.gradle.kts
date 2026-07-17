@@ -52,3 +52,6 @@ include(":feature:duel")
 // Lot « concerts + compétitions » : catalogues, billetterie/dédicaces, classements.
 include(":feature:concert")
 include(":feature:competition")
+
+// Lot « profil » : identité, rôles, statistiques, accès portefeuille.
+include(":feature:profile")

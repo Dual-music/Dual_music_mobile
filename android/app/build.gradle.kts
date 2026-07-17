@@ -63,6 +63,8 @@ dependencies {
     // Lot concerts + compétitions.
     implementation(project(":feature:concert"))
     implementation(project(":feature:competition"))
+    // Lot profil.
+    implementation(project(":feature:profile"))
     implementation("androidx.compose.material:material-icons-extended")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")

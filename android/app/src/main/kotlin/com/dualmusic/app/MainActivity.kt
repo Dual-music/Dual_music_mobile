@@ -6,12 +6,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -34,6 +37,8 @@ import com.dualmusic.core.media.LiveKitTokenService
 import com.dualmusic.core.media.LiveRoomClient
 import com.dualmusic.core.network.ApiClient
 import com.dualmusic.core.realtime.RealtimeClient
+import com.dualmusic.core.ui.components.DMButton
+import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.model.Competition
 import com.dualmusic.domain.model.Duel
@@ -60,6 +65,9 @@ import com.dualmusic.feature.feed.FeedScreen
 import com.dualmusic.feature.feed.FeedViewModel
 import com.dualmusic.feature.live.LiveRepository
 import com.dualmusic.feature.live.LiveViewModel
+import com.dualmusic.feature.profile.ProfileRepository
+import com.dualmusic.feature.profile.ProfileScreen
+import com.dualmusic.feature.profile.ProfileViewModel
 import com.dualmusic.feature.wallet.WalletRepository
 import com.dualmusic.feature.wallet.WalletScreen
 import com.dualmusic.feature.wallet.WalletViewModel
@@ -104,6 +112,9 @@ class AppContainer(context: Context) {
     // --- Lot portefeuille ---
     private val walletRepository = WalletRepository(api)
 
+    // --- Lot profil ---
+    private val profileRepository = ProfileRepository(api)
+
     // --- Lot duels ---
     private val duelRepository = DuelRepository(api)
 
@@ -116,6 +127,9 @@ class AppContainer(context: Context) {
 
     /** Nouveau ViewModel de portefeuille (solde + historiques). */
     fun makeWalletViewModel(): WalletViewModel = WalletViewModel(walletRepository)
+
+    /** Nouveau ViewModel de profil (identité + statistiques). */
+    fun makeProfileViewModel(): ProfileViewModel = ProfileViewModel(profileRepository)
 
     /** Nouveau ViewModel du catalogue de duels. */
     fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository)
@@ -181,7 +195,7 @@ class MainActivity : ComponentActivity() {
 
                 val authState by vm.authState.collectAsStateWithLifecycle()
                 when (authState) {
-                    is AuthState.SignedIn -> MainShell(container)
+                    is AuthState.SignedIn -> MainShell(container, onSignOut = vm::signOut)
                     else -> SignInScreen(viewModel = vm, onGoogle = { /* TODO(lot suivant): OAuth Google + deeplink */ })
                 }
             }
@@ -195,7 +209,7 @@ class MainActivity : ComponentActivity() {
  * (duels, concerts, compétitions, profil) s'ajouteront ici au fil des lots.
  */
 @Composable
-private fun MainShell(container: AppContainer) {
+private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
     var tab by remember { mutableIntStateOf(0) }
     // Duel actuellement ouvert (null = on affiche le catalogue).
     var openDuel by remember { mutableStateOf<Duel?>(null) }
@@ -233,8 +247,8 @@ private fun MainShell(container: AppContainer) {
                 NavigationBarItem(
                     selected = tab == 4,
                     onClick = { tab = 4 },
-                    icon = { Icon(Icons.Filled.AccountBalanceWallet, contentDescription = null) },
-                    label = { Text("Wallet") },
+                    icon = { Icon(Icons.Filled.Person, contentDescription = null) },
+                    label = { Text("Profil") },
                 )
             }
         },
@@ -272,8 +286,26 @@ private fun MainShell(container: AppContainer) {
                     }
                 }
                 else -> {
-                    val walletVm: WalletViewModel = viewModel { container.makeWalletViewModel() }
-                    WalletScreen(viewModel = walletVm)
+                    // Onglet Profil ; le portefeuille s'ouvre par-dessus, avec un retour.
+                    var showWallet by remember { mutableStateOf(false) }
+                    if (showWallet) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            DMButton(
+                                "← Retour au profil",
+                                style = DMButtonStyle.OUTLINE,
+                                modifier = Modifier.padding(DualMusicTheme.spacing.md),
+                            ) { showWallet = false }
+                            val walletVm: WalletViewModel = viewModel { container.makeWalletViewModel() }
+                            WalletScreen(viewModel = walletVm)
+                        }
+                    } else {
+                        val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
+                        ProfileScreen(
+                            viewModel = profileVm,
+                            onOpenWallet = { showWallet = true },
+                            onSignOut = onSignOut,
+                        )
+                    }
                 }
             }
         }
