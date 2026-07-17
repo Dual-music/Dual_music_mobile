@@ -18,6 +18,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Requis par LiveKit : ses dépendances transitives `noise` et `audioswitch`
+        // (com.github.*) sont publiées sur JitPack, pas sur Maven Central.
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
