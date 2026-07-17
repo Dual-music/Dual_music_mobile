@@ -31,6 +31,17 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
+
+    // LiveKit + Ktor/OkHttp embarquent des métadonnées qui entrent en conflit au
+    // packaging : on exclut les doublons courants pour éviter les erreurs de build.
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "/META-INF/DEPENDENCIES"
+            excludes += "/META-INF/INDEX.LIST"
+            excludes += "/META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        }
+    }
 }
 
 dependencies {
@@ -40,6 +51,11 @@ dependencies {
     implementation(project(":core:network"))
     implementation(project(":core:auth"))
     implementation(project(":shared-domain"))
+    // Lot feed + live : écrans + infra temps réel/média (pour le wiring DI dans l'app).
+    implementation(project(":feature:feed"))
+    implementation(project(":feature:live"))
+    implementation(project(":core:media"))
+    implementation(project(":core:realtime"))
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)

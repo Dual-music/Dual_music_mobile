@@ -34,5 +34,8 @@ include(":core:network")
 include(":core:auth")
 include(":feature:auth")
 
-// À activer aux lots suivants (feed / live / vidéo) :
-// include(":core:realtime", ":core:media", ":feature:live", ":feature:feed")
+// Lot « feed + live » : temps réel (Socket.IO), média (LiveKit) et les écrans.
+include(":core:realtime")
+include(":core:media")
+include(":feature:live")
+include(":feature:feed")
