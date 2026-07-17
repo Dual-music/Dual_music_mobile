@@ -26,8 +26,10 @@ dependencies {
     implementation(project(":shared-domain"))
 
     // Ktor client (moteur OkHttp) + négociation JSON.
+    // `api` pour ktor-client-core : le constructeur public d'ApiClient expose un
+    // paramètre `http: HttpClient` (type Ktor) → doit être visible des modules consommateurs.
     val ktor = "3.0.1"
-    implementation("io.ktor:ktor-client-core:$ktor")
+    api("io.ktor:ktor-client-core:$ktor")
     implementation("io.ktor:ktor-client-okhttp:$ktor")
     implementation("io.ktor:ktor-client-content-negotiation:$ktor")
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor")

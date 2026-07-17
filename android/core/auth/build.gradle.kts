@@ -31,8 +31,10 @@ dependencies {
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
 
     // Client minimal pour l'appel de refresh (indépendant de core:network → pas de cycle).
+    // `api` pour ktor-client-core : le constructeur public d'AuthRefresher expose un
+    // paramètre `http: HttpClient` (type Ktor) → doit être visible des modules consommateurs.
     val ktor = "3.0.1"
-    implementation("io.ktor:ktor-client-core:$ktor")
+    api("io.ktor:ktor-client-core:$ktor")
     implementation("io.ktor:ktor-client-okhttp:$ktor")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
