@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Leaderboard
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -33,12 +35,21 @@ import com.dualmusic.core.media.LiveRoomClient
 import com.dualmusic.core.network.ApiClient
 import com.dualmusic.core.realtime.RealtimeClient
 import com.dualmusic.core.ui.theme.DualMusicTheme
+import com.dualmusic.domain.model.Competition
 import com.dualmusic.domain.model.Duel
 import com.dualmusic.domain.model.Live
 import com.dualmusic.feature.auth.AuthRepository
 import com.dualmusic.feature.auth.AuthState
 import com.dualmusic.feature.auth.AuthViewModel
 import com.dualmusic.feature.auth.SignInScreen
+import com.dualmusic.feature.competition.CompetitionRepository
+import com.dualmusic.feature.competition.CompetitionRoomScreen
+import com.dualmusic.feature.competition.CompetitionRoomViewModel
+import com.dualmusic.feature.competition.CompetitionsListScreen
+import com.dualmusic.feature.competition.CompetitionsViewModel
+import com.dualmusic.feature.concert.ConcertRepository
+import com.dualmusic.feature.concert.ConcertsListScreen
+import com.dualmusic.feature.concert.ConcertsViewModel
 import com.dualmusic.feature.duel.DuelRepository
 import com.dualmusic.feature.duel.DuelRoomScreen
 import com.dualmusic.feature.duel.DuelViewModel
@@ -96,6 +107,10 @@ class AppContainer(context: Context) {
     // --- Lot duels ---
     private val duelRepository = DuelRepository(api)
 
+    // --- Lot concerts + compétitions ---
+    private val concertRepository = ConcertRepository(api)
+    private val competitionRepository = CompetitionRepository(api)
+
     /** Nouveau ViewModel de feed (liste des lives + prefetch des tokens LiveKit). */
     fun makeFeedViewModel(): FeedViewModel = FeedViewModel(feedRepository, tokenService)
 
@@ -104,6 +119,16 @@ class AppContainer(context: Context) {
 
     /** Nouveau ViewModel du catalogue de duels. */
     fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository)
+
+    /** Nouveau ViewModel du catalogue de concerts. */
+    fun makeConcertsViewModel(): ConcertsViewModel = ConcertsViewModel(concertRepository)
+
+    /** Nouveau ViewModel du catalogue de compétitions. */
+    fun makeCompetitionsViewModel(): CompetitionsViewModel = CompetitionsViewModel(competitionRepository)
+
+    /** Nouveau ViewModel de room de compétition (classement + votes). */
+    fun makeCompetitionRoomViewModel(competitionId: String): CompetitionRoomViewModel =
+        CompetitionRoomViewModel(competitionId, competitionRepository, realtimeClient)
 
     /**
      * Fabrique un ViewModel de room de duel (une connexion SFU par duel ouvert).
@@ -174,6 +199,8 @@ private fun MainShell(container: AppContainer) {
     var tab by remember { mutableIntStateOf(0) }
     // Duel actuellement ouvert (null = on affiche le catalogue).
     var openDuel by remember { mutableStateOf<Duel?>(null) }
+    // Compétition actuellement ouverte (null = on affiche le catalogue).
+    var openCompetition by remember { mutableStateOf<Competition?>(null) }
     val colors = DualMusicTheme.colors
 
     Scaffold(
@@ -194,8 +221,20 @@ private fun MainShell(container: AppContainer) {
                 NavigationBarItem(
                     selected = tab == 2,
                     onClick = { tab = 2 },
+                    icon = { Icon(Icons.Filled.MusicNote, contentDescription = null) },
+                    label = { Text("Concerts") },
+                )
+                NavigationBarItem(
+                    selected = tab == 3,
+                    onClick = { tab = 3; openCompetition = null },
+                    icon = { Icon(Icons.Filled.Leaderboard, contentDescription = null) },
+                    label = { Text("Compét.") },
+                )
+                NavigationBarItem(
+                    selected = tab == 4,
+                    onClick = { tab = 4 },
                     icon = { Icon(Icons.Filled.AccountBalanceWallet, contentDescription = null) },
-                    label = { Text("Portefeuille") },
+                    label = { Text("Wallet") },
                 )
             }
         },
@@ -215,6 +254,21 @@ private fun MainShell(container: AppContainer) {
                         // Clé = id du duel → un ViewModel (et une room SFU) par duel ouvert.
                         val duelVm: DuelViewModel = viewModel(key = duel.id) { container.makeDuelViewModel(duel) }
                         DuelRoomScreen(viewModel = duelVm)
+                    }
+                }
+                2 -> {
+                    val concertsVm: ConcertsViewModel = viewModel { container.makeConcertsViewModel() }
+                    ConcertsListScreen(viewModel = concertsVm)
+                }
+                3 -> {
+                    val competition = openCompetition
+                    if (competition == null) {
+                        val listVm: CompetitionsViewModel = viewModel { container.makeCompetitionsViewModel() }
+                        CompetitionsListScreen(viewModel = listVm, onOpen = { openCompetition = it })
+                    } else {
+                        val roomVm: CompetitionRoomViewModel =
+                            viewModel(key = competition.id) { container.makeCompetitionRoomViewModel(competition.id) }
+                        CompetitionRoomScreen(viewModel = roomVm)
                     }
                 }
                 else -> {

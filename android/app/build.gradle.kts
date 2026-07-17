@@ -60,6 +60,9 @@ dependencies {
     implementation(project(":feature:wallet"))
     // Lot duels.
     implementation(project(":feature:duel"))
+    // Lot concerts + compétitions.
+    implementation(project(":feature:concert"))
+    implementation(project(":feature:competition"))
     implementation("androidx.compose.material:material-icons-extended")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")

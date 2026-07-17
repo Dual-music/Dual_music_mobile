@@ -48,3 +48,7 @@ include(":feature:wallet")
 
 // Lot « duels » : catalogue + room (vidéo, votes payants, minuteur, chat, cadeaux).
 include(":feature:duel")
+
+// Lot « concerts + compétitions » : catalogues, billetterie/dédicaces, classements.
+include(":feature:concert")
+include(":feature:competition")
