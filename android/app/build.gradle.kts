@@ -30,7 +30,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    // buildConfig : expose BuildConfig.DEBUG / VERSION_NAME (utilisés par l'init Sentry).
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     // LiveKit + Ktor/OkHttp embarquent des métadonnées qui entrent en conflit au
     // packaging : on exclut les doublons courants pour éviter les erreurs de build.
@@ -79,5 +83,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // Observabilité : crashs, ANR, perf (auto-capture des exceptions non gérées).
+    implementation("io.sentry:sentry-android:7.14.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
