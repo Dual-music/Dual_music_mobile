@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -79,7 +79,7 @@ private fun Poster(item: Live) {
             Text(item.artist?.displayName ?: "Live", color = Color.White)
             item.title?.let { Text(it, color = Color.White.copy(alpha = 0.8f)) }
             Icon(
-                Icons.Filled.PlayCircle,
+                Icons.Filled.PlayArrow,
                 contentDescription = null,
                 tint = Color.White,
                 modifier = Modifier.dmGlow(),
