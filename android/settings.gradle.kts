@@ -61,3 +61,6 @@ include(":feature:notifications")
 
 // Lot « retrait » : PIN, méthodes de paiement, demande de retrait.
 include(":feature:withdrawal")
+
+// Lot « replays » : catalogue + lecteur ExoPlayer + déblocage payant.
+include(":feature:replay")

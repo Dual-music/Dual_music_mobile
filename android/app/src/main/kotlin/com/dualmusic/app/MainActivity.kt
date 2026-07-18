@@ -43,6 +43,7 @@ import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.model.Competition
 import com.dualmusic.domain.model.Duel
 import com.dualmusic.domain.model.Live
+import com.dualmusic.domain.replay.ReplayVideo
 import com.dualmusic.feature.auth.AuthRepository
 import com.dualmusic.feature.auth.AuthState
 import com.dualmusic.feature.auth.AuthViewModel
@@ -71,6 +72,11 @@ import com.dualmusic.feature.notifications.NotificationsViewModel
 import com.dualmusic.feature.profile.ProfileRepository
 import com.dualmusic.feature.profile.ProfileScreen
 import com.dualmusic.feature.profile.ProfileViewModel
+import com.dualmusic.feature.replay.ReplayPlayerScreen
+import com.dualmusic.feature.replay.ReplayPlayerViewModel
+import com.dualmusic.feature.replay.ReplayRepository
+import com.dualmusic.feature.replay.ReplaysListScreen
+import com.dualmusic.feature.replay.ReplaysViewModel
 import com.dualmusic.feature.wallet.WalletRepository
 import com.dualmusic.feature.withdrawal.WithdrawalRepository
 import com.dualmusic.feature.withdrawal.WithdrawalScreen
@@ -127,6 +133,9 @@ class AppContainer(context: Context) {
     // --- Lot retrait ---
     private val withdrawalRepository = WithdrawalRepository(api)
 
+    // --- Lot replays ---
+    private val replayRepository = ReplayRepository(api)
+
     // --- Lot duels ---
     private val duelRepository = DuelRepository(api)
 
@@ -149,6 +158,13 @@ class AppContainer(context: Context) {
 
     /** Nouveau ViewModel du flux de retrait (PIN + méthodes + demande). */
     fun makeWithdrawalViewModel(): WithdrawalViewModel = WithdrawalViewModel(withdrawalRepository)
+
+    /** Nouveau ViewModel du catalogue de replays. */
+    fun makeReplaysViewModel(): ReplaysViewModel = ReplaysViewModel(replayRepository)
+
+    /** Nouveau ViewModel de lecture d'un replay (accès + déblocage). */
+    fun makeReplayPlayerViewModel(replay: ReplayVideo): ReplayPlayerViewModel =
+        ReplayPlayerViewModel(replay, replayRepository)
 
     /** Nouveau ViewModel du catalogue de duels. */
     fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository)
@@ -321,12 +337,33 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                             val wdVm: WithdrawalViewModel = viewModel { container.makeWithdrawalViewModel() }
                             WithdrawalScreen(viewModel = wdVm)
                         }
+                        4 -> SubScreen(onBack = { sub = 0 }) {
+                            // Sous-navigation replays : liste → lecteur.
+                            var openReplay by remember { mutableStateOf<ReplayVideo?>(null) }
+                            val r = openReplay
+                            if (r == null) {
+                                val listVm: ReplaysViewModel = viewModel { container.makeReplaysViewModel() }
+                                ReplaysListScreen(viewModel = listVm, onOpen = { openReplay = it })
+                            } else {
+                                val playerVm: ReplayPlayerViewModel =
+                                    viewModel(key = r.id) { container.makeReplayPlayerViewModel(r) }
+                                Column(modifier = Modifier.fillMaxSize()) {
+                                    DMButton(
+                                        "← Liste des replays",
+                                        style = DMButtonStyle.OUTLINE,
+                                        modifier = Modifier.padding(DualMusicTheme.spacing.sm),
+                                    ) { openReplay = null }
+                                    ReplayPlayerScreen(viewModel = playerVm)
+                                }
+                            }
+                        }
                         else -> {
                             val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
                             ProfileScreen(
                                 viewModel = profileVm,
                                 onOpenWallet = { sub = 1 },
                                 onOpenWithdrawal = { sub = 3 },
+                                onOpenReplays = { sub = 4 },
                                 onOpenNotifications = { sub = 2 },
                                 onSignOut = onSignOut,
                             )

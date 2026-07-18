@@ -74,6 +74,7 @@ fun ProfileScreen(
     viewModel: ProfileViewModel,
     onOpenWallet: () -> Unit,
     onOpenWithdrawal: () -> Unit,
+    onOpenReplays: () -> Unit,
     onOpenNotifications: () -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -120,6 +121,7 @@ fun ProfileScreen(
 
         DMButton("Mon portefeuille", onClick = onOpenWallet)
         DMButton("Retirer mes crédits", style = DMButtonStyle.SECONDARY, onClick = onOpenWithdrawal)
+        DMButton("Replays", style = DMButtonStyle.SECONDARY, onClick = onOpenReplays)
         DMButton("Notifications", style = DMButtonStyle.SECONDARY, onClick = onOpenNotifications)
         DMButton("Se déconnecter", style = DMButtonStyle.OUTLINE, onClick = onSignOut)
     }
