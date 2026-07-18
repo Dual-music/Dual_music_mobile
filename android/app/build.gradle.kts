@@ -85,7 +85,8 @@ dependencies {
     implementation(project(":feature:content"))
     // Lot artistes.
     implementation(project(":feature:artists"))
-    // Lots sponsors + créateur.
+    // Lots sponsors + créateur (+ upload média partagé).
+    implementation(project(":core:upload"))
     implementation(project(":feature:sponsor"))
     implementation(project(":feature:creator"))
     implementation("androidx.compose.material:material-icons-extended")

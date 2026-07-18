@@ -37,6 +37,7 @@ import com.dualmusic.core.media.LiveKitTokenService
 import com.dualmusic.core.media.LiveRoomClient
 import com.dualmusic.core.network.ApiClient
 import com.dualmusic.core.realtime.RealtimeClient
+import com.dualmusic.core.upload.MediaUploader
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.theme.DualMusicTheme
@@ -128,6 +129,8 @@ class AppContainer(context: Context) {
     private val tokenStore = EncryptedTokenStore(appContext)
     private val refresher = AuthRefresher(API_BASE_URL)
     private val api = ApiClient(API_BASE_URL, tokenStore, refresher, appScope)
+    // Upload média (presign → PUT → confirm), partagé par sponsor + créateur.
+    private val mediaUploader = MediaUploader(api)
 
     /** Repository d'authentification prêt à l'emploi. */
     val authRepository = AuthRepository(api, tokenStore, API_BASE_URL)
@@ -209,10 +212,10 @@ class AppContainer(context: Context) {
     fun makeArtistsViewModel(): ArtistsViewModel = ArtistsViewModel(api)
 
     /** Nouveau ViewModel du sponsoring. */
-    fun makeSponsorViewModel(): SponsorViewModel = SponsorViewModel(api)
+    fun makeSponsorViewModel(): SponsorViewModel = SponsorViewModel(api, mediaUploader)
 
     /** Nouveau ViewModel de l'espace créateur. */
-    fun makeCreatorViewModel(): CreatorViewModel = CreatorViewModel(api)
+    fun makeCreatorViewModel(): CreatorViewModel = CreatorViewModel(api, mediaUploader)
 
     /** Nouveau ViewModel du catalogue de duels. */
     fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository)

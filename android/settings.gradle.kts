@@ -79,6 +79,9 @@ include(":feature:content")
 // Lot « artistes » : annuaire + suivi.
 include(":feature:artists")
 
+// Upload média (presign → PUT → confirm), partagé par sponsor + créateur.
+include(":core:upload")
+
 // Lots « sponsors » et « créateur » (outils artiste/manager).
 include(":feature:sponsor")
 include(":feature:creator")

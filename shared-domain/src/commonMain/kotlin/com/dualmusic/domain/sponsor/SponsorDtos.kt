@@ -30,9 +30,30 @@ data class SponsorRequest(
     val payable: Boolean get() = status == "approved"
 }
 
+/**
+ * Corps de `POST /sponsors/requests` — création d'une demande de sponsoring.
+ *
+ * ⚠️ camelCase STRICT : le backend (Joi `stripUnknown`) supprime silencieusement tout champ
+ * hors DTO. Ne jamais annoter en snake_case ici.
+ *
+ * Le prix n'est PAS envoyé : il est calculé serveur à partir de [mediaDurationSeconds]
+ * (barème par palier). [eventType] ∈ `duel|concert|artist_concert|competition`,
+ * [mediaType] ∈ `image|video`, durée 1..600 s, [mediaUrl] = URL publique issue de l'upload.
+ */
+@Serializable
+data class CreateSponsorRequest(
+    val eventType: String,
+    val eventId: String,
+    val mediaType: String,
+    val mediaUrl: String,
+    val mediaDurationSeconds: Int,
+    val description: String? = null,
+)
+
 /** Chemins REST du sponsoring (source unique, partagée). */
 object SponsorEndpoints {
     const val TIERS = "/sponsors/tiers"
     const val MY_REQUESTS = "/sponsors/requests/me"
+    const val CREATE = "/sponsors/requests"
     fun pay(id: String) = "/sponsors/requests/$id/pay"
 }

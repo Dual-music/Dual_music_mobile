@@ -32,6 +32,25 @@ data class CreateDuelRequest(
     val message: String? = null,
 )
 
+/**
+ * Corps de `POST /artist-concerts` — création d'un concert d'artiste.
+ *
+ * ⚠️ camelCase STRICT (Joi `stripUnknown`). Le concert est créé en `approval_status=pending`
+ * (invisible jusqu'à validation admin). [coverImageUrl] = URL publique issue de l'upload
+ * (catégorie `image`, ≤ 5 Mo). [scheduledDate] au format ISO 8601.
+ */
+@Serializable
+data class CreateArtistConcert(
+    val title: String,
+    val description: String? = null,
+    val scheduledDate: String,
+    val ticketPrice: Double = 0.0,
+    val maxTickets: Int? = null,
+    val coverImageUrl: String? = null,
+    val allowsDedications: Boolean = true,
+    val allowsSponsorAds: Boolean = true,
+)
+
 /** Chemins REST des outils créateur (source unique, partagée). */
 object CreatorEndpoints {
     /** Défis de duel du caller (émis + reçus). */
