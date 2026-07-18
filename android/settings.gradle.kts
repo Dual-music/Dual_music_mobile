@@ -58,3 +58,6 @@ include(":feature:profile")
 
 // Lot « notifications » : centre in-app + temps réel (push FCM = lot séparé, requiert Firebase).
 include(":feature:notifications")
+
+// Lot « retrait » : PIN, méthodes de paiement, demande de retrait.
+include(":feature:withdrawal")

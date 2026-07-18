@@ -72,6 +72,9 @@ import com.dualmusic.feature.profile.ProfileRepository
 import com.dualmusic.feature.profile.ProfileScreen
 import com.dualmusic.feature.profile.ProfileViewModel
 import com.dualmusic.feature.wallet.WalletRepository
+import com.dualmusic.feature.withdrawal.WithdrawalRepository
+import com.dualmusic.feature.withdrawal.WithdrawalScreen
+import com.dualmusic.feature.withdrawal.WithdrawalViewModel
 import com.dualmusic.feature.wallet.WalletScreen
 import com.dualmusic.feature.wallet.WalletViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -121,6 +124,9 @@ class AppContainer(context: Context) {
     // --- Lot notifications ---
     private val notificationRepository = NotificationRepository(api)
 
+    // --- Lot retrait ---
+    private val withdrawalRepository = WithdrawalRepository(api)
+
     // --- Lot duels ---
     private val duelRepository = DuelRepository(api)
 
@@ -140,6 +146,9 @@ class AppContainer(context: Context) {
     /** Nouveau ViewModel du centre de notifications (in-app + temps réel). */
     fun makeNotificationsViewModel(): NotificationsViewModel =
         NotificationsViewModel(notificationRepository, realtimeClient)
+
+    /** Nouveau ViewModel du flux de retrait (PIN + méthodes + demande). */
+    fun makeWithdrawalViewModel(): WithdrawalViewModel = WithdrawalViewModel(withdrawalRepository)
 
     /** Nouveau ViewModel du catalogue de duels. */
     fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository)
@@ -308,11 +317,16 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                             val notifVm: NotificationsViewModel = viewModel { container.makeNotificationsViewModel() }
                             NotificationsScreen(viewModel = notifVm)
                         }
+                        3 -> SubScreen(onBack = { sub = 0 }) {
+                            val wdVm: WithdrawalViewModel = viewModel { container.makeWithdrawalViewModel() }
+                            WithdrawalScreen(viewModel = wdVm)
+                        }
                         else -> {
                             val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
                             ProfileScreen(
                                 viewModel = profileVm,
                                 onOpenWallet = { sub = 1 },
+                                onOpenWithdrawal = { sub = 3 },
                                 onOpenNotifications = { sub = 2 },
                                 onSignOut = onSignOut,
                             )

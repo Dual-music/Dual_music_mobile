@@ -65,6 +65,7 @@ class ProfileViewModel(private val repository: ProfileRepository) : ViewModel() 
  *
  * @param viewModel source d'état.
  * @param onOpenWallet ouvre le portefeuille.
+ * @param onOpenWithdrawal ouvre le flux de retrait.
  * @param onOpenNotifications ouvre le centre de notifications.
  * @param onSignOut déconnexion (efface la session).
  */
@@ -72,6 +73,7 @@ class ProfileViewModel(private val repository: ProfileRepository) : ViewModel() 
 fun ProfileScreen(
     viewModel: ProfileViewModel,
     onOpenWallet: () -> Unit,
+    onOpenWithdrawal: () -> Unit,
     onOpenNotifications: () -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -117,6 +119,7 @@ fun ProfileScreen(
         ))
 
         DMButton("Mon portefeuille", onClick = onOpenWallet)
+        DMButton("Retirer mes crédits", style = DMButtonStyle.SECONDARY, onClick = onOpenWithdrawal)
         DMButton("Notifications", style = DMButtonStyle.SECONDARY, onClick = onOpenNotifications)
         DMButton("Se déconnecter", style = DMButtonStyle.OUTLINE, onClick = onSignOut)
     }

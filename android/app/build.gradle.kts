@@ -71,6 +71,8 @@ dependencies {
     implementation(project(":feature:profile"))
     // Lot notifications (in-app).
     implementation(project(":feature:notifications"))
+    // Lot retrait.
+    implementation(project(":feature:withdrawal"))
     implementation("androidx.compose.material:material-icons-extended")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
