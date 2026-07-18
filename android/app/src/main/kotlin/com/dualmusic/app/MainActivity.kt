@@ -47,6 +47,8 @@ import com.dualmusic.domain.replay.ReplayVideo
 import com.dualmusic.feature.auth.AuthRepository
 import com.dualmusic.feature.auth.AuthState
 import com.dualmusic.feature.auth.AuthViewModel
+import com.dualmusic.feature.artists.ArtistsScreen
+import com.dualmusic.feature.artists.ArtistsViewModel
 import com.dualmusic.feature.auth.SignInScreen
 import com.dualmusic.feature.competition.CompetitionRepository
 import com.dualmusic.feature.competition.CompetitionRoomScreen
@@ -198,6 +200,9 @@ class AppContainer(context: Context) {
 
     /** Nouveau ViewModel du contenu (lifestyle + blog). */
     fun makeContentViewModel(): ContentViewModel = ContentViewModel(contentRepository)
+
+    /** Nouveau ViewModel de l'annuaire des artistes. */
+    fun makeArtistsViewModel(): ArtistsViewModel = ArtistsViewModel(api)
 
     /** Nouveau ViewModel du catalogue de duels. */
     fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository)
@@ -410,6 +415,10 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                             val contentVm: ContentViewModel = viewModel { container.makeContentViewModel() }
                             ContentScreen(viewModel = contentVm)
                         }
+                        10 -> SubScreen(onBack = { sub = 0 }) {
+                            val artistsVm: ArtistsViewModel = viewModel { container.makeArtistsViewModel() }
+                            ArtistsScreen(viewModel = artistsVm)
+                        }
                         else -> {
                             val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
                             ProfileScreen(
@@ -422,6 +431,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                                 onOpenReferral = { sub = 7 },
                                 onOpenSubscription = { sub = 8 },
                                 onOpenContent = { sub = 9 },
+                                onOpenArtists = { sub = 10 },
                                 onOpenNotifications = { sub = 2 },
                                 onSignOut = onSignOut,
                             )

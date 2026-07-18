@@ -75,3 +75,6 @@ include(":feature:subscription")
 
 // Lot « contenu » : vidéos lifestyle + blog.
 include(":feature:content")
+
+// Lot « artistes » : annuaire + suivi.
+include(":feature:artists")
