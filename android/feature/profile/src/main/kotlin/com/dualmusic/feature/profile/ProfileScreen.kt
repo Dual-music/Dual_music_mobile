@@ -81,6 +81,8 @@ fun ProfileScreen(
     onOpenSubscription: () -> Unit,
     onOpenContent: () -> Unit,
     onOpenArtists: () -> Unit,
+    onOpenSponsor: () -> Unit,
+    onOpenCreator: () -> Unit,
     onOpenNotifications: () -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -131,6 +133,8 @@ fun ProfileScreen(
         DMButton("Boutique de cadeaux", style = DMButtonStyle.SECONDARY, onClick = onOpenGiftShop)
         DMButton("Découvrir (lifestyle & blog)", style = DMButtonStyle.SECONDARY, onClick = onOpenContent)
         DMButton("Artistes", style = DMButtonStyle.SECONDARY, onClick = onOpenArtists)
+        DMButton("Espace créateur", style = DMButtonStyle.SECONDARY, onClick = onOpenCreator)
+        DMButton("Sponsoring", style = DMButtonStyle.SECONDARY, onClick = onOpenSponsor)
         DMButton("Classements", style = DMButtonStyle.SECONDARY, onClick = onOpenLeaderboard)
         DMButton("Parrainage", style = DMButtonStyle.SECONDARY, onClick = onOpenReferral)
         DMButton("Abonnements", style = DMButtonStyle.SECONDARY, onClick = onOpenSubscription)

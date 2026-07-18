@@ -78,3 +78,7 @@ include(":feature:content")
 
 // Lot « artistes » : annuaire + suivi.
 include(":feature:artists")
+
+// Lots « sponsors » et « créateur » (outils artiste/manager).
+include(":feature:sponsor")
+include(":feature:creator")

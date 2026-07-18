@@ -49,6 +49,10 @@ import com.dualmusic.feature.auth.AuthState
 import com.dualmusic.feature.auth.AuthViewModel
 import com.dualmusic.feature.artists.ArtistsScreen
 import com.dualmusic.feature.artists.ArtistsViewModel
+import com.dualmusic.feature.creator.CreatorScreen
+import com.dualmusic.feature.creator.CreatorViewModel
+import com.dualmusic.feature.sponsor.SponsorScreen
+import com.dualmusic.feature.sponsor.SponsorViewModel
 import com.dualmusic.feature.auth.SignInScreen
 import com.dualmusic.feature.competition.CompetitionRepository
 import com.dualmusic.feature.competition.CompetitionRoomScreen
@@ -203,6 +207,12 @@ class AppContainer(context: Context) {
 
     /** Nouveau ViewModel de l'annuaire des artistes. */
     fun makeArtistsViewModel(): ArtistsViewModel = ArtistsViewModel(api)
+
+    /** Nouveau ViewModel du sponsoring. */
+    fun makeSponsorViewModel(): SponsorViewModel = SponsorViewModel(api)
+
+    /** Nouveau ViewModel de l'espace créateur. */
+    fun makeCreatorViewModel(): CreatorViewModel = CreatorViewModel(api)
 
     /** Nouveau ViewModel du catalogue de duels. */
     fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository)
@@ -419,6 +429,14 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                             val artistsVm: ArtistsViewModel = viewModel { container.makeArtistsViewModel() }
                             ArtistsScreen(viewModel = artistsVm)
                         }
+                        11 -> SubScreen(onBack = { sub = 0 }) {
+                            val sponsorVm: SponsorViewModel = viewModel { container.makeSponsorViewModel() }
+                            SponsorScreen(viewModel = sponsorVm)
+                        }
+                        12 -> SubScreen(onBack = { sub = 0 }) {
+                            val creatorVm: CreatorViewModel = viewModel { container.makeCreatorViewModel() }
+                            CreatorScreen(viewModel = creatorVm)
+                        }
                         else -> {
                             val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
                             ProfileScreen(
@@ -432,6 +450,8 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                                 onOpenSubscription = { sub = 8 },
                                 onOpenContent = { sub = 9 },
                                 onOpenArtists = { sub = 10 },
+                                onOpenSponsor = { sub = 11 },
+                                onOpenCreator = { sub = 12 },
                                 onOpenNotifications = { sub = 2 },
                                 onSignOut = onSignOut,
                             )

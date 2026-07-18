@@ -85,6 +85,9 @@ dependencies {
     implementation(project(":feature:content"))
     // Lot artistes.
     implementation(project(":feature:artists"))
+    // Lots sponsors + créateur.
+    implementation(project(":feature:sponsor"))
+    implementation(project(":feature:creator"))
     implementation("androidx.compose.material:material-icons-extended")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
