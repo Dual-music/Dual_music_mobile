@@ -64,3 +64,6 @@ include(":feature:withdrawal")
 
 // Lot « replays » : catalogue + lecteur ExoPlayer + déblocage payant.
 include(":feature:replay")
+
+// Lot « boutique cadeaux » : catalogue + inventaire + achat.
+include(":feature:giftshop")

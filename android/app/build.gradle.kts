@@ -75,6 +75,8 @@ dependencies {
     implementation(project(":feature:withdrawal"))
     // Lot replays.
     implementation(project(":feature:replay"))
+    // Lot boutique cadeaux.
+    implementation(project(":feature:giftshop"))
     implementation("androidx.compose.material:material-icons-extended")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")

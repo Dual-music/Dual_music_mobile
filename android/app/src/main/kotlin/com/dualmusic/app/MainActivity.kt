@@ -62,6 +62,9 @@ import com.dualmusic.feature.duel.DuelViewModel
 import com.dualmusic.feature.duel.DuelsListScreen
 import com.dualmusic.feature.duel.DuelsListViewModel
 import com.dualmusic.feature.feed.FeedRepository
+import com.dualmusic.feature.giftshop.GiftShopRepository
+import com.dualmusic.feature.giftshop.GiftShopScreen
+import com.dualmusic.feature.giftshop.GiftShopViewModel
 import com.dualmusic.feature.feed.FeedScreen
 import com.dualmusic.feature.feed.FeedViewModel
 import com.dualmusic.feature.live.LiveRepository
@@ -136,6 +139,9 @@ class AppContainer(context: Context) {
     // --- Lot replays ---
     private val replayRepository = ReplayRepository(api)
 
+    // --- Lot boutique cadeaux ---
+    private val giftShopRepository = GiftShopRepository(api)
+
     // --- Lot duels ---
     private val duelRepository = DuelRepository(api)
 
@@ -165,6 +171,9 @@ class AppContainer(context: Context) {
     /** Nouveau ViewModel de lecture d'un replay (accès + déblocage). */
     fun makeReplayPlayerViewModel(replay: ReplayVideo): ReplayPlayerViewModel =
         ReplayPlayerViewModel(replay, replayRepository)
+
+    /** Nouveau ViewModel de la boutique de cadeaux (catalogue + inventaire). */
+    fun makeGiftShopViewModel(): GiftShopViewModel = GiftShopViewModel(giftShopRepository)
 
     /** Nouveau ViewModel du catalogue de duels. */
     fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository)
@@ -357,6 +366,10 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                                 }
                             }
                         }
+                        5 -> SubScreen(onBack = { sub = 0 }) {
+                            val shopVm: GiftShopViewModel = viewModel { container.makeGiftShopViewModel() }
+                            GiftShopScreen(viewModel = shopVm)
+                        }
                         else -> {
                             val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
                             ProfileScreen(
@@ -364,6 +377,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                                 onOpenWallet = { sub = 1 },
                                 onOpenWithdrawal = { sub = 3 },
                                 onOpenReplays = { sub = 4 },
+                                onOpenGiftShop = { sub = 5 },
                                 onOpenNotifications = { sub = 2 },
                                 onSignOut = onSignOut,
                             )
