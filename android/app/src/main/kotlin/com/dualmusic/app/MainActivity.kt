@@ -65,6 +65,12 @@ import com.dualmusic.feature.feed.FeedRepository
 import com.dualmusic.feature.giftshop.GiftShopRepository
 import com.dualmusic.feature.giftshop.GiftShopScreen
 import com.dualmusic.feature.giftshop.GiftShopViewModel
+import com.dualmusic.feature.leaderboard.LeaderboardScreen
+import com.dualmusic.feature.leaderboard.LeaderboardViewModel
+import com.dualmusic.feature.referral.ReferralScreen
+import com.dualmusic.feature.referral.ReferralViewModel
+import com.dualmusic.feature.subscription.SubscriptionScreen
+import com.dualmusic.feature.subscription.SubscriptionViewModel
 import com.dualmusic.feature.feed.FeedScreen
 import com.dualmusic.feature.feed.FeedViewModel
 import com.dualmusic.feature.live.LiveRepository
@@ -174,6 +180,15 @@ class AppContainer(context: Context) {
 
     /** Nouveau ViewModel de la boutique de cadeaux (catalogue + inventaire). */
     fun makeGiftShopViewModel(): GiftShopViewModel = GiftShopViewModel(giftShopRepository)
+
+    /** Nouveau ViewModel des classements. */
+    fun makeLeaderboardViewModel(): LeaderboardViewModel = LeaderboardViewModel(api)
+
+    /** Nouveau ViewModel du parrainage. */
+    fun makeReferralViewModel(): ReferralViewModel = ReferralViewModel(api)
+
+    /** Nouveau ViewModel des abonnements. */
+    fun makeSubscriptionViewModel(): SubscriptionViewModel = SubscriptionViewModel(api)
 
     /** Nouveau ViewModel du catalogue de duels. */
     fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository)
@@ -370,6 +385,18 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                             val shopVm: GiftShopViewModel = viewModel { container.makeGiftShopViewModel() }
                             GiftShopScreen(viewModel = shopVm)
                         }
+                        6 -> SubScreen(onBack = { sub = 0 }) {
+                            val lbVm: LeaderboardViewModel = viewModel { container.makeLeaderboardViewModel() }
+                            LeaderboardScreen(viewModel = lbVm)
+                        }
+                        7 -> SubScreen(onBack = { sub = 0 }) {
+                            val refVm: ReferralViewModel = viewModel { container.makeReferralViewModel() }
+                            ReferralScreen(viewModel = refVm)
+                        }
+                        8 -> SubScreen(onBack = { sub = 0 }) {
+                            val subVm: SubscriptionViewModel = viewModel { container.makeSubscriptionViewModel() }
+                            SubscriptionScreen(viewModel = subVm)
+                        }
                         else -> {
                             val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
                             ProfileScreen(
@@ -378,6 +405,9 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                                 onOpenWithdrawal = { sub = 3 },
                                 onOpenReplays = { sub = 4 },
                                 onOpenGiftShop = { sub = 5 },
+                                onOpenLeaderboard = { sub = 6 },
+                                onOpenReferral = { sub = 7 },
+                                onOpenSubscription = { sub = 8 },
                                 onOpenNotifications = { sub = 2 },
                                 onSignOut = onSignOut,
                             )

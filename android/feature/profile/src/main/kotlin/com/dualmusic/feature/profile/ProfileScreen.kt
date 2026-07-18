@@ -76,6 +76,9 @@ fun ProfileScreen(
     onOpenWithdrawal: () -> Unit,
     onOpenReplays: () -> Unit,
     onOpenGiftShop: () -> Unit,
+    onOpenLeaderboard: () -> Unit,
+    onOpenReferral: () -> Unit,
+    onOpenSubscription: () -> Unit,
     onOpenNotifications: () -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -124,6 +127,9 @@ fun ProfileScreen(
         DMButton("Retirer mes crédits", style = DMButtonStyle.SECONDARY, onClick = onOpenWithdrawal)
         DMButton("Replays", style = DMButtonStyle.SECONDARY, onClick = onOpenReplays)
         DMButton("Boutique de cadeaux", style = DMButtonStyle.SECONDARY, onClick = onOpenGiftShop)
+        DMButton("Classements", style = DMButtonStyle.SECONDARY, onClick = onOpenLeaderboard)
+        DMButton("Parrainage", style = DMButtonStyle.SECONDARY, onClick = onOpenReferral)
+        DMButton("Abonnements", style = DMButtonStyle.SECONDARY, onClick = onOpenSubscription)
         DMButton("Notifications", style = DMButtonStyle.SECONDARY, onClick = onOpenNotifications)
         DMButton("Se déconnecter", style = DMButtonStyle.OUTLINE, onClick = onSignOut)
     }

@@ -67,3 +67,8 @@ include(":feature:replay")
 
 // Lot « boutique cadeaux » : catalogue + inventaire + achat.
 include(":feature:giftshop")
+
+// Lots « classements », « parrainage », « abonnements » (lecture + affichage).
+include(":feature:leaderboard")
+include(":feature:referral")
+include(":feature:subscription")
