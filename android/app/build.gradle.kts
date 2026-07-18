@@ -81,6 +81,8 @@ dependencies {
     implementation(project(":feature:leaderboard"))
     implementation(project(":feature:referral"))
     implementation(project(":feature:subscription"))
+    // Lot contenu.
+    implementation(project(":feature:content"))
     implementation("androidx.compose.material:material-icons-extended")
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")

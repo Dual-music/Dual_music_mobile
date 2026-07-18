@@ -72,3 +72,6 @@ include(":feature:giftshop")
 include(":feature:leaderboard")
 include(":feature:referral")
 include(":feature:subscription")
+
+// Lot « contenu » : vidéos lifestyle + blog.
+include(":feature:content")

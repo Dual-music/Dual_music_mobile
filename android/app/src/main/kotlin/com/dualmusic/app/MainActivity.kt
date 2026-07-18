@@ -54,6 +54,9 @@ import com.dualmusic.feature.competition.CompetitionRoomViewModel
 import com.dualmusic.feature.competition.CompetitionsListScreen
 import com.dualmusic.feature.competition.CompetitionsViewModel
 import com.dualmusic.feature.concert.ConcertRepository
+import com.dualmusic.feature.content.ContentRepository
+import com.dualmusic.feature.content.ContentScreen
+import com.dualmusic.feature.content.ContentViewModel
 import com.dualmusic.feature.concert.ConcertsListScreen
 import com.dualmusic.feature.concert.ConcertsViewModel
 import com.dualmusic.feature.duel.DuelRepository
@@ -148,6 +151,9 @@ class AppContainer(context: Context) {
     // --- Lot boutique cadeaux ---
     private val giftShopRepository = GiftShopRepository(api)
 
+    // --- Lot contenu ---
+    private val contentRepository = ContentRepository(api)
+
     // --- Lot duels ---
     private val duelRepository = DuelRepository(api)
 
@@ -189,6 +195,9 @@ class AppContainer(context: Context) {
 
     /** Nouveau ViewModel des abonnements. */
     fun makeSubscriptionViewModel(): SubscriptionViewModel = SubscriptionViewModel(api)
+
+    /** Nouveau ViewModel du contenu (lifestyle + blog). */
+    fun makeContentViewModel(): ContentViewModel = ContentViewModel(contentRepository)
 
     /** Nouveau ViewModel du catalogue de duels. */
     fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository)
@@ -397,6 +406,10 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                             val subVm: SubscriptionViewModel = viewModel { container.makeSubscriptionViewModel() }
                             SubscriptionScreen(viewModel = subVm)
                         }
+                        9 -> SubScreen(onBack = { sub = 0 }) {
+                            val contentVm: ContentViewModel = viewModel { container.makeContentViewModel() }
+                            ContentScreen(viewModel = contentVm)
+                        }
                         else -> {
                             val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
                             ProfileScreen(
@@ -408,6 +421,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                                 onOpenLeaderboard = { sub = 6 },
                                 onOpenReferral = { sub = 7 },
                                 onOpenSubscription = { sub = 8 },
+                                onOpenContent = { sub = 9 },
                                 onOpenNotifications = { sub = 2 },
                                 onSignOut = onSignOut,
                             )
