@@ -1,6 +1,7 @@
 package com.dualmusic.feature.auth
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -56,10 +57,24 @@ fun SignInScreen(
             height = 72.dp,
             modifier = Modifier.padding(top = DualMusicTheme.spacing.xxl),
         )
-        Text("Connecte-toi pour rejoindre les lives", color = colors.mutedForeground)
+        Text(
+            if (ui.isRegister) "Crée ton compte pour rejoindre les lives"
+            else "Connecte-toi pour rejoindre les lives",
+            color = colors.mutedForeground,
+        )
 
         DMCard {
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md)) {
+                // Nom : uniquement en inscription (optionnel côté backend).
+                if (ui.isRegister) {
+                    OutlinedTextField(
+                        value = ui.fullName,
+                        onValueChange = viewModel::onFullNameChange,
+                        label = { Text("Nom (optionnel)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 OutlinedTextField(
                     value = ui.email,
                     onValueChange = viewModel::onEmailChange,
@@ -72,6 +87,7 @@ fun SignInScreen(
                     value = ui.password,
                     onValueChange = viewModel::onPasswordChange,
                     label = { Text("Mot de passe") },
+                    supportingText = { Text("Au moins 8 caractères") },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -81,16 +97,27 @@ fun SignInScreen(
                 ui.error?.let { Text(it, color = colors.destructive) }
 
                 DMButton(
-                    title = "Se connecter",
+                    title = if (ui.isRegister) "Créer mon compte" else "Se connecter",
                     isLoading = ui.isSubmitting,
                     enabled = ui.canSubmit,
-                    onClick = viewModel::signIn,
+                    onClick = viewModel::submit,
                 )
 
                 DMButton(
                     title = "Continuer avec Google",
                     style = DMButtonStyle.OUTLINE,
                     onClick = onGoogle,
+                )
+
+                // Bascule connexion ⇄ inscription.
+                Text(
+                    text = if (ui.isRegister) "Déjà un compte ? Se connecter"
+                    else "Pas de compte ? S'inscrire",
+                    color = colors.primaryGlow,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !ui.isSubmitting) { viewModel.toggleMode() },
                 )
             }
         }
