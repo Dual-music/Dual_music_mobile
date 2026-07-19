@@ -250,8 +250,9 @@ téléphone joint le backend** 🎉. Sinon, voir le dépannage plus bas (Wi-Fi /
 
 Une fois l'app relancée et connectée au backend, teste dans cet ordre :
 
-1. **Connexion / inscription** (email + mot de passe). Utilise un compte de démo issu du
-   `db:seed`, ou crée-en un.
+1. **Inscription** (email + mot de passe). ⚠️ Le `db:seed` ne crée **aucun compte** (il
+   installe seulement les réglages + le catalogue de cadeaux/prix) — **crée donc un compte**
+   via l'écran d'inscription. Ensuite tu pourras te reconnecter avec.
 2. **Feed** des lives / **catalogues** (duels, concerts, compétitions) → les listes doivent
    se remplir depuis le backend.
 3. **Portefeuille** : solde + historiques.
@@ -277,7 +278,7 @@ Une fois l'app relancée et connectée au backend, teste dans cet ordre :
 | Réseaux d'entreprise / Wi-Fi public | *Isolation des clients* activée (le PC et le téléphone ne peuvent pas se voir) | Utilise un **partage de connexion** (hotspot) depuis le téléphone, ou un Wi-Fi domestique. |
 | `Unknown collation: 'utf8mb4_0900_ai_ci'` au `db:migrate` | MySQL **< 8.0** (5.7 / XAMPP / MariaDB) | Installe **MySQL 8.0+** (voir Étape A.2, option Docker recommandée). Cette collation n'existe qu'en MySQL 8. |
 | `db:reset` échoue | MySQL éteint, mauvaise version, ou identifiants `.env` faux | Démarre MySQL 8, vérifie `DB_PORT` (3307 si Docker), corrige `DB_USER`/`DB_PASSWORD` dans `.env`. |
-| Connexion refuse les identifiants | La base n'a pas de données | Rejoue `npm run db:seed` (ou `npm run db:reset`). |
+| Connexion refuse les identifiants | Aucun compte (le seed n'en crée pas) | **Inscris-toi** d'abord dans l'app, puis connecte-toi avec ce compte. |
 
 ---
 
