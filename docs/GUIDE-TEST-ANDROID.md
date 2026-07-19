@@ -155,29 +155,69 @@ Le backend a besoin de **Node.js ≥ 20** et d'une base **MySQL**. (Redis est **
    ```
 2. **MySQL 8.0+ OBLIGATOIRE.** Le backend utilise la collation `utf8mb4_0900_ai_ci` et des
    fonctions fenêtre (`ROW_NUMBER/OVER`) — **exclusives à MySQL 8.0+** (MySQL 5.7 et XAMPP
-   échouent avec `Unknown collation: 'utf8mb4_0900_ai_ci'`). Deux options :
-   - **Option installeur** : *MySQL Community Server 8.0* (https://dev.mysql.com/downloads/mysql/).
-   - **Option Docker (recommandée, isolée, n'écrase pas un MySQL existant)** — lance un
-     MySQL 8 sur le port **3307** :
-     ```powershell
-     docker run --name dualmysql8 -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=duel_music -p 3307:3306 -d mysql:8.0
-     docker logs dualmysql8 --tail 5    # attends "ready for connections" (~30 s)
-     ```
-     Puis dans `.env` : `DB_PORT=3307`, `DB_USER=root`, `DB_PASSWORD=root`. (Éteindre/rallumer :
-     `docker stop dualmysql8` / `docker start dualmysql8` — les données sont conservées.)
-3. Ouvre un terminal dans le dossier **`Dual_music_backend`** et configure l'environnement :
+   échouent avec `Unknown collation: 'utf8mb4_0900_ai_ci'`). Choisis **un** des deux chemins
+   ci-dessous (🐳 **Docker recommandé** : isolé, n'écrase pas un MySQL existant), puis
+   continue au point 3.
+
+> ### 🐳 Chemin Docker — recette complète (validée)
+>
+> Pré-requis : **Docker Desktop** installé et **lancé** (sinon erreur *« check if the daemon
+> is running »* → ouvre Docker Desktop et attends qu'il soit prêt).
+>
+> On lance un MySQL 8 **isolé** sur le port **3307** (pour ne pas entrer en conflit avec un
+> éventuel MySQL déjà présent sur 3306).
+>
+> **a. Démarrer le conteneur** (crée aussi la base `duel_music`, mot de passe root = `root`) :
+> ```powershell
+> docker run --name dualmysql8 -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=duel_music -p 3307:3306 -d mysql:8.0
+> ```
+>
+> **b. Attendre qu'il soit prêt** (~30 s la 1re fois). Répète jusqu'à voir
+> `ready for connections` :
+> ```powershell
+> docker logs dualmysql8 --tail 5
+> ```
+> ⚠️ **N'enchaîne pas trop tôt** : tant que le conteneur affiche *« Starting temporary
+> server »* / *« InnoDB initialization »*, il **refuse les connexions** (tu obtiendrais
+> `Access denied`). Attends bien la ligne `ready for connections`.
+>
+> **c. Configurer le `.env`** du backend avec ces valeurs **exactes** :
+> ```
+> DB_HOST=127.0.0.1
+> DB_PORT=3307
+> DB_NAME=duel_music
+> DB_USER=root
+> DB_PASSWORD=root
+> ```
+> (En Docker, la base `duel_music` existe déjà → **`npm run db:create` est inutile**, passe
+> directement à `db:reset` au point 4.)
+>
+> **Gérer le conteneur ensuite** : `docker stop dualmysql8` pour l'éteindre,
+> `docker start dualmysql8` pour le rallumer — **les données sont conservées**. (Pour repartir
+> de zéro : `docker rm -f dualmysql8` puis relance la commande **a**.)
+
+> ### 💽 Chemin installeur (alternative)
+>
+> Installe *MySQL Community Server 8.0* (https://dev.mysql.com/downloads/mysql/), démarre-le,
+> et note le mot de passe **root**. Dans le `.env` : `DB_PORT=3306` (défaut),
+> `DB_PASSWORD=<ton_mot_de_passe>`. Ici, `npm run db:create` **est** nécessaire (point 4).
+
+3. Ouvre un terminal dans le dossier **`Dual_music_backend`** et installe les dépendances :
    ```bash
    cd Dual_music_backend
-   copy .env.example .env      # (Windows) ; puis ouvre .env et renseigne DB_USER/DB_PASSWORD
+   copy .env.example .env      # (Windows) — si le .env n'existe pas encore
    npm install
    ```
-   Dans **`.env`**, vérifie au minimum : `DB_HOST=127.0.0.1`, `DB_NAME=duel_music`,
-   `DB_USER=root`, `DB_PASSWORD=<ton_mot_de_passe>`, `PORT=4000`.
-4. **Créer + remplir la base** (migrations + procédures stockées + données de test) :
+   Vérifie dans **`.env`** : `DB_HOST=127.0.0.1`, `DB_NAME=duel_music`, `PORT=4000`, et le
+   `DB_PORT`/`DB_PASSWORD` selon ton chemin (Docker = `3307`/`root` ; installeur = `3306`/ton mdp).
+4. **Remplir la base** (migrations + procédures stockées + réglages/catalogue) :
    ```bash
-   npm run db:create     # crée la base "duel_music" (ignore l'erreur si elle existe déjà)
-   npm run db:reset      # migrations + procédures + jeu de données de démo
+   npm run db:create     # 💽 installeur uniquement (🐳 Docker : SAUTE cette ligne)
+   npm run db:reset      # migrations + procédures + seed — ~4 min la 1re fois
    ```
+   ✅ Succès = `All stored procedures applied.` puis le seed sans erreur.
+   ℹ️ Le seed installe les **réglages + le catalogue de cadeaux/prix**, mais **aucun compte** :
+   tu créeras ton compte via l'**inscription** dans l'app.
 5. **Démarrer le serveur** :
    ```bash
    npm run dev
