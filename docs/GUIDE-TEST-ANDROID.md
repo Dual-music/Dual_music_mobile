@@ -123,8 +123,10 @@ On itère ainsi jusqu'à ce que ça compile.
 | Composant SDK manquant | Accepte l'installation proposée, ou **Tools → SDK Manager** pour installer l'API 35. |
 
 ---
-
+===================================================================================================================
 # Partie 2 — Test end-to-end avec le backend branché
+===================================================================================================================
+
 
 Jusqu'ici l'app tournait seule. Pour tester les **vrais écrans** (connexion, feed, lives,
 duels, portefeuille, cadeaux…), il faut **3 choses** :
@@ -151,8 +153,18 @@ Le backend a besoin de **Node.js ≥ 20** et d'une base **MySQL**. (Redis est **
    ```bash
    node -v   # doit afficher v20.x ou plus
    ```
-2. **Installer MySQL** (ex. via *MySQL Community Server* ou *XAMPP*) et le démarrer. Note le
-   mot de passe **root**.
+2. **MySQL 8.0+ OBLIGATOIRE.** Le backend utilise la collation `utf8mb4_0900_ai_ci` et des
+   fonctions fenêtre (`ROW_NUMBER/OVER`) — **exclusives à MySQL 8.0+** (MySQL 5.7 et XAMPP
+   échouent avec `Unknown collation: 'utf8mb4_0900_ai_ci'`). Deux options :
+   - **Option installeur** : *MySQL Community Server 8.0* (https://dev.mysql.com/downloads/mysql/).
+   - **Option Docker (recommandée, isolée, n'écrase pas un MySQL existant)** — lance un
+     MySQL 8 sur le port **3307** :
+     ```powershell
+     docker run --name dualmysql8 -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=duel_music -p 3307:3306 -d mysql:8.0
+     docker logs dualmysql8 --tail 5    # attends "ready for connections" (~30 s)
+     ```
+     Puis dans `.env` : `DB_PORT=3307`, `DB_USER=root`, `DB_PASSWORD=root`. (Éteindre/rallumer :
+     `docker stop dualmysql8` / `docker start dualmysql8` — les données sont conservées.)
 3. Ouvre un terminal dans le dossier **`Dual_music_backend`** et configure l'environnement :
    ```bash
    cd Dual_music_backend
@@ -263,7 +275,8 @@ Une fois l'app relancée et connectée au backend, teste dans cet ordre :
 | Ça marche sur émulateur mais pas sur téléphone | L'app pointe encore sur `10.0.2.2` | Mets l'**IP du PC** dans `API_BASE_URL` (Étape C). `10.0.2.2` **ne marche que sur émulateur**. |
 | L'IP du PC change après un redémarrage | IP attribuée dynamiquement par la box | Refais B.1 + C, ou réserve une IP fixe pour le PC dans la box. |
 | Réseaux d'entreprise / Wi-Fi public | *Isolation des clients* activée (le PC et le téléphone ne peuvent pas se voir) | Utilise un **partage de connexion** (hotspot) depuis le téléphone, ou un Wi-Fi domestique. |
-| `db:reset` échoue | MySQL éteint, ou identifiants `.env` faux | Démarre MySQL, corrige `DB_USER`/`DB_PASSWORD` dans `.env`. |
+| `Unknown collation: 'utf8mb4_0900_ai_ci'` au `db:migrate` | MySQL **< 8.0** (5.7 / XAMPP / MariaDB) | Installe **MySQL 8.0+** (voir Étape A.2, option Docker recommandée). Cette collation n'existe qu'en MySQL 8. |
+| `db:reset` échoue | MySQL éteint, mauvaise version, ou identifiants `.env` faux | Démarre MySQL 8, vérifie `DB_PORT` (3307 si Docker), corrige `DB_USER`/`DB_PASSWORD` dans `.env`. |
 | Connexion refuse les identifiants | La base n'a pas de données | Rejoue `npm run db:seed` (ou `npm run db:reset`). |
 
 ---
