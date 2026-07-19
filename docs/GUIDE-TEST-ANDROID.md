@@ -124,14 +124,179 @@ On itère ainsi jusqu'à ce que ça compile.
 
 ---
 
-## Et après ? (aperçu)
+# Partie 2 — Test end-to-end avec le backend branché
 
-Cette démo = **écran de marque uniquement**. Les vrais écrans arriveront **module par
-module** :
-1. **Connexion** (email + mot de passe, OTP, Google, biométrie).
-2. **Feed de lives** (scroll vertical style TikTok).
-3. **Live** (vidéo LiveKit + chat + cadeaux animés).
+Jusqu'ici l'app tournait seule. Pour tester les **vrais écrans** (connexion, feed, lives,
+duels, portefeuille, cadeaux…), il faut **3 choses** :
 
-Pour ces écrans, il faudra faire **tourner le backend** sur le PC et le rendre **joignable
-depuis le téléphone** (via l'IP locale du PC, ex. `http://192.168.x.x:4000`, car le
-téléphone ne connaît pas `localhost`). Un guide dédié sera fourni à ce moment-là.
+1. faire **tourner le backend** sur le PC,
+2. le rendre **joignable depuis le téléphone** (via l'IP locale du PC),
+3. **pointer l'app** vers cette adresse.
+
+> 💡 **Pourquoi une IP et pas `localhost` ?** Pour le téléphone, `localhost` = *lui-même*,
+> pas le PC. Il faut donc l'**IP du PC sur le Wi-Fi** (ex. `192.168.1.42`).
+> Exception : l'**émulateur** utilise l'adresse spéciale `10.0.2.2` (déjà configurée par
+> défaut) — si tu testes sur émulateur, tu n'as **rien à changer** dans l'app.
+
+**Pré-requis absolu : le téléphone et le PC doivent être sur le MÊME réseau Wi-Fi.**
+
+---
+
+## Étape A — Faire tourner le backend (sur le PC)
+
+Le backend a besoin de **Node.js ≥ 20** et d'une base **MySQL**. (Redis est **optionnel** :
+`REDIS_OPTIONAL=true` — sans Redis, l'app utilise un repli intégré, aucun souci.)
+
+1. **Installer Node 20+** : https://nodejs.org (choisis « LTS »). Vérifie dans un terminal :
+   ```bash
+   node -v   # doit afficher v20.x ou plus
+   ```
+2. **Installer MySQL** (ex. via *MySQL Community Server* ou *XAMPP*) et le démarrer. Note le
+   mot de passe **root**.
+3. Ouvre un terminal dans le dossier **`Dual_music_backend`** et configure l'environnement :
+   ```bash
+   cd Dual_music_backend
+   copy .env.example .env      # (Windows) ; puis ouvre .env et renseigne DB_USER/DB_PASSWORD
+   npm install
+   ```
+   Dans **`.env`**, vérifie au minimum : `DB_HOST=127.0.0.1`, `DB_NAME=duel_music`,
+   `DB_USER=root`, `DB_PASSWORD=<ton_mot_de_passe>`, `PORT=4000`.
+4. **Créer + remplir la base** (migrations + procédures stockées + données de test) :
+   ```bash
+   npm run db:create     # crée la base "duel_music" (ignore l'erreur si elle existe déjà)
+   npm run db:reset      # migrations + procédures + jeu de données de démo
+   ```
+5. **Démarrer le serveur** :
+   ```bash
+   npm run dev
+   ```
+   ✅ Succès = la ligne `Dual Music API listening on http://localhost:4000`.
+
+**Vérifie dans un navigateur sur le PC** : ouvre `http://localhost:4000/api/v1/health`
+(ou la page d'accueil de l'API). Si tu obtiens une réponse JSON, le backend tourne. 👍
+
+> ⚠️ **Laisse ce terminal ouvert** : tant que `npm run dev` tourne, le backend est vivant.
+> Le fermer = couper le backend.
+
+---
+
+## Étape B — Rendre le backend joignable depuis le téléphone
+
+### B.1 — Trouver l'IP locale du PC
+
+Dans un terminal Windows :
+```bash
+ipconfig
+```
+Cherche la ligne **« Adresse IPv4 »** de ta carte Wi-Fi (ex. `192.168.1.42`).
+**C'est cette adresse** que le téléphone utilisera. Note-la.
+
+### B.2 — Autoriser le port 4000 dans le pare-feu Windows
+
+Par défaut, Windows **bloque** les connexions entrantes : le téléphone ne pourra pas
+joindre le PC tant que le port 4000 n'est pas ouvert. Dans un terminal **PowerShell en
+administrateur** :
+```powershell
+New-NetFirewallRule -DisplayName "Dual Music API 4000" -Direction Inbound -LocalPort 4000 -Protocol TCP -Action Allow
+```
+(Alternative manuelle : *Pare-feu Windows Defender → Paramètres avancés → Règles de trafic
+entrant → Nouvelle règle → Port → TCP 4000 → Autoriser*.)
+
+### B.3 — Vérifier depuis le téléphone
+
+Sur le **navigateur du téléphone** (connecté au même Wi-Fi), ouvre :
+```
+http://<IP_DU_PC>:4000/api/v1/health
+```
+(ex. `http://192.168.1.42:4000/api/v1/health`). Si tu vois la réponse JSON → **le
+téléphone joint le backend** 🎉. Sinon, voir le dépannage plus bas (Wi-Fi / pare-feu / IP).
+
+---
+
+## Étape C — Pointer l'app vers le backend
+
+1. Dans Android Studio, ouvre le fichier
+   [MainActivity.kt](../android/app/src/main/kotlin/com/dualmusic/app/MainActivity.kt).
+2. Cherche la ligne (vers le **haut du fichier**) :
+   ```kotlin
+   private const val API_BASE_URL = "http://10.0.2.2:4000"
+   ```
+3. Remplace `10.0.2.2` par **l'IP du PC** trouvée à l'étape B.1 :
+   ```kotlin
+   private const val API_BASE_URL = "http://192.168.1.42:4000"   // ← ton IP
+   ```
+   > ⚠️ Garde `http://` et `:4000`. **N'ajoute PAS** `/api/v1` : l'app l'ajoute déjà elle-même.
+   > 📱 **Émulateur** : laisse `10.0.2.2` (ne change rien).
+4. **Relance l'app** : **▶ Run**. Android Studio recompile et réinstalle avec la nouvelle adresse.
+
+> 🔒 **Le HTTP en clair est déjà autorisé** dans l'app (`usesCleartextTraffic="true"` dans
+> le manifeste) — pas de config TLS à faire pour un test local.
+
+---
+
+## Étape D — Tester les vrais parcours
+
+Une fois l'app relancée et connectée au backend, teste dans cet ordre :
+
+1. **Connexion / inscription** (email + mot de passe). Utilise un compte de démo issu du
+   `db:seed`, ou crée-en un.
+2. **Feed** des lives / **catalogues** (duels, concerts, compétitions) → les listes doivent
+   se remplir depuis le backend.
+3. **Portefeuille** : solde + historiques.
+4. **Temps réel** : ouvre un live/duel → le **chat** et les **cadeaux** transitent par
+   Socket.IO (même adresse `API_BASE_URL`).
+5. **Création avec upload** (espace créateur / sponsoring) : choisir une image/vidéo →
+   l'upload passe par `presign → PUT → confirm`.
+
+> 🐛 **En cas de bug** : ouvre l'onglet **Logcat** (en bas d'Android Studio), filtre par
+> `Dual` ou par le niveau **Error**, et copie le texte rouge. C'est la source n°1 pour
+> diagnostiquer (erreur réseau, 401, parsing JSON…).
+
+---
+
+## Dépannage — connexion backend ↔ téléphone
+
+| Symptôme | Cause probable | Solution |
+|---|---|---|
+| L'app affiche *« impossible de joindre le serveur »* / timeout | Mauvaise IP, ou pas le même Wi-Fi | Re-vérifie `ipconfig` (IPv4 **Wi-Fi**), et que téléphone **et** PC sont sur le **même** réseau. |
+| Le test navigateur B.3 échoue depuis le téléphone | Pare-feu Windows bloque le port | Rejoue la règle pare-feu (B.2). Vérifie aussi que le backend tourne toujours (`npm run dev`). |
+| Ça marche sur émulateur mais pas sur téléphone | L'app pointe encore sur `10.0.2.2` | Mets l'**IP du PC** dans `API_BASE_URL` (Étape C). `10.0.2.2` **ne marche que sur émulateur**. |
+| L'IP du PC change après un redémarrage | IP attribuée dynamiquement par la box | Refais B.1 + C, ou réserve une IP fixe pour le PC dans la box. |
+| Réseaux d'entreprise / Wi-Fi public | *Isolation des clients* activée (le PC et le téléphone ne peuvent pas se voir) | Utilise un **partage de connexion** (hotspot) depuis le téléphone, ou un Wi-Fi domestique. |
+| `db:reset` échoue | MySQL éteint, ou identifiants `.env` faux | Démarre MySQL, corrige `DB_USER`/`DB_PASSWORD` dans `.env`. |
+| Connexion refuse les identifiants | La base n'a pas de données | Rejoue `npm run db:seed` (ou `npm run db:reset`). |
+
+---
+
+## Récapitulatif express (une fois tout installé)
+
+```bash
+# 1. PC — démarrer le backend
+cd Dual_music_backend
+npm run dev                     # → http://localhost:4000
+
+# 2. PC — connaître son IP
+ipconfig                        # → Adresse IPv4, ex. 192.168.1.42
+```
+```kotlin
+// 3. App — MainActivity.kt
+private const val API_BASE_URL = "http://192.168.1.42:4000"
+```
+```
+# 4. Android Studio — ▶ Run (téléphone branché, même Wi-Fi, port 4000 ouvert)
+```
+
+---
+
+## Fonctions **non** testables en E2E local (rappel)
+
+Ces fonctions dépendent de **consoles externes** et ne peuvent pas être validées par ce
+test local — elles seront ajoutées **après** :
+
+- **Notifications push (FCM)** → nécessite un projet **Firebase** + `google-services.json`.
+- **Recharge de crédits / achat d'abonnement (Google Play Billing)** → nécessite la **Play
+  Console** (compte à 25 $) + produits configurés.
+- **Connexion Google native (OAuth)** → nécessite un client OAuth (Firebase/Google Cloud) +
+  empreinte SHA-1.
+
+Le reste de l'app (le cœur) est **entièrement testable** dès maintenant avec ce guide.
