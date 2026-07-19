@@ -13,6 +13,13 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.DualMusic">
 
+        <!--
+          Désactive l'auto-initialisation de Sentry (son SentryInitProvider s'exécute AVANT
+          notre Application et planterait sans DSN : « DSN is required »). L'init se fait
+          exclusivement dans DualMusicApp (no-op sûr tant que le DSN est vide).
+        -->
+        <meta-data android:name="io.sentry.auto-init" android:value="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
