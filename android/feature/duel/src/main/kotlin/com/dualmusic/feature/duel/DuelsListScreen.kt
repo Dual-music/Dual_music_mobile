@@ -22,6 +22,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.dualmusic.core.ui.components.DMCard
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import com.dualmusic.core.ui.components.DMEmptyState
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.model.Duel
 import com.dualmusic.domain.model.EventStatus
@@ -84,7 +87,12 @@ fun DuelsListScreen(
             CircularProgressIndicator(color = colors.primary)
         }
         if (!isLoading && duels.isEmpty()) {
-            Text("Aucun duel pour le moment.", color = colors.mutedForeground)
+            DMEmptyState(
+                title = "Aucun duel pour le moment",
+                subtitle = "Les duels à venir s'afficheront ici.",
+                icon = Icons.Filled.DateRange,
+                modifier = Modifier.weight(1f),
+            )
         }
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {

@@ -22,6 +22,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.dualmusic.core.ui.components.DMCard
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import com.dualmusic.core.ui.components.DMEmptyState
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.model.Competition
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,7 +84,12 @@ fun CompetitionsListScreen(
 
         if (isLoading) CircularProgressIndicator(color = colors.primary)
         if (!isLoading && competitions.isEmpty()) {
-            Text("Aucune compétition pour le moment.", color = colors.mutedForeground)
+            DMEmptyState(
+                title = "Aucune compétition pour le moment",
+                subtitle = "Les compétitions ouvertes apparaîtront ici.",
+                icon = Icons.Filled.Star,
+                modifier = Modifier.weight(1f),
+            )
         }
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {

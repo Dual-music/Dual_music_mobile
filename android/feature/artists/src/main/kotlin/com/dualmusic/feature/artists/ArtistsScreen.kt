@@ -25,6 +25,9 @@ import com.dualmusic.core.network.Endpoint
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
+import com.dualmusic.core.ui.components.DMEmptyState
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.artist.ArtistEndpoints
 import com.dualmusic.domain.artist.ArtistSummary
@@ -111,6 +114,14 @@ fun ArtistsScreen(viewModel: ArtistsViewModel) {
     ) {
         Text("Artistes", color = colors.foreground, fontWeight = FontWeight.Bold)
         if (isLoading) CircularProgressIndicator(color = colors.primary)
+        if (!isLoading && artists.isEmpty()) {
+            DMEmptyState(
+                title = "Aucun artiste",
+                subtitle = "Les artistes de la plateforme apparaîtront ici.",
+                icon = Icons.Filled.Person,
+                modifier = Modifier.weight(1f),
+            )
+        }
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
             items(artists) { artist ->

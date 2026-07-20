@@ -21,6 +21,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.dualmusic.core.ui.components.DMCard
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import com.dualmusic.core.ui.components.DMEmptyState
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.model.Concert
 import com.dualmusic.domain.model.EventStatus
@@ -81,7 +84,12 @@ fun ConcertsListScreen(
 
         if (isLoading) CircularProgressIndicator(color = colors.primary)
         if (!isLoading && concerts.isEmpty()) {
-            Text("Aucun concert programmé.", color = colors.mutedForeground)
+            DMEmptyState(
+                title = "Aucun concert programmé",
+                subtitle = "Les concerts à venir apparaîtront ici.",
+                icon = Icons.Filled.DateRange,
+                modifier = Modifier.weight(1f),
+            )
         }
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {

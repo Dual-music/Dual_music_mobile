@@ -29,6 +29,9 @@ import androidx.lifecycle.viewModelScope
 import com.dualmusic.core.network.ApiClient
 import com.dualmusic.core.network.Endpoint
 import com.dualmusic.core.ui.components.DMCard
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import com.dualmusic.core.ui.components.DMEmptyState
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.leaderboard.LeaderboardEndpoints
 import com.dualmusic.domain.leaderboard.LeaderboardEntry
@@ -102,6 +105,14 @@ fun LeaderboardScreen(viewModel: LeaderboardViewModel) {
         if (isLoading) CircularProgressIndicator(color = colors.primary)
 
         val list = if (tab == 0) artists else donors
+        if (!isLoading && list.isEmpty()) {
+            DMEmptyState(
+                title = "Classement vide",
+                subtitle = "Le classement se remplira avec l'activité de la plateforme.",
+                icon = Icons.Filled.Star,
+                modifier = Modifier.weight(1f),
+            )
+        }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
             itemsIndexed(list) { index, entry -> EntryRow(index + 1, entry) }
         }

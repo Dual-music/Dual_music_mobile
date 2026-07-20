@@ -22,6 +22,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.dualmusic.core.ui.components.DMCard
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import com.dualmusic.core.ui.components.DMEmptyState
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.replay.ReplayVideo
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,7 +84,12 @@ fun ReplaysListScreen(
 
         if (isLoading) CircularProgressIndicator(color = colors.primary)
         if (!isLoading && replays.isEmpty()) {
-            Text("Aucune rediffusion disponible.", color = colors.mutedForeground)
+            DMEmptyState(
+                title = "Aucune rediffusion disponible",
+                subtitle = "Les rediffusions débloquées apparaîtront ici.",
+                icon = Icons.Filled.PlayArrow,
+                modifier = Modifier.weight(1f),
+            )
         }
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {

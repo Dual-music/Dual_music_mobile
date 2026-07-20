@@ -23,6 +23,9 @@ import com.dualmusic.core.realtime.NamespaceSession
 import com.dualmusic.core.realtime.RealtimeClient
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMCard
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import com.dualmusic.core.ui.components.DMEmptyState
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.competition.CompetitionCandidate
 import com.dualmusic.domain.realtime.Realtime
@@ -136,7 +139,12 @@ fun CompetitionRoomScreen(
         Text("Classement", color = colors.foreground, fontWeight = FontWeight.Bold)
         error?.let { Text(it, color = colors.destructive) }
         if (candidates.isEmpty()) {
-            Text("Aucun candidat approuvé.", color = colors.mutedForeground)
+            DMEmptyState(
+                title = "Aucun candidat approuvé",
+                subtitle = "Le classement s'affichera dès les premières candidatures.",
+                icon = Icons.Filled.Star,
+                modifier = Modifier.weight(1f),
+            )
         }
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {

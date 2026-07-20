@@ -29,6 +29,9 @@ import com.dualmusic.core.realtime.RealtimeClient
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Notifications
+import com.dualmusic.core.ui.components.DMEmptyState
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.notification.AppNotification
 import com.dualmusic.domain.realtime.Realtime
@@ -128,7 +131,12 @@ fun NotificationsScreen(viewModel: NotificationsViewModel) {
         }
 
         if (items.isEmpty()) {
-            Text("Aucune notification.", color = colors.mutedForeground)
+            DMEmptyState(
+                title = "Aucune notification",
+                subtitle = "Tes alertes apparaîtront ici.",
+                icon = Icons.Filled.Notifications,
+                modifier = Modifier.weight(1f),
+            )
         }
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {

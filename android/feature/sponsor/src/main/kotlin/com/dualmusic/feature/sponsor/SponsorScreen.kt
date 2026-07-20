@@ -41,6 +41,10 @@ import com.dualmusic.core.network.Endpoint
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import com.dualmusic.core.ui.components.DMEmptyState
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.core.upload.LocalMedia
 import com.dualmusic.core.upload.MediaUploader
@@ -267,7 +271,13 @@ private fun MyRequestsTab(ui: SponsorUiState, viewModel: SponsorViewModel) {
             }
         }
         item { Text("Mes demandes", color = colors.mutedForeground) }
-        if (ui.requests.isEmpty()) item { Text("Aucune demande de sponsoring.", color = colors.mutedForeground) }
+        if (ui.requests.isEmpty()) item {
+            DMEmptyState(
+                title = "Aucune demande de sponsoring",
+                subtitle = "Crée une demande depuis l'onglet « Nouvelle ».",
+                icon = Icons.Filled.Star,
+            )
+        }
         items(ui.requests) { req -> RequestRow(req) { viewModel.pay(req.id) } }
     }
 }
@@ -305,7 +315,13 @@ private fun NewRequestTab(ui: SponsorUiState, viewModel: SponsorViewModel, onSen
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
         item { Text("1. Choisir l'événement", color = colors.mutedForeground) }
-        if (ui.events.isEmpty()) item { Text("Aucun événement disponible.", color = colors.mutedForeground) }
+        if (ui.events.isEmpty()) item {
+            DMEmptyState(
+                title = "Aucun événement disponible",
+                subtitle = "Reviens quand des événements seront programmés.",
+                icon = Icons.Filled.Search,
+            )
+        }
         items(ui.events) { ev ->
             EventRow(ev, selected?.id == ev.id) { selected = ev }
         }

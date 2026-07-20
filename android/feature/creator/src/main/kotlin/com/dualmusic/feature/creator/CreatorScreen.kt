@@ -39,6 +39,10 @@ import com.dualmusic.core.network.Endpoint
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Notifications
+import com.dualmusic.core.ui.components.DMEmptyState
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.core.upload.MediaUploader
 import com.dualmusic.core.upload.readLocalMedia
@@ -200,7 +204,14 @@ fun CreatorScreen(viewModel: CreatorViewModel) {
 
         when (tab) {
             0 -> {
-                if (ui.duelRequests.isEmpty()) Text("Aucun défi.", color = colors.mutedForeground)
+                if (ui.duelRequests.isEmpty()) {
+                    DMEmptyState(
+                        title = "Aucun défi",
+                        subtitle = "Les défis de duel reçus apparaîtront ici.",
+                        icon = Icons.Filled.Notifications,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
                     items(ui.duelRequests) { req ->
                         DuelRequestRow(
@@ -213,7 +224,14 @@ fun CreatorScreen(viewModel: CreatorViewModel) {
                 }
             }
             1 -> {
-                if (ui.concerts.isEmpty()) Text("Aucun concert.", color = colors.mutedForeground)
+                if (ui.concerts.isEmpty()) {
+                    DMEmptyState(
+                        title = "Aucun concert",
+                        subtitle = "Crée ton premier concert depuis l'onglet « Créer ».",
+                        icon = Icons.Filled.DateRange,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
                     items(ui.concerts) { concert -> ConcertRow(concert) }
                 }
