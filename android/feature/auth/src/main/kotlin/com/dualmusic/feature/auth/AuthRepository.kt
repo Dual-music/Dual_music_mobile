@@ -5,7 +5,9 @@ import com.dualmusic.core.network.Endpoint
 import com.dualmusic.core.network.TokenStore
 import com.dualmusic.domain.auth.AuthEndpoints
 import com.dualmusic.domain.auth.AuthSession
+import com.dualmusic.domain.auth.ForgotPasswordRequest
 import com.dualmusic.domain.auth.LoginRequest
+import com.dualmusic.domain.auth.ResetPasswordRequest
 import com.dualmusic.domain.auth.MeResponse
 import com.dualmusic.domain.auth.RegisterRequest
 import com.dualmusic.domain.auth.VerifyOtpRequest
@@ -63,6 +65,32 @@ class AuthRepository(
     suspend fun verifyPhoneOtp(code: String) {
         val body = json.encodeToString(VerifyOtpRequest.serializer(), VerifyOtpRequest(code))
         api.request<Unit>(Endpoint.post(AuthEndpoints.OTP_PHONE_VERIFY, body))
+    }
+
+    /** (Ré)envoie le code de vérification par email au compte connecté. */
+    suspend fun sendEmailOtp() {
+        api.request<Unit>(Endpoint.post(AuthEndpoints.OTP_EMAIL_SEND))
+    }
+
+    /** Vérifie le code email → marque l'email comme vérifié côté serveur. */
+    suspend fun verifyEmailOtp(code: String) {
+        val body = json.encodeToString(VerifyOtpRequest.serializer(), VerifyOtpRequest(code))
+        api.request<Unit>(Endpoint.post(AuthEndpoints.OTP_EMAIL_VERIFY, body))
+    }
+
+    /** Demande un email de réinitialisation (renvoie toujours OK, ne révèle rien). */
+    suspend fun forgotPassword(email: String) {
+        val body = json.encodeToString(ForgotPasswordRequest.serializer(), ForgotPasswordRequest(email.trim()))
+        api.request<Unit>(Endpoint.post(AuthEndpoints.PASSWORD_FORGOT, body).copy(anonymous = true))
+    }
+
+    /** Réinitialise le mot de passe avec le code reçu par email. */
+    suspend fun resetPassword(email: String, code: String, newPassword: String) {
+        val body = json.encodeToString(
+            ResetPasswordRequest.serializer(),
+            ResetPasswordRequest(email.trim(), code.trim(), newPassword),
+        )
+        api.request<Unit>(Endpoint.post(AuthEndpoints.PASSWORD_RESET, body).copy(anonymous = true))
     }
 
     /**

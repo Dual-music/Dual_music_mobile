@@ -69,9 +69,21 @@ data class RegisterRequest(
 @Serializable
 data class RefreshRequest(val refreshToken: String)
 
-/** Corps de `POST /auth/otp/phone/verify`. */
+/** Corps de `POST /auth/otp/phone/verify` et `/auth/otp/email/verify`. */
 @Serializable
 data class VerifyOtpRequest(val code: String)
+
+/** Corps de `POST /auth/password/forgot`. */
+@Serializable
+data class ForgotPasswordRequest(val email: String)
+
+/** Corps de `POST /auth/password/reset` — code reçu par email + nouveau mot de passe. */
+@Serializable
+data class ResetPasswordRequest(
+    val email: String,
+    val code: String,
+    val newPassword: String,
+)
 
 /**
  * Corps proposé pour l'échange natif Google (`POST /auth/oauth/google/native`).
@@ -90,6 +102,10 @@ object AuthEndpoints {
     const val ME = "/auth/me"
     const val OTP_PHONE_SEND = "/auth/otp/phone/send"
     const val OTP_PHONE_VERIFY = "/auth/otp/phone/verify"
+    const val OTP_EMAIL_SEND = "/auth/otp/email/send"
+    const val OTP_EMAIL_VERIFY = "/auth/otp/email/verify"
+    const val PASSWORD_FORGOT = "/auth/password/forgot"
+    const val PASSWORD_RESET = "/auth/password/reset"
     const val OAUTH_GOOGLE_START = "/auth/oauth/google"
     /** Proposé (à créer côté backend) pour l'auth Google native mobile. */
     const val OAUTH_GOOGLE_NATIVE = "/auth/oauth/google/native"

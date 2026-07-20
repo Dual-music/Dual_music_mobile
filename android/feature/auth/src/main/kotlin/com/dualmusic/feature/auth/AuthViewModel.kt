@@ -15,28 +15,50 @@ import kotlinx.coroutines.launch
 sealed interface AuthState {
     data object Loading : AuthState          // réhydratation au démarrage
     data object SignedOut : AuthState
+    /** Inscrit mais email non vérifié : on propose l'écran de saisie du code. */
+    data class PendingEmailVerification(val user: AuthUser, val email: String) : AuthState
     data class SignedIn(val user: AuthUser) : AuthState
 }
 
-/** État de l'écran de connexion / inscription. */
+/** Écran actif de la zone d'authentification. */
+enum class AuthMode { LOGIN, REGISTER, FORGOT, RESET }
+
+/** État de l'écran auth (connexion / inscription / mot de passe oublié / reset). */
 data class SignInUiState(
+    val mode: AuthMode = AuthMode.LOGIN,
     val email: String = "",
     val password: String = "",
+    val confirmPassword: String = "",
     val fullName: String = "",
-    /** `true` = mode inscription ; `false` = mode connexion. */
-    val isRegister: Boolean = false,
+    val phone: String = "",
+    val referralCode: String = "",
+    val acceptTerms: Boolean = false,
+    // Reset de mot de passe.
+    val resetCode: String = "",
+    val newPassword: String = "",
+    // Vérification email (écran dédié).
+    val verifyCode: String = "",
     val isSubmitting: Boolean = false,
     val error: String? = null,
+    val info: String? = null,
 ) {
-    /** Le formulaire est-il soumettable ? (activation du bouton — mdp ≥ 8, email avec `@`). */
-    val canSubmit: Boolean get() = !isSubmitting && email.contains("@") && password.length >= 8
+    /** Le formulaire courant est-il soumettable ? (règles = celles du backend). */
+    val canSubmit: Boolean
+        get() = !isSubmitting && when (mode) {
+            AuthMode.LOGIN -> email.contains("@") && password.length >= 8
+            AuthMode.REGISTER ->
+                fullName.isNotBlank() && email.contains("@") &&
+                    password.length >= 8 && password == confirmPassword && acceptTerms
+            AuthMode.FORGOT -> email.contains("@")
+            AuthMode.RESET -> email.contains("@") && resetCode.length in 4..8 && newPassword.length >= 8
+        }
 }
 
 /**
  * ViewModel de l'authentification (MVI léger).
  *
- * Expose [authState] (session) et [uiState] (écran de connexion) en [StateFlow]. Les
- * écrans Compose collectent ces flux ; les intents passent par les méthodes publiques.
+ * Gère la connexion, l'inscription (mêmes champs que le web), le mot de passe oublié
+ * (demande + reset par code email) et la vérification de l'email par code.
  */
 class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
 
@@ -46,12 +68,19 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     private val _uiState = MutableStateFlow(SignInUiState())
     val uiState: StateFlow<SignInUiState> = _uiState.asStateFlow()
 
-    fun onEmailChange(value: String) = _uiState.update { it.copy(email = value, error = null) }
-    fun onPasswordChange(value: String) = _uiState.update { it.copy(password = value, error = null) }
-    fun onFullNameChange(value: String) = _uiState.update { it.copy(fullName = value, error = null) }
+    fun onEmailChange(v: String) = _uiState.update { it.copy(email = v, error = null) }
+    fun onPasswordChange(v: String) = _uiState.update { it.copy(password = v, error = null) }
+    fun onConfirmPasswordChange(v: String) = _uiState.update { it.copy(confirmPassword = v, error = null) }
+    fun onFullNameChange(v: String) = _uiState.update { it.copy(fullName = v, error = null) }
+    fun onPhoneChange(v: String) = _uiState.update { it.copy(phone = v, error = null) }
+    fun onReferralChange(v: String) = _uiState.update { it.copy(referralCode = v.uppercase(), error = null) }
+    fun onAcceptTermsChange(v: Boolean) = _uiState.update { it.copy(acceptTerms = v, error = null) }
+    fun onResetCodeChange(v: String) = _uiState.update { it.copy(resetCode = v.filter { c -> c.isDigit() }, error = null) }
+    fun onNewPasswordChange(v: String) = _uiState.update { it.copy(newPassword = v, error = null) }
+    fun onVerifyCodeChange(v: String) = _uiState.update { it.copy(verifyCode = v.filter { c -> c.isDigit() }, error = null) }
 
-    /** Bascule entre connexion et inscription (réinitialise l'erreur). */
-    fun toggleMode() = _uiState.update { it.copy(isRegister = !it.isRegister, error = null) }
+    /** Change de mode (connexion/inscription/oublié/reset), en nettoyant messages. */
+    fun setMode(mode: AuthMode) = _uiState.update { it.copy(mode = mode, error = null, info = null) }
 
     /** Réhydrate la session au lancement (via le refresh token persisté). */
     fun bootstrap() {
@@ -61,30 +90,81 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         }
     }
 
-    /** Soumet le formulaire : connexion ou inscription selon [SignInUiState.isRegister]. */
+    /** Soumet le formulaire courant selon le [SignInUiState.mode]. */
     fun submit() {
-        val state = _uiState.value
-        if (!state.canSubmit) return
+        val s = _uiState.value
+        if (!s.canSubmit) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isSubmitting = true, error = null) }
-            val result = if (state.isRegister) {
-                runCatching {
+            _uiState.update { it.copy(isSubmitting = true, error = null, info = null) }
+            when (s.mode) {
+                AuthMode.LOGIN -> runCatching { repository.login(s.email.trim(), s.password) }
+                    .onSuccess { _authState.value = AuthState.SignedIn(it.user) }
+                    .onFailure { setError(it) }
+
+                AuthMode.REGISTER -> runCatching {
                     repository.register(
                         RegisterRequest(
-                            email = state.email.trim(),
-                            password = state.password,
-                            fullName = state.fullName.trim().ifBlank { null },
+                            email = s.email.trim(),
+                            password = s.password,
+                            fullName = s.fullName.trim(),
+                            phone = s.phone.trim().ifBlank { null },
+                            countryCode = "FR",
+                            phoneCountryCode = "+33",
+                            referralCode = s.referralCode.trim().ifBlank { null },
                         ),
                     )
-                }
-            } else {
-                runCatching { repository.login(state.email.trim(), state.password) }
+                }.onSuccess {
+                    // Inscription OK → on demande la vérification de l'email (code déjà envoyé par le backend).
+                    _authState.value = AuthState.PendingEmailVerification(it.user, s.email.trim())
+                }.onFailure { setError(it) }
+
+                AuthMode.FORGOT -> runCatching { repository.forgotPassword(s.email.trim()) }
+                    .onSuccess {
+                        _uiState.update {
+                            it.copy(mode = AuthMode.RESET, info = "Si un compte existe, un code a été envoyé par email.")
+                        }
+                    }
+                    .onFailure { setError(it) }
+
+                AuthMode.RESET -> runCatching {
+                    repository.resetPassword(s.email.trim(), s.resetCode, s.newPassword)
+                }.onSuccess {
+                    _uiState.update {
+                        it.copy(mode = AuthMode.LOGIN, password = "", info = "Mot de passe réinitialisé. Connecte-toi.")
+                    }
+                }.onFailure { setError(it) }
             }
-            result
-                .onSuccess { _authState.value = AuthState.SignedIn(it.user) }
-                .onFailure { _uiState.update { s -> s.copy(error = friendlyMessage(it)) } }
             _uiState.update { it.copy(isSubmitting = false) }
         }
+    }
+
+    /** Vérifie le code email ; en cas de succès, entre dans l'app. */
+    fun verifyEmail() {
+        val pending = _authState.value as? AuthState.PendingEmailVerification ?: return
+        val code = _uiState.value.verifyCode
+        if (code.length !in 4..8) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSubmitting = true, error = null) }
+            runCatching { repository.verifyEmailOtp(code) }
+                .onSuccess { _authState.value = AuthState.SignedIn(pending.user) }
+                .onFailure { setError(it) }
+            _uiState.update { it.copy(isSubmitting = false) }
+        }
+    }
+
+    /** (Ré)envoie le code de vérification email. */
+    fun resendEmailCode() {
+        viewModelScope.launch {
+            runCatching { repository.sendEmailOtp() }
+                .onSuccess { _uiState.update { it.copy(info = "Nouveau code envoyé.") } }
+                .onFailure { setError(it) }
+        }
+    }
+
+    /** Passe la vérification (non bloquante) et entre dans l'app. */
+    fun skipVerification() {
+        val pending = _authState.value as? AuthState.PendingEmailVerification ?: return
+        _authState.value = AuthState.SignedIn(pending.user)
     }
 
     /** Déconnexion. */
@@ -96,11 +176,14 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         }
     }
 
+    private fun setError(t: Throwable) = _uiState.update { it.copy(error = friendlyMessage(t)) }
+
     /** Traduit une erreur backend en message utilisateur. */
     private fun friendlyMessage(t: Throwable): String = when {
         t is DomainError && t.httpStatus == 401 -> "Email ou mot de passe incorrect."
         t is DomainError && t.httpStatus == 409 -> "Cet email est déjà utilisé."
-        t is DomainError && t.code == "VALIDATION_ERROR" -> "Identifiants invalides (email valide + mot de passe ≥ 8 caractères)."
+        t is DomainError && (t.code == "OTP_INVALID" || t.code == "OTP_EXPIRED") -> "Code invalide ou expiré."
+        t is DomainError && t.code == "VALIDATION_ERROR" -> "Champs invalides (email valide + mot de passe ≥ 8 caractères)."
         t is DomainError && t.isRetriable -> "Connexion instable. Réessaie."
         t is DomainError -> t.message
         else -> "Une erreur est survenue. Réessaie."

@@ -47,6 +47,7 @@ import com.dualmusic.domain.model.Live
 import com.dualmusic.domain.replay.ReplayVideo
 import com.dualmusic.feature.auth.AuthRepository
 import com.dualmusic.feature.auth.AuthState
+import com.dualmusic.feature.auth.EmailVerifyScreen
 import com.dualmusic.feature.auth.AuthViewModel
 import com.dualmusic.feature.artists.ArtistsScreen
 import com.dualmusic.feature.artists.ArtistsViewModel
@@ -115,7 +116,14 @@ import kotlinx.coroutines.SupervisorJob
  *    Trouve l'IP avec `ipconfig` sur le PC (IPv4). Le PC et le téléphone doivent être sur
  *    le MÊME réseau Wi-Fi, et le backend doit tourner.
  */
+
+/**
 private const val API_BASE_URL = "http://10.0.2.2:4000"
+*/
+
+private const val API_BASE_URL = "http://172.17.10.149:4000"
+
+
 
 /**
  * Conteneur d'injection minimal (sans framework DI, pour rester simple et lisible).
@@ -280,8 +288,9 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) { vm.bootstrap() }
 
                 val authState by vm.authState.collectAsStateWithLifecycle()
-                when (authState) {
+                when (val st = authState) {
                     is AuthState.SignedIn -> MainShell(container, onSignOut = vm::signOut)
+                    is AuthState.PendingEmailVerification -> EmailVerifyScreen(viewModel = vm, email = st.email)
                     else -> SignInScreen(viewModel = vm, onGoogle = { /* TODO(lot suivant): OAuth Google + deeplink */ })
                 }
             }
