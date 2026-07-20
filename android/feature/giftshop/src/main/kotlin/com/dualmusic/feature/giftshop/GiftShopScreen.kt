@@ -2,13 +2,17 @@ package com.dualmusic.feature.giftshop
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,12 +20,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMCard
+import com.dualmusic.core.ui.components.DMEmptyState
+import com.dualmusic.core.ui.components.DMRemoteImage
+import com.dualmusic.core.ui.components.formatCredits
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.gift.InventoryItem
 import com.dualmusic.domain.model.VirtualGift
@@ -65,7 +75,7 @@ class GiftShopViewModel(private val repository: GiftShopRepository) : ViewModel(
             val ok = repository.purchase(gift.id, 1)
             if (ok) {
                 val inventory = runCatching { repository.inventory() }.getOrDefault(_uiState.value.inventory)
-                _uiState.update { it.copy(inventory = inventory, message = "✅ ${gift.name ?: "Cadeau"} acheté !") }
+                _uiState.update { it.copy(inventory = inventory, message = "✅ ${gift.name} acheté !") }
             } else {
                 _uiState.update { it.copy(message = "Achat impossible (solde insuffisant ?).") }
             }
@@ -74,7 +84,8 @@ class GiftShopViewModel(private val repository: GiftShopRepository) : ViewModel(
 }
 
 /**
- * Boutique de cadeaux : catalogue (achat) + inventaire possédé.
+ * Boutique de cadeaux : grille du catalogue (visuel emoji + nom + prix en Crédits + achat)
+ * façon web, avec un badge « ×N » sur les cadeaux déjà possédés.
  *
  * @param viewModel état + actions.
  */
@@ -85,58 +96,99 @@ fun GiftShopScreen(viewModel: GiftShopViewModel) {
 
     LaunchedEffect(Unit) { viewModel.load() }
 
-    LazyColumn(
+    // Quantité possédée par id de cadeau (pour le badge).
+    val ownedByGift = ui.inventory.associate { it.giftId to it.quantity }
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
         modifier = Modifier
             .fillMaxSize()
             .background(DualMusicTheme.gradients.hero)
             .padding(DualMusicTheme.spacing.lg),
+        horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
     ) {
-        item {
-            Text("Boutique de cadeaux", color = colors.foreground, fontWeight = FontWeight.Bold)
-            ui.message?.let { Text(it, color = colors.primary) }
-            if (ui.isLoading) CircularProgressIndicator(color = colors.primary)
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
+                Text("Boutique de cadeaux", color = colors.foreground, fontWeight = FontWeight.Bold)
+                Text(
+                    "Achète des cadeaux virtuels à envoyer aux artistes pendant les duels.",
+                    color = colors.mutedForeground,
+                )
+                ui.message?.let { Text(it, color = colors.primaryGlow) }
+                if (ui.isLoading) CircularProgressIndicator(color = colors.primary)
+            }
         }
 
-        // Inventaire.
-        if (ui.inventory.isNotEmpty()) {
-            item { Text("Mon inventaire", color = colors.mutedForeground) }
-            items(ui.inventory) { inv -> InventoryRow(inv) }
+        if (!ui.isLoading && ui.catalog.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                DMEmptyState(
+                    title = "Boutique vide",
+                    subtitle = "Les cadeaux seront bientôt disponibles.",
+                )
+            }
         }
 
-        // Catalogue.
-        item { Text("À acheter", color = colors.mutedForeground) }
-        items(ui.catalog) { gift -> CatalogRow(gift) { viewModel.buy(gift) } }
-    }
-}
-
-/** Ligne du catalogue : cadeau + prix + bouton acheter. */
-@Composable
-private fun CatalogRow(gift: VirtualGift, onBuy: () -> Unit) {
-    val colors = DualMusicTheme.colors
-    DMCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("${gift.emoji ?: "🎁"}  ${gift.name}", color = colors.foreground)
-            DMButton("${gift.price.toInt()} cr.", onClick = onBuy)
+        items(ui.catalog) { gift ->
+            GiftCard(gift = gift, owned = ownedByGift[gift.id] ?: 0) { viewModel.buy(gift) }
         }
     }
 }
 
-/** Ligne d'inventaire : cadeau + quantité possédée. */
+/** Carte d'un cadeau : carré dégradé + emoji, nom, prix (Crédits), bouton Acheter. */
 @Composable
-private fun InventoryRow(item: InventoryItem) {
+private fun GiftCard(gift: VirtualGift, owned: Int, onBuy: () -> Unit) {
     val colors = DualMusicTheme.colors
-    DMCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("🎁  ${item.name ?: "Cadeau"}", color = colors.foreground)
-            Text("×${item.quantity}", color = colors.accent, fontWeight = FontWeight.Bold)
+    DMCard(modifier = Modifier.fillMaxWidth(), padded = false) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            // Vignette carrée dégradée.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .background(DualMusicTheme.gradients.primary),
+                contentAlignment = Alignment.Center,
+            ) {
+                GiftVisual(gift)
+            }
+            // Badge quantité possédée.
+            if (owned > 0) {
+                Text(
+                    "×$owned",
+                    color = colors.accentForeground,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(DualMusicTheme.spacing.sm)
+                        .clip(RoundedCornerShape(DualMusicTheme.radii.pill))
+                        .background(colors.accent)
+                        .padding(horizontal = DualMusicTheme.spacing.sm, vertical = 2.dp),
+                )
+            }
         }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(DualMusicTheme.spacing.md),
+            verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs),
+        ) {
+            Text(gift.name, color = colors.foreground, fontWeight = FontWeight.Bold)
+            Text(formatCredits(gift.price), color = colors.accent, fontWeight = FontWeight.Bold)
+            DMButton("Acheter", modifier = Modifier.fillMaxWidth(), onClick = onBuy)
+        }
+    }
+}
+
+/**
+ * Visuel d'un cadeau : le backend range un EMOJI dans `image_url` (rendu en grand, comme le
+ * web). Si c'est exceptionnellement une vraie URL (http…), on la charge en image.
+ */
+@Composable
+private fun GiftVisual(gift: VirtualGift) {
+    val raw = gift.imageUrl?.takeIf { it.isNotBlank() } ?: gift.emoji
+    if (raw != null && raw.startsWith("http")) {
+        DMRemoteImage(url = raw, contentDescription = gift.name, modifier = Modifier.fillMaxSize())
+    } else {
+        Text(raw ?: "🎁", fontSize = 56.sp)
     }
 }

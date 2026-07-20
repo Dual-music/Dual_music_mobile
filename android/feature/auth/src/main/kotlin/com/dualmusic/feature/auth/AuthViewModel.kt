@@ -31,6 +31,7 @@ data class SignInUiState(
     val confirmPassword: String = "",
     val fullName: String = "",
     val phone: String = "",
+    val country: Country = Countries.DEFAULT,
     val referralCode: String = "",
     val acceptTerms: Boolean = false,
     // Reset de mot de passe.
@@ -74,6 +75,7 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     fun onFullNameChange(v: String) = _uiState.update { it.copy(fullName = v, error = null) }
     fun onPhoneChange(v: String) = _uiState.update { it.copy(phone = v, error = null) }
     fun onReferralChange(v: String) = _uiState.update { it.copy(referralCode = v.uppercase(), error = null) }
+    fun onCountrySelected(country: Country) = _uiState.update { it.copy(country = country, error = null) }
     fun onAcceptTermsChange(v: Boolean) = _uiState.update { it.copy(acceptTerms = v, error = null) }
     fun onResetCodeChange(v: String) = _uiState.update { it.copy(resetCode = v.filter { c -> c.isDigit() }, error = null) }
     fun onNewPasswordChange(v: String) = _uiState.update { it.copy(newPassword = v, error = null) }
@@ -108,8 +110,8 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
                             password = s.password,
                             fullName = s.fullName.trim(),
                             phone = s.phone.trim().ifBlank { null },
-                            countryCode = "FR",
-                            phoneCountryCode = "+33",
+                            countryCode = s.country.code,
+                            phoneCountryCode = s.country.dial,
                             referralCode = s.referralCode.trim().ifBlank { null },
                         ),
                     )
