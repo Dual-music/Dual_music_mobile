@@ -1,6 +1,8 @@
 package com.dualmusic.feature.profile
 
 import androidx.compose.animation.AnimatedVisibility
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,18 +25,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import coil.compose.AsyncImage
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
@@ -42,10 +46,14 @@ import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.auth.MeResponse
 import com.dualmusic.domain.model.UserRole
 import com.dualmusic.domain.user.UserStats
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 
 /** État de l'écran profil. */
 data class ProfileUiState(
@@ -201,9 +209,10 @@ private fun ProfileHero(me: MeResponse?, roleLabel: String) {
                     .background(DualMusicTheme.gradients.primary),
                 contentAlignment = Alignment.Center,
             ) {
-                if (!avatarUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = avatarUrl,
+                val avatar = rememberRemoteImage(avatarUrl)
+                if (avatar != null) {
+                    Image(
+                        bitmap = avatar,
                         contentDescription = "Photo de profil",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.size(64.dp).clip(CircleShape),
@@ -243,6 +252,35 @@ private fun StatSection(title: String, rows: List<Pair<String, String>>) {
             }
         }
     }
+}
+
+/**
+ * Charge une image distante (avatar) en [ImageBitmap], sans dépendance externe.
+ *
+ * Téléchargement + décodage sur [Dispatchers.IO] via [produceState] (re-déclenché si l'URL
+ * change). Renvoie `null` tant que l'image n'est pas prête ou en cas d'échec (repli initiale).
+ * Suffisant pour un unique avatar ; pour du chargement massif, préférer une lib de cache.
+ *
+ * @param url URL publique de l'image (peut être nulle/vide).
+ */
+@Composable
+private fun rememberRemoteImage(url: String?): ImageBitmap? {
+    val image by produceState<ImageBitmap?>(initialValue = null, url) {
+        value = if (url.isNullOrBlank()) {
+            null
+        } else {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 8000
+                        readTimeout = 8000
+                    }
+                    conn.inputStream.use { BitmapFactory.decodeStream(it) }?.asImageBitmap()
+                }.getOrNull()
+            }
+        }
+    }
+    return image
 }
 
 /** Libellé du rôle principal (priorité admin > artiste > manager > modérateur > fan). */
