@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.dualmusic.domain.api.DomainError
 import com.dualmusic.domain.auth.AuthUser
 import com.dualmusic.domain.auth.RegisterRequest
+import com.dualmusic.domain.user.UpdateProfileRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +18,8 @@ sealed interface AuthState {
     data object SignedOut : AuthState
     /** Inscrit mais email non vérifié : on propose l'écran de saisie du code. */
     data class PendingEmailVerification(val user: AuthUser, val email: String) : AuthState
+    /** Email vérifié : on demande les informations de profil (nom, pays, numéro). */
+    data class PendingProfileCompletion(val user: AuthUser) : AuthState
     data class SignedIn(val user: AuthUser) : AuthState
 }
 
@@ -47,9 +50,10 @@ data class SignInUiState(
     val canSubmit: Boolean
         get() = !isSubmitting && when (mode) {
             AuthMode.LOGIN -> email.contains("@") && password.length >= 8
+            // Étape 1 : email + mot de passe + confirmation uniquement. Les autres infos
+            // (nom, pays, numéro) sont demandées APRÈS validation du code email.
             AuthMode.REGISTER ->
-                fullName.isNotBlank() && email.contains("@") &&
-                    password.length >= 8 && password == confirmPassword && acceptTerms
+                email.contains("@") && password.length >= 8 && password == confirmPassword
             AuthMode.FORGOT -> email.contains("@")
             AuthMode.RESET -> email.contains("@") && resetCode.length in 4..8 && newPassword.length >= 8
         }
@@ -103,20 +107,11 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
                     .onSuccess { _authState.value = AuthState.SignedIn(it.user) }
                     .onFailure { setError(it) }
 
+                // Étape 1 : on ne crée le compte qu'avec email + mot de passe. Le backend
+                // envoie automatiquement le code de vérification par email.
                 AuthMode.REGISTER -> runCatching {
-                    repository.register(
-                        RegisterRequest(
-                            email = s.email.trim(),
-                            password = s.password,
-                            fullName = s.fullName.trim(),
-                            phone = s.phone.trim().ifBlank { null },
-                            countryCode = s.country.code,
-                            phoneCountryCode = s.country.dial,
-                            referralCode = s.referralCode.trim().ifBlank { null },
-                        ),
-                    )
+                    repository.register(RegisterRequest(email = s.email.trim(), password = s.password))
                 }.onSuccess {
-                    // Inscription OK → on demande la vérification de l'email (code déjà envoyé par le backend).
                     _authState.value = AuthState.PendingEmailVerification(it.user, s.email.trim())
                 }.onFailure { setError(it) }
 
@@ -140,7 +135,7 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         }
     }
 
-    /** Vérifie le code email ; en cas de succès, entre dans l'app. */
+    /** Vérifie le code email ; en cas de succès, passe à la saisie des infos de profil. */
     fun verifyEmail() {
         val pending = _authState.value as? AuthState.PendingEmailVerification ?: return
         val code = _uiState.value.verifyCode
@@ -148,10 +143,44 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmitting = true, error = null) }
             runCatching { repository.verifyEmailOtp(code) }
-                .onSuccess { _authState.value = AuthState.SignedIn(pending.user) }
+                .onSuccess { _authState.value = AuthState.PendingProfileCompletion(pending.user) }
                 .onFailure { setError(it) }
             _uiState.update { it.copy(isSubmitting = false) }
         }
+    }
+
+    /**
+     * Étape 3 : enregistre les informations de profil (nom, pays, numéro) puis entre dans
+     * l'app. Le numéro est optionnel ; le nom est requis.
+     */
+    fun completeProfile() {
+        val pending = _authState.value as? AuthState.PendingProfileCompletion ?: return
+        val s = _uiState.value
+        if (s.fullName.isBlank()) {
+            _uiState.update { it.copy(error = "Le nom est requis.") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSubmitting = true, error = null) }
+            runCatching {
+                repository.updateProfile(
+                    UpdateProfileRequest(
+                        fullName = s.fullName.trim(),
+                        countryCode = s.country.code,
+                        phone = s.phone.trim().ifBlank { null },
+                        phoneCountryCode = s.country.dial,
+                    ),
+                )
+            }.onSuccess { _authState.value = AuthState.SignedIn(pending.user) }
+                .onFailure { setError(it) }
+            _uiState.update { it.copy(isSubmitting = false) }
+        }
+    }
+
+    /** Passe la saisie des infos de profil (pourra les compléter plus tard). */
+    fun skipProfile() {
+        val pending = _authState.value as? AuthState.PendingProfileCompletion ?: return
+        _authState.value = AuthState.SignedIn(pending.user)
     }
 
     /** (Ré)envoie le code de vérification email. */
@@ -163,10 +192,10 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         }
     }
 
-    /** Passe la vérification (non bloquante) et entre dans l'app. */
+    /** Passe la vérification (non bloquante) → saisie des infos de profil. */
     fun skipVerification() {
         val pending = _authState.value as? AuthState.PendingEmailVerification ?: return
-        _authState.value = AuthState.SignedIn(pending.user)
+        _authState.value = AuthState.PendingProfileCompletion(pending.user)
     }
 
     /** Déconnexion. */

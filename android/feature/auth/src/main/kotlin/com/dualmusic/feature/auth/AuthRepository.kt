@@ -11,6 +11,8 @@ import com.dualmusic.domain.auth.ResetPasswordRequest
 import com.dualmusic.domain.auth.MeResponse
 import com.dualmusic.domain.auth.RegisterRequest
 import com.dualmusic.domain.auth.VerifyOtpRequest
+import com.dualmusic.domain.user.UpdateProfileRequest
+import com.dualmusic.domain.user.UserEndpoints
 import kotlinx.serialization.json.Json
 
 /**
@@ -46,6 +48,15 @@ class AuthRepository(
 
     /** Utilisateur courant (`/auth/me`) — réhydratation au démarrage. */
     suspend fun me(): MeResponse = api.request(Endpoint.get(AuthEndpoints.ME))
+
+    /**
+     * Complète/édite le profil du caller (`PATCH /users/me`) — étape 3 de l'inscription
+     * (nom, pays, numéro) et édition ultérieure. N'envoie que les champs non nuls.
+     */
+    suspend fun updateProfile(request: UpdateProfileRequest) {
+        val body = json.encodeToString(UpdateProfileRequest.serializer(), request)
+        api.request<Unit>(Endpoint.patch(UserEndpoints.UPDATE_ME, body))
+    }
 
     /** Déconnexion : invalide le refresh côté serveur puis efface le stockage local. */
     suspend fun logout() {

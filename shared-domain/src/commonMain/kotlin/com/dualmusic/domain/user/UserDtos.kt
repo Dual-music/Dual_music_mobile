@@ -1,5 +1,6 @@
 package com.dualmusic.domain.user
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -38,6 +39,22 @@ data class FanStats(
     val totalVotesCast: Double = 0.0,
     val totalGiftsSent: Int = 0,
     val totalTickets: Int = 0,
+)
+
+/**
+ * Corps de `PATCH /users/me` — mise à jour du profil (étape 3 de l'inscription + édition).
+ *
+ * ⚠️ snake_case (le backend attend ces noms exacts). Tous les champs sont optionnels ;
+ * n'envoyer que ceux modifiés.
+ */
+@Serializable
+data class UpdateProfileRequest(
+    @SerialName("full_name") val fullName: String? = null,
+    @SerialName("country_code") val countryCode: String? = null,
+    val phone: String? = null,
+    @SerialName("phone_country_code") val phoneCountryCode: String? = null,
+    val bio: String? = null,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
 )
 
 /** Chemins REST du profil / utilisateur. */

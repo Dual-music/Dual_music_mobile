@@ -55,6 +55,7 @@ import com.dualmusic.feature.creator.CreatorScreen
 import com.dualmusic.feature.creator.CreatorViewModel
 import com.dualmusic.feature.sponsor.SponsorScreen
 import com.dualmusic.feature.sponsor.SponsorViewModel
+import com.dualmusic.feature.auth.ProfileCompletionScreen
 import com.dualmusic.feature.auth.SignInScreen
 import com.dualmusic.feature.competition.CompetitionRepository
 import com.dualmusic.feature.competition.CompetitionRoomScreen
@@ -291,6 +292,7 @@ class MainActivity : ComponentActivity() {
                 when (val st = authState) {
                     is AuthState.SignedIn -> MainShell(container, onSignOut = vm::signOut)
                     is AuthState.PendingEmailVerification -> EmailVerifyScreen(viewModel = vm, email = st.email)
+                    is AuthState.PendingProfileCompletion -> ProfileCompletionScreen(viewModel = vm)
                     else -> SignInScreen(viewModel = vm, onGoogle = { /* TODO(lot suivant): OAuth Google + deeplink */ })
                 }
             }

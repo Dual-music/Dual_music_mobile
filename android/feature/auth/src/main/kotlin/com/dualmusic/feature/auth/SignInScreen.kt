@@ -16,7 +16,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -106,17 +105,13 @@ private fun LoginFields(ui: SignInUiState, vm: AuthViewModel) {
     PasswordField(ui.password, vm::onPasswordChange, label = "Mot de passe")
 }
 
-/** Champs d'inscription (parité web). */
+/**
+ * Étape 1 de l'inscription : email + mot de passe + confirmation UNIQUEMENT.
+ * Un code de vérification est ensuite envoyé par email ; les autres informations (nom,
+ * pays, numéro) sont saisies à l'étape suivante (voir [ProfileCompletionScreen]).
+ */
 @Composable
 private fun RegisterFields(ui: SignInUiState, vm: AuthViewModel) {
-    val colors = DualMusicTheme.colors
-    OutlinedTextField(
-        value = ui.fullName,
-        onValueChange = vm::onFullNameChange,
-        label = { Text("Nom complet *") },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-    )
     EmailField(ui.email, vm::onEmailChange)
     PasswordField(ui.password, vm::onPasswordChange, label = "Mot de passe *", supporting = "Au moins 8 caractères")
     PasswordField(
@@ -129,31 +124,6 @@ private fun RegisterFields(ui: SignInUiState, vm: AuthViewModel) {
             null
         },
     )
-    CountryField(ui, vm)
-    OutlinedTextField(
-        value = ui.phone,
-        onValueChange = vm::onPhoneChange,
-        label = { Text("Téléphone (optionnel)") },
-        placeholder = { Text("${ui.country.dial}612345678") },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-        modifier = Modifier.fillMaxWidth(),
-    )
-    OutlinedTextField(
-        value = ui.referralCode,
-        onValueChange = vm::onReferralChange,
-        label = { Text("Code de parrainage (optionnel)") },
-        placeholder = { Text("Ex : REF-ABC12345") },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(checked = ui.acceptTerms, onCheckedChange = vm::onAcceptTermsChange)
-        Text(
-            "J'accepte la Politique de confidentialité et les Conditions d'utilisation.",
-            color = colors.mutedForeground,
-        )
-    }
 }
 
 /** Champ email de la demande de réinitialisation. */
@@ -196,7 +166,7 @@ private fun ModeLinks(ui: SignInUiState, vm: AuthViewModel) {
 
 /** Sélecteur de pays (menu déroulant) → alimente countryCode + phoneCountryCode. */
 @Composable
-private fun CountryField(ui: SignInUiState, vm: AuthViewModel) {
+internal fun CountryField(ui: SignInUiState, vm: AuthViewModel) {
     val colors = DualMusicTheme.colors
     var expanded by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
