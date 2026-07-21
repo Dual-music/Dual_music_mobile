@@ -101,11 +101,8 @@ fun ProfileScreen(
     onOpenWithdrawal: () -> Unit,
     onOpenReplays: () -> Unit,
     onOpenGiftShop: () -> Unit,
-    onOpenLeaderboard: () -> Unit,
     onOpenReferral: () -> Unit,
     onOpenSubscription: () -> Unit,
-    onOpenContent: () -> Unit,
-    onOpenArtists: () -> Unit,
     onOpenSponsor: () -> Unit,
     onOpenCreator: () -> Unit,
     onOpenNotifications: () -> Unit,
@@ -123,6 +120,7 @@ fun ProfileScreen(
     val isAdmin = UserRole.ADMIN in roles
     // Outils créateur + retrait de crédits : réservés artiste/manager/admin (comme le web).
     val canCreate = isArtist || isManager || isAdmin
+    val isPureFan = !isArtist && !isManager && !isAdmin
 
     Column(
         modifier = Modifier
@@ -153,12 +151,6 @@ fun ProfileScreen(
 
         // Statistiques par rôle — comme sur le web, chaque profil ne voit QUE ses propres
         // recaps : un fan ne voit pas les stats artiste/manager, et inversement.
-        val roles = ui.me?.roles ?: emptyList()
-        val isArtist = UserRole.ARTIST in roles
-        val isManager = UserRole.MANAGER in roles
-        val isAdmin = UserRole.ADMIN in roles
-        val isPureFan = !isArtist && !isManager && !isAdmin
-
         if (isArtist) {
             StatSection("Espace Artiste", listOf(
                 "Votes reçus" to ui.stats.artistStats.totalVotes.toInt().toString(),
@@ -194,9 +186,6 @@ fun ProfileScreen(
                 DMButton("Sponsoring", style = DMButtonStyle.SECONDARY, onClick = onOpenSponsor)
                 DMButton("Replays", style = DMButtonStyle.SECONDARY, onClick = onOpenReplays)
                 DMButton("Boutique de cadeaux", style = DMButtonStyle.SECONDARY, onClick = onOpenGiftShop)
-                DMButton("Découvrir (lifestyle & blog)", style = DMButtonStyle.SECONDARY, onClick = onOpenContent)
-                DMButton("Artistes", style = DMButtonStyle.SECONDARY, onClick = onOpenArtists)
-                DMButton("Classements", style = DMButtonStyle.SECONDARY, onClick = onOpenLeaderboard)
                 DMButton("Parrainage", style = DMButtonStyle.SECONDARY, onClick = onOpenReferral)
                 DMButton("Abonnements", style = DMButtonStyle.SECONDARY, onClick = onOpenSubscription)
                 DMButton("Notifications", style = DMButtonStyle.SECONDARY, onClick = onOpenNotifications)

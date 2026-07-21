@@ -10,11 +10,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -300,62 +299,104 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Coque de l'app connectée : barre de navigation basse + écran courant.
- * Onglets : **Lives** (feed vertical) et **Portefeuille**. Les autres features
- * (duels, concerts, compétitions, profil) s'ajouteront ici au fil des lots.
+ * Coque de l'app connectée : **barre du haut** (hors profil) + **navigation basse** + écran.
+ *
+ * Onglets bas : Accueil · Lives · Duels · Concerts · Compét. Le **profil** s'ouvre via
+ * l'avatar de la barre du haut ([showProfile]) et possède sa propre sous-navigation
+ * ([profileSub]). La page Accueil donne 3 accès rapides (Lifestyle/Classement/Artistes)
+ * via [homeOpen] — ces sections ne figurent donc plus dans le profil (comme sur le web).
  */
 @Composable
 private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
+    // 0=Accueil · 1=Lives · 2=Duels · 3=Concerts · 4=Compét.
     var tab by remember { mutableIntStateOf(0) }
-    // Duel actuellement ouvert (null = on affiche le catalogue).
+    var showProfile by remember { mutableStateOf(false) }
+    // Sous-navigation du profil (0=profil ; voir le when ci-dessous).
+    var profileSub by remember { mutableIntStateOf(0) }
+    // Accès rapides de l'accueil : 0=aucun · 1=lifestyle · 2=classement · 3=artistes.
+    var homeOpen by remember { mutableIntStateOf(0) }
     var openDuel by remember { mutableStateOf<Duel?>(null) }
-    // Compétition actuellement ouverte (null = on affiche le catalogue).
     var openCompetition by remember { mutableStateOf<Competition?>(null) }
     val colors = DualMusicTheme.colors
 
+    // Quitte le profil et sélectionne un onglet bas.
+    fun goTab(t: Int) { tab = t; showProfile = false }
+
     Scaffold(
+        topBar = {
+            // Barre du haut masquée dans le profil (qui a déjà son propre en-tête).
+            if (!showProfile) {
+                TopBar(
+                    onOpenNotifications = { showProfile = true; profileSub = 2 },
+                    onOpenProfile = { showProfile = true; profileSub = 0 },
+                )
+            }
+        },
         bottomBar = {
             NavigationBar(containerColor = colors.card) {
                 NavigationBarItem(
-                    selected = tab == 0,
-                    onClick = { tab = 0 },
+                    selected = !showProfile && tab == 0,
+                    onClick = { goTab(0) },
+                    icon = { Icon(Icons.Filled.Home, contentDescription = null) },
+                    label = { Text("Accueil") },
+                )
+                NavigationBarItem(
+                    selected = !showProfile && tab == 1,
+                    onClick = { goTab(1) },
                     icon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
                     label = { Text("Lives") },
                 )
                 NavigationBarItem(
-                    selected = tab == 1,
-                    onClick = { tab = 1; openDuel = null },
+                    selected = !showProfile && tab == 2,
+                    onClick = { goTab(2); openDuel = null },
                     icon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) },
                     label = { Text("Duels") },
                 )
                 NavigationBarItem(
-                    selected = tab == 2,
-                    onClick = { tab = 2 },
+                    selected = !showProfile && tab == 3,
+                    onClick = { goTab(3) },
                     icon = { Icon(Icons.Filled.MusicNote, contentDescription = null) },
                     label = { Text("Concerts") },
                 )
                 NavigationBarItem(
-                    selected = tab == 3,
-                    onClick = { tab = 3; openCompetition = null },
+                    selected = !showProfile && tab == 4,
+                    onClick = { goTab(4); openCompetition = null },
                     icon = { Icon(Icons.Filled.Leaderboard, contentDescription = null) },
                     label = { Text("Compét.") },
-                )
-                NavigationBarItem(
-                    selected = tab == 4,
-                    onClick = { tab = 4 },
-                    icon = { Icon(Icons.Filled.Person, contentDescription = null) },
-                    label = { Text("Profil") },
                 )
             }
         },
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
-            when (tab) {
-                0 -> {
+            if (showProfile) {
+                ProfileSection(
+                    container = container,
+                    sub = profileSub,
+                    onSub = { profileSub = it },
+                    onSignOut = onSignOut,
+                )
+            } else when (tab) {
+                0 -> when (homeOpen) {
+                    1 -> SubScreen(title = "Lifestyle", onBack = { homeOpen = 0 }) {
+                        ContentScreen(viewModel = viewModel { container.makeContentViewModel() })
+                    }
+                    2 -> SubScreen(title = "Classement", onBack = { homeOpen = 0 }) {
+                        LeaderboardScreen(viewModel = viewModel { container.makeLeaderboardViewModel() })
+                    }
+                    3 -> SubScreen(title = "Artistes", onBack = { homeOpen = 0 }) {
+                        ArtistsScreen(viewModel = viewModel { container.makeArtistsViewModel() })
+                    }
+                    else -> HomeScreen(
+                        onOpenLifestyle = { homeOpen = 1 },
+                        onOpenClassement = { homeOpen = 2 },
+                        onOpenArtistes = { homeOpen = 3 },
+                    )
+                }
+                1 -> {
                     val feedVm: FeedViewModel = viewModel { container.makeFeedViewModel() }
                     FeedScreen(viewModel = feedVm, makeLiveViewModel = container::makeLiveViewModel)
                 }
-                1 -> {
+                2 -> {
                     val duel = openDuel
                     if (duel == null) {
                         val listVm: DuelsListViewModel = viewModel { container.makeDuelsListViewModel() }
@@ -366,11 +407,11 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                         DuelRoomScreen(viewModel = duelVm)
                     }
                 }
-                2 -> {
+                3 -> {
                     val concertsVm: ConcertsViewModel = viewModel { container.makeConcertsViewModel() }
                     ConcertsListScreen(viewModel = concertsVm)
                 }
-                3 -> {
+                4 -> {
                     val competition = openCompetition
                     if (competition == null) {
                         val listVm: CompetitionsViewModel = viewModel { container.makeCompetitionsViewModel() }
@@ -381,97 +422,94 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                         CompetitionRoomScreen(viewModel = roomVm)
                     }
                 }
-                else -> {
-                    // Onglet Profil ; portefeuille et notifications s'ouvrent par-dessus (retour).
-                    // 0 = profil · 1 = portefeuille · 2 = notifications
-                    var sub by remember { mutableIntStateOf(0) }
-                    when (sub) {
-                        1 -> SubScreen(title = "Mon portefeuille", onBack = { sub = 0 }) {
-                            val walletVm: WalletViewModel = viewModel { container.makeWalletViewModel() }
-                            WalletScreen(viewModel = walletVm)
-                        }
-                        2 -> SubScreen(title = "Notifications", onBack = { sub = 0 }) {
-                            val notifVm: NotificationsViewModel = viewModel { container.makeNotificationsViewModel() }
-                            NotificationsScreen(viewModel = notifVm)
-                        }
-                        3 -> SubScreen(title = "Retrait des crédits", onBack = { sub = 0 }) {
-                            val wdVm: WithdrawalViewModel = viewModel { container.makeWithdrawalViewModel() }
-                            WithdrawalScreen(viewModel = wdVm)
-                        }
-                        4 -> SubScreen(title = "Replays", onBack = { sub = 0 }) {
-                            // Sous-navigation replays : liste → lecteur.
-                            var openReplay by remember { mutableStateOf<ReplayVideo?>(null) }
-                            val r = openReplay
-                            if (r == null) {
-                                val listVm: ReplaysViewModel = viewModel { container.makeReplaysViewModel() }
-                                ReplaysListScreen(viewModel = listVm, onOpen = { openReplay = it })
-                            } else {
-                                val playerVm: ReplayPlayerViewModel =
-                                    viewModel(key = r.id) { container.makeReplayPlayerViewModel(r) }
-                                Column(modifier = Modifier.fillMaxSize()) {
-                                    DMButton(
-                                        "← Liste des replays",
-                                        style = DMButtonStyle.OUTLINE,
-                                        modifier = Modifier.padding(DualMusicTheme.spacing.sm),
-                                    ) { openReplay = null }
-                                    ReplayPlayerScreen(viewModel = playerVm)
-                                }
-                            }
-                        }
-                        5 -> SubScreen(title = "Boutique de cadeaux", onBack = { sub = 0 }) {
-                            val shopVm: GiftShopViewModel = viewModel { container.makeGiftShopViewModel() }
-                            GiftShopScreen(viewModel = shopVm)
-                        }
-                        6 -> SubScreen(title = "Classements", onBack = { sub = 0 }) {
-                            val lbVm: LeaderboardViewModel = viewModel { container.makeLeaderboardViewModel() }
-                            LeaderboardScreen(viewModel = lbVm)
-                        }
-                        7 -> SubScreen(title = "Parrainage", onBack = { sub = 0 }) {
-                            val refVm: ReferralViewModel = viewModel { container.makeReferralViewModel() }
-                            ReferralScreen(viewModel = refVm)
-                        }
-                        8 -> SubScreen(title = "Abonnements", onBack = { sub = 0 }) {
-                            val subVm: SubscriptionViewModel = viewModel { container.makeSubscriptionViewModel() }
-                            SubscriptionScreen(viewModel = subVm)
-                        }
-                        9 -> SubScreen(title = "Découvrir", onBack = { sub = 0 }) {
-                            val contentVm: ContentViewModel = viewModel { container.makeContentViewModel() }
-                            ContentScreen(viewModel = contentVm)
-                        }
-                        10 -> SubScreen(title = "Artistes", onBack = { sub = 0 }) {
-                            val artistsVm: ArtistsViewModel = viewModel { container.makeArtistsViewModel() }
-                            ArtistsScreen(viewModel = artistsVm)
-                        }
-                        11 -> SubScreen(title = "Sponsoring", onBack = { sub = 0 }) {
-                            val sponsorVm: SponsorViewModel = viewModel { container.makeSponsorViewModel() }
-                            SponsorScreen(viewModel = sponsorVm)
-                        }
-                        12 -> SubScreen(title = "Espace créateur", onBack = { sub = 0 }) {
-                            val creatorVm: CreatorViewModel = viewModel { container.makeCreatorViewModel() }
-                            CreatorScreen(viewModel = creatorVm)
-                        }
-                        else -> {
-                            val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
-                            ProfileScreen(
-                                viewModel = profileVm,
-                                onOpenWallet = { sub = 1 },
-                                onOpenWithdrawal = { sub = 3 },
-                                onOpenReplays = { sub = 4 },
-                                onOpenGiftShop = { sub = 5 },
-                                onOpenLeaderboard = { sub = 6 },
-                                onOpenReferral = { sub = 7 },
-                                onOpenSubscription = { sub = 8 },
-                                onOpenContent = { sub = 9 },
-                                onOpenArtists = { sub = 10 },
-                                onOpenSponsor = { sub = 11 },
-                                onOpenCreator = { sub = 12 },
-                                onOpenNotifications = { sub = 2 },
-                                onSignOut = onSignOut,
-                            )
-                        }
-                    }
+            }
+        }
+    }
+}
+
+/**
+ * Section profil (ouverte via l'avatar de la barre du haut) avec sa propre sous-navigation.
+ *
+ * Lifestyle / Classement / Artistes n'y figurent plus : ils sont accessibles depuis l'accueil.
+ *
+ * @param sub sous-écran courant (0 = profil).
+ * @param onSub change de sous-écran.
+ */
+@Composable
+private fun ProfileSection(
+    container: AppContainer,
+    sub: Int,
+    onSub: (Int) -> Unit,
+    onSignOut: () -> Unit,
+) {
+    when (sub) {
+        1 -> SubScreen(title = "Mon portefeuille", onBack = { onSub(0) }) {
+            val walletVm: WalletViewModel = viewModel { container.makeWalletViewModel() }
+            WalletScreen(viewModel = walletVm)
+        }
+        2 -> SubScreen(title = "Notifications", onBack = { onSub(0) }) {
+            val notifVm: NotificationsViewModel = viewModel { container.makeNotificationsViewModel() }
+            NotificationsScreen(viewModel = notifVm)
+        }
+        3 -> SubScreen(title = "Retrait des crédits", onBack = { onSub(0) }) {
+            val wdVm: WithdrawalViewModel = viewModel { container.makeWithdrawalViewModel() }
+            WithdrawalScreen(viewModel = wdVm)
+        }
+        4 -> SubScreen(title = "Replays", onBack = { onSub(0) }) {
+            // Sous-navigation replays : liste → lecteur.
+            var openReplay by remember { mutableStateOf<ReplayVideo?>(null) }
+            val r = openReplay
+            if (r == null) {
+                val listVm: ReplaysViewModel = viewModel { container.makeReplaysViewModel() }
+                ReplaysListScreen(viewModel = listVm, onOpen = { openReplay = it })
+            } else {
+                val playerVm: ReplayPlayerViewModel =
+                    viewModel(key = r.id) { container.makeReplayPlayerViewModel(r) }
+                Column(modifier = Modifier.fillMaxSize()) {
+                    DMButton(
+                        "← Liste des replays",
+                        style = DMButtonStyle.OUTLINE,
+                        modifier = Modifier.padding(DualMusicTheme.spacing.sm),
+                    ) { openReplay = null }
+                    ReplayPlayerScreen(viewModel = playerVm)
                 }
             }
+        }
+        5 -> SubScreen(title = "Boutique de cadeaux", onBack = { onSub(0) }) {
+            val shopVm: GiftShopViewModel = viewModel { container.makeGiftShopViewModel() }
+            GiftShopScreen(viewModel = shopVm)
+        }
+        7 -> SubScreen(title = "Parrainage", onBack = { onSub(0) }) {
+            val refVm: ReferralViewModel = viewModel { container.makeReferralViewModel() }
+            ReferralScreen(viewModel = refVm)
+        }
+        8 -> SubScreen(title = "Abonnements", onBack = { onSub(0) }) {
+            val subVm: SubscriptionViewModel = viewModel { container.makeSubscriptionViewModel() }
+            SubscriptionScreen(viewModel = subVm)
+        }
+        11 -> SubScreen(title = "Sponsoring", onBack = { onSub(0) }) {
+            val sponsorVm: SponsorViewModel = viewModel { container.makeSponsorViewModel() }
+            SponsorScreen(viewModel = sponsorVm)
+        }
+        12 -> SubScreen(title = "Espace créateur", onBack = { onSub(0) }) {
+            val creatorVm: CreatorViewModel = viewModel { container.makeCreatorViewModel() }
+            CreatorScreen(viewModel = creatorVm)
+        }
+        else -> {
+            val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
+            ProfileScreen(
+                viewModel = profileVm,
+                onOpenWallet = { onSub(1) },
+                onOpenWithdrawal = { onSub(3) },
+                onOpenReplays = { onSub(4) },
+                onOpenGiftShop = { onSub(5) },
+                onOpenReferral = { onSub(7) },
+                onOpenSubscription = { onSub(8) },
+                onOpenSponsor = { onSub(11) },
+                onOpenCreator = { onSub(12) },
+                onOpenNotifications = { onSub(2) },
+                onSignOut = onSignOut,
+            )
         }
     }
 }
