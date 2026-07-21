@@ -112,7 +112,6 @@ fun ArtistsScreen(viewModel: ArtistsViewModel) {
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Text("Artistes", color = colors.foreground, fontWeight = FontWeight.Bold)
         if (isLoading) CircularProgressIndicator(color = colors.primary)
         if (!isLoading && artists.isEmpty()) {
             DMEmptyState(

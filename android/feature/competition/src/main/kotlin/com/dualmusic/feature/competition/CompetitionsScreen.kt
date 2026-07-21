@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -80,7 +81,7 @@ fun CompetitionsListScreen(
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Text("Compétitions", color = colors.foreground, fontWeight = FontWeight.Bold)
+        Text("Compétitions", color = colors.foreground, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
 
         if (isLoading) CircularProgressIndicator(color = colors.primary)
         if (!isLoading && competitions.isEmpty()) {

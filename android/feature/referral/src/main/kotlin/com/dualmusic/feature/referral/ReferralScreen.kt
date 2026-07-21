@@ -84,7 +84,6 @@ fun ReferralScreen(viewModel: ReferralViewModel) {
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Text("Parrainage", color = colors.foreground, fontWeight = FontWeight.Bold)
 
         // Code + copie.
         DMCard {

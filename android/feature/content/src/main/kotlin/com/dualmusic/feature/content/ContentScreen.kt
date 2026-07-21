@@ -114,7 +114,6 @@ fun ContentScreen(viewModel: ContentViewModel) {
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Text("Découvrir", color = colors.foreground, fontWeight = FontWeight.Bold)
         TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = colors.foreground) {
             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Lifestyle") })
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Blog") })

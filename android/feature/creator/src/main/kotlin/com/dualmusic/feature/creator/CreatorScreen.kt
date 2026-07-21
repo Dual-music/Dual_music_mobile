@@ -194,7 +194,6 @@ fun CreatorScreen(viewModel: CreatorViewModel) {
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Text("Espace créateur", color = colors.foreground, fontWeight = FontWeight.Bold)
         ui.message?.let { Text(it, color = colors.primary) }
         TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = colors.foreground) {
             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Défis") })

@@ -54,7 +54,6 @@ fun WalletScreen(viewModel: WalletViewModel) {
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.lg),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Portefeuille", color = colors.foreground, fontWeight = FontWeight.Bold)
 
         // --- Solde ---
         DMCard {

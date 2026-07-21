@@ -83,7 +83,6 @@ fun SubscriptionScreen(viewModel: SubscriptionViewModel) {
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Text("Abonnements", color = colors.foreground, fontWeight = FontWeight.Bold)
 
         // Statut courant.
         if (ui.current.isActive) {

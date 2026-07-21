@@ -57,7 +57,6 @@ fun WithdrawalScreen(viewModel: WithdrawalViewModel) {
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Text("Retrait", color = colors.foreground, fontWeight = FontWeight.Bold)
 
         if (ui.isLoading) CircularProgressIndicator(color = colors.primary)
         ui.error?.let { Text(it, color = colors.destructive) }

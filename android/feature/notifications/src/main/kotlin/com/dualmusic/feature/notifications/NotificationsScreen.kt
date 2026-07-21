@@ -119,13 +119,11 @@ fun NotificationsScreen(viewModel: NotificationsViewModel) {
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Notifications", color = colors.foreground, fontWeight = FontWeight.Bold)
-            if (items.any { !it.read }) {
+        if (items.any { !it.read }) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
                 DMButton("Tout lu", style = DMButtonStyle.OUTLINE, onClick = viewModel::markAllRead)
             }
         }

@@ -245,7 +245,6 @@ fun SponsorScreen(viewModel: SponsorViewModel) {
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Text("Sponsoring", color = colors.foreground, fontWeight = FontWeight.Bold)
         ui.message?.let { Text(it, color = colors.primary) }
         TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = colors.foreground) {
             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Mes demandes") })

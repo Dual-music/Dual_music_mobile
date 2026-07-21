@@ -110,7 +110,6 @@ fun GiftShopScreen(viewModel: GiftShopViewModel) {
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
-                Text("Boutique de cadeaux", color = colors.foreground, fontWeight = FontWeight.Bold)
                 Text(
                     "Achète des cadeaux virtuels à envoyer aux artistes pendant les duels.",
                     color = colors.mutedForeground,
