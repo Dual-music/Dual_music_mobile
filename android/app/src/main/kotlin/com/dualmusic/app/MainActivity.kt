@@ -40,6 +40,7 @@ import com.dualmusic.core.realtime.RealtimeClient
 import com.dualmusic.core.upload.MediaUploader
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
+import com.dualmusic.core.ui.components.DMPageHeader
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.model.Competition
 import com.dualmusic.domain.model.Duel
@@ -385,19 +386,19 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                     // 0 = profil · 1 = portefeuille · 2 = notifications
                     var sub by remember { mutableIntStateOf(0) }
                     when (sub) {
-                        1 -> SubScreen(onBack = { sub = 0 }) {
+                        1 -> SubScreen(title = "Mon portefeuille", onBack = { sub = 0 }) {
                             val walletVm: WalletViewModel = viewModel { container.makeWalletViewModel() }
                             WalletScreen(viewModel = walletVm)
                         }
-                        2 -> SubScreen(onBack = { sub = 0 }) {
+                        2 -> SubScreen(title = "Notifications", onBack = { sub = 0 }) {
                             val notifVm: NotificationsViewModel = viewModel { container.makeNotificationsViewModel() }
                             NotificationsScreen(viewModel = notifVm)
                         }
-                        3 -> SubScreen(onBack = { sub = 0 }) {
+                        3 -> SubScreen(title = "Retrait des crédits", onBack = { sub = 0 }) {
                             val wdVm: WithdrawalViewModel = viewModel { container.makeWithdrawalViewModel() }
                             WithdrawalScreen(viewModel = wdVm)
                         }
-                        4 -> SubScreen(onBack = { sub = 0 }) {
+                        4 -> SubScreen(title = "Replays", onBack = { sub = 0 }) {
                             // Sous-navigation replays : liste → lecteur.
                             var openReplay by remember { mutableStateOf<ReplayVideo?>(null) }
                             val r = openReplay
@@ -417,35 +418,35 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                                 }
                             }
                         }
-                        5 -> SubScreen(onBack = { sub = 0 }) {
+                        5 -> SubScreen(title = "Boutique de cadeaux", onBack = { sub = 0 }) {
                             val shopVm: GiftShopViewModel = viewModel { container.makeGiftShopViewModel() }
                             GiftShopScreen(viewModel = shopVm)
                         }
-                        6 -> SubScreen(onBack = { sub = 0 }) {
+                        6 -> SubScreen(title = "Classements", onBack = { sub = 0 }) {
                             val lbVm: LeaderboardViewModel = viewModel { container.makeLeaderboardViewModel() }
                             LeaderboardScreen(viewModel = lbVm)
                         }
-                        7 -> SubScreen(onBack = { sub = 0 }) {
+                        7 -> SubScreen(title = "Parrainage", onBack = { sub = 0 }) {
                             val refVm: ReferralViewModel = viewModel { container.makeReferralViewModel() }
                             ReferralScreen(viewModel = refVm)
                         }
-                        8 -> SubScreen(onBack = { sub = 0 }) {
+                        8 -> SubScreen(title = "Abonnements", onBack = { sub = 0 }) {
                             val subVm: SubscriptionViewModel = viewModel { container.makeSubscriptionViewModel() }
                             SubscriptionScreen(viewModel = subVm)
                         }
-                        9 -> SubScreen(onBack = { sub = 0 }) {
+                        9 -> SubScreen(title = "Découvrir", onBack = { sub = 0 }) {
                             val contentVm: ContentViewModel = viewModel { container.makeContentViewModel() }
                             ContentScreen(viewModel = contentVm)
                         }
-                        10 -> SubScreen(onBack = { sub = 0 }) {
+                        10 -> SubScreen(title = "Artistes", onBack = { sub = 0 }) {
                             val artistsVm: ArtistsViewModel = viewModel { container.makeArtistsViewModel() }
                             ArtistsScreen(viewModel = artistsVm)
                         }
-                        11 -> SubScreen(onBack = { sub = 0 }) {
+                        11 -> SubScreen(title = "Sponsoring", onBack = { sub = 0 }) {
                             val sponsorVm: SponsorViewModel = viewModel { container.makeSponsorViewModel() }
                             SponsorScreen(viewModel = sponsorVm)
                         }
-                        12 -> SubScreen(onBack = { sub = 0 }) {
+                        12 -> SubScreen(title = "Espace créateur", onBack = { sub = 0 }) {
                             val creatorVm: CreatorViewModel = viewModel { container.makeCreatorViewModel() }
                             CreatorScreen(viewModel = creatorVm)
                         }
@@ -476,18 +477,16 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
 }
 
 /**
- * Enveloppe une sous-vue (portefeuille, notifications) avec une barre « ← Retour ».
- * Évite de dupliquer la logique de retour et de modifier les écrans concernés.
+ * Enveloppe une sous-vue (portefeuille, notifications…) avec un [DMPageHeader] :
+ * titre centré + flèche de retour en haut à gauche.
+ *
+ * @param title titre affiché, centré.
+ * @param onBack action de retour.
  */
 @Composable
-private fun SubScreen(onBack: () -> Unit, content: @Composable () -> Unit) {
+private fun SubScreen(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
-        DMButton(
-            "← Retour",
-            style = DMButtonStyle.OUTLINE,
-            modifier = Modifier.padding(DualMusicTheme.spacing.md),
-            onClick = onBack,
-        )
+        DMPageHeader(title = title, onBack = onBack)
         content()
     }
 }

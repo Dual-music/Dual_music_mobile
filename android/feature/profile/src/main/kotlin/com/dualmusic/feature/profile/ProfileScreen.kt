@@ -151,17 +151,35 @@ fun ProfileScreen(
         // Héro : photo + nom + email + rôle.
         ProfileHero(ui.me, primaryRoleLabel(roles))
 
-        // Statistiques.
-        StatSection("Artiste", listOf(
-            "Votes reçus" to ui.stats.artistStats.totalVotes.toInt().toString(),
-            "Duels gagnés" to "${ui.stats.artistStats.wonDuels}/${ui.stats.artistStats.totalDuels}",
-            "Cadeaux reçus" to ui.stats.artistStats.totalGifts.toString(),
-        ))
-        StatSection("Fan", listOf(
-            "Votes émis" to ui.stats.fanStats.totalVotesCast.toInt().toString(),
-            "Cadeaux envoyés" to ui.stats.fanStats.totalGiftsSent.toString(),
-            "Billets" to ui.stats.fanStats.totalTickets.toString(),
-        ))
+        // Statistiques par rôle — comme sur le web, chaque profil ne voit QUE ses propres
+        // recaps : un fan ne voit pas les stats artiste/manager, et inversement.
+        val roles = ui.me?.roles ?: emptyList()
+        val isArtist = UserRole.ARTIST in roles
+        val isManager = UserRole.MANAGER in roles
+        val isAdmin = UserRole.ADMIN in roles
+        val isPureFan = !isArtist && !isManager && !isAdmin
+
+        if (isArtist) {
+            StatSection("Espace Artiste", listOf(
+                "Votes reçus" to ui.stats.artistStats.totalVotes.toInt().toString(),
+                "Duels gagnés" to "${ui.stats.artistStats.wonDuels}/${ui.stats.artistStats.totalDuels}",
+                "Cadeaux reçus" to ui.stats.artistStats.totalGifts.toString(),
+            ))
+        }
+        if (isManager) {
+            StatSection("Espace Manager", listOf(
+                "Duels gérés" to ui.stats.managerStats.totalDuelsManaged.toString(),
+                "En cours" to ui.stats.managerStats.activeDuels.toString(),
+                "Cadeaux reçus" to ui.stats.managerStats.totalGiftsReceived.toString(),
+            ))
+        }
+        if (isPureFan) {
+            StatSection("Espace Fan", listOf(
+                "Votes effectués" to ui.stats.fanStats.totalVotesCast.toInt().toString(),
+                "Cadeaux envoyés" to ui.stats.fanStats.totalGiftsSent.toString(),
+                "Billets achetés" to ui.stats.fanStats.totalTickets.toString(),
+            ))
+        }
 
         // Action principale toujours visible.
         DMButton("Mon portefeuille", onClick = onOpenWallet)

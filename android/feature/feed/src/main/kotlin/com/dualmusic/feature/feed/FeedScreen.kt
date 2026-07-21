@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dualmusic.core.ui.components.DMEmptyState
 import com.dualmusic.core.ui.dmGlow
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.model.Live
@@ -46,6 +47,21 @@ fun FeedScreen(
     // Prewarm + pagination quand la page active change.
     LaunchedEffect(pagerState.currentPage, items.size) {
         if (items.isNotEmpty()) viewModel.onPageChanged(pagerState.currentPage)
+    }
+
+    // Aucun live en cours : état vide centré plutôt qu'un écran noir.
+    if (items.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize().background(DualMusicTheme.gradients.hero),
+            contentAlignment = Alignment.Center,
+        ) {
+            DMEmptyState(
+                title = "Aucun live en cours",
+                subtitle = "Reviens bientôt : les lives des artistes apparaîtront ici dès qu'ils démarrent.",
+                icon = Icons.Filled.PlayArrow,
+            )
+        }
+        return
     }
 
     VerticalPager(
