@@ -2,9 +2,13 @@ package com.dualmusic.app
 
 import android.content.Context
 import android.os.Bundle
+import android.Manifest
+import android.os.Build
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,6 +39,7 @@ import com.dualmusic.core.auth.EncryptedTokenStore
 import com.dualmusic.core.media.LiveKitTokenService
 import com.dualmusic.core.media.LiveRoomClient
 import com.dualmusic.core.network.ApiClient
+import com.dualmusic.core.network.Endpoint
 import com.dualmusic.core.realtime.RealtimeClient
 import com.dualmusic.core.upload.MediaUploader
 import com.dualmusic.core.ui.components.DMButton
@@ -110,9 +115,11 @@ import com.dualmusic.feature.wallet.RechargeScreen
 import com.dualmusic.feature.wallet.RechargeViewModel
 import com.dualmusic.feature.wallet.WalletScreen
 import com.dualmusic.feature.wallet.WalletViewModel
+import com.dualmusic.domain.notification.NotificationEndpoints
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * URL de base du backend Dual Music.
@@ -149,6 +156,23 @@ class AppContainer(context: Context) {
 
     /** Repository d'authentification prêt à l'emploi. */
     val authRepository = AuthRepository(api, tokenStore, API_BASE_URL)
+
+    /**
+     * Enregistre le jeton FCM de cet appareil auprès du backend (à appeler une fois connecté).
+     * L'appel nécessite le Bearer de l'utilisateur ; échec silencieux si FCM/réseau indispo.
+     */
+    fun registerPushToken() {
+        com.google.firebase.messaging.FirebaseMessaging.getInstance().token
+            .addOnSuccessListener { token ->
+                appScope.launch {
+                    runCatching {
+                        api.request<Unit>(
+                            Endpoint.post(NotificationEndpoints.DEVICES, """{"token":"$token"}"""),
+                        )
+                    }
+                }
+            }
+    }
 
     // --- Lot feed + live ---
     private val tokenService = LiveKitTokenService(api)
@@ -304,6 +328,21 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) { vm.bootstrap() }
 
                 val authState by vm.authState.collectAsStateWithLifecycle()
+
+                // Une fois connecté : enregistre le jeton push + demande l'autorisation
+                // de notifications (Android 13+).
+                val notifPermissionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission(),
+                ) { /* accordée ou non : sans effet bloquant */ }
+                LaunchedEffect(authState) {
+                    if (authState is AuthState.SignedIn) {
+                        container.registerPushToken()
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+                }
+
                 when (val st = authState) {
                     is AuthState.SignedIn -> MainShell(container, onSignOut = vm::signOut)
                     is AuthState.PendingEmailVerification -> EmailVerifyScreen(viewModel = vm, email = st.email)

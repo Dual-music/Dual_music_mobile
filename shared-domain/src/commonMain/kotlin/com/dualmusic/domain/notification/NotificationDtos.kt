@@ -27,11 +27,17 @@ data class AppNotification(
 @Serializable
 data class UnreadCount(val count: Int = 0)
 
+/** Corps de `POST/DELETE /notifications/devices` — jeton d'appareil FCM (push mobile). */
+@Serializable
+data class DeviceTokenRequest(val token: String)
+
 /** Chemins REST des notifications (source unique, partagée). */
 object NotificationEndpoints {
     const val LIST = "/notifications"
     const val UNREAD_COUNT = "/notifications/unread-count"
     const val READ_ALL = "/notifications/read-all"
+    /** Enregistrement/suppression d'un jeton FCM (mobile). */
+    const val DEVICES = "/notifications/devices"
     fun read(id: String) = "/notifications/$id/read"
     fun remove(id: String) = "/notifications/$id"
 }

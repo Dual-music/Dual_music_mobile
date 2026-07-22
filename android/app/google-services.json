@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "663210356103",
+    "project_id": "dual-music",
+    "storage_bucket": "dual-music.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:663210356103:android:23bc59ca379c31ee617722",
+        "android_client_info": {
+          "package_name": "com.dualmusic.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqXHwZZjW3trx3w-hrgakMeR3x_lxlTXQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

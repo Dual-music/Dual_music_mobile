@@ -8,6 +8,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    // Firebase Cloud Messaging (push) — lit android/app/google-services.json.
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -103,5 +105,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     // Observabilité : crashs, ANR, perf (auto-capture des exceptions non gérées).
     implementation("io.sentry:sentry-android:7.14.0")
+    // Firebase Cloud Messaging (notifications push).
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    implementation("com.google.firebase:firebase-messaging")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
