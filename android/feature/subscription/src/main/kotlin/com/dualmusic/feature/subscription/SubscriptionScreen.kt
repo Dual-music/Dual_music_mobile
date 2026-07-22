@@ -1,5 +1,7 @@
 package com.dualmusic.feature.subscription
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -20,22 +23,30 @@ import androidx.lifecycle.viewModelScope
 import com.dualmusic.core.network.ApiClient
 import com.dualmusic.core.network.Endpoint
 import com.dualmusic.core.ui.components.DMButton
-import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
 import com.dualmusic.core.ui.theme.DualMusicTheme
+import com.dualmusic.domain.payment.PaymentEndpoints
+import com.dualmusic.domain.payment.StripeCheckoutResponse
+import com.dualmusic.domain.payment.StripeSubscriptionRequest
 import com.dualmusic.domain.subscription.MySubscription
 import com.dualmusic.domain.subscription.SubscriptionEndpoints
 import com.dualmusic.domain.subscription.SubscriptionPlan
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 
 /** État de l'écran d'abonnement. */
 data class SubscriptionUiState(
     val plans: List<SubscriptionPlan> = emptyList(),
     val current: MySubscription = MySubscription(),
+    val loading: Boolean = false,
+    val message: String? = null,
+    /** URL de paiement Stripe à ouvrir (consommée par l'UI puis remise à null). */
+    val checkoutUrl: String? = null,
 )
 
 /**
@@ -44,6 +55,8 @@ data class SubscriptionUiState(
  * @param api client HTTP.
  */
 class SubscriptionViewModel(private val api: ApiClient) : ViewModel() {
+
+    private val json = Json { explicitNulls = false }
 
     private val _uiState = MutableStateFlow(SubscriptionUiState())
     val uiState: StateFlow<SubscriptionUiState> = _uiState.asStateFlow()
@@ -60,6 +73,24 @@ class SubscriptionViewModel(private val api: ApiClient) : ViewModel() {
             _uiState.value = SubscriptionUiState(plans = plans, current = current)
         }
     }
+
+    /**
+     * Achète un abonnement (`pro`/`premium`) via Stripe : ouvre l'URL de paiement hébergée.
+     * Le compte est mis à jour côté serveur après le paiement (webhook Stripe).
+     */
+    fun subscribe(plan: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(loading = true, message = null) }
+            val body = json.encodeToString(StripeSubscriptionRequest.serializer(), StripeSubscriptionRequest(plan))
+            runCatching {
+                api.request(Endpoint.post(PaymentEndpoints.STRIPE_SUBSCRIPTION, body), StripeCheckoutResponse.serializer())
+            }.onSuccess { res -> _uiState.update { it.copy(loading = false, checkoutUrl = res.url, message = "Ouverture du paiement…") } }
+                .onFailure { e -> _uiState.update { it.copy(loading = false, message = e.message ?: "Abonnement indisponible.") } }
+        }
+    }
+
+    /** À appeler après avoir ouvert l'URL de paiement. */
+    fun consumeUrl() = _uiState.update { it.copy(checkoutUrl = null) }
 }
 
 /**
@@ -73,8 +104,18 @@ class SubscriptionViewModel(private val api: ApiClient) : ViewModel() {
 fun SubscriptionScreen(viewModel: SubscriptionViewModel) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) { viewModel.load() }
+
+    // Ouvre l'URL de paiement Stripe dès qu'elle est disponible, puis la consomme.
+    LaunchedEffect(ui.checkoutUrl) {
+        val url = ui.checkoutUrl ?: return@LaunchedEffect
+        runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        viewModel.consumeUrl()
+    }
 
     Column(
         modifier = Modifier
@@ -95,18 +136,21 @@ fun SubscriptionScreen(viewModel: SubscriptionViewModel) {
             }
         }
 
-        ui.plans.forEach { plan -> PlanCard(plan) }
+        ui.message?.let { Text(it, color = colors.primaryGlow) }
+        ui.plans.forEach { plan ->
+            PlanCard(plan, enabled = !ui.loading) { viewModel.subscribe((plan.tier ?: plan.name ?: "pro").lowercase()) }
+        }
 
         Text(
-            "L'achat d'un abonnement se fera via Google Play (bientôt).",
+            "Paiement par carte (Stripe). Ton abonnement est activé automatiquement après le paiement.",
             color = colors.mutedForeground,
         )
     }
 }
 
-/** Carte d'une offre : nom, prix, description + bouton (achat via store à venir). */
+/** Carte d'une offre : nom, prix, description + bouton d'abonnement (paiement Stripe). */
 @Composable
-private fun PlanCard(plan: SubscriptionPlan) {
+private fun PlanCard(plan: SubscriptionPlan, enabled: Boolean, onSubscribe: () -> Unit) {
     val colors = DualMusicTheme.colors
     DMCard(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
@@ -119,8 +163,7 @@ private fun PlanCard(plan: SubscriptionPlan) {
                 Text("${plan.price.toInt()} cr.", color = colors.accent, fontWeight = FontWeight.Bold)
             }
             plan.description?.let { Text(it, color = colors.mutedForeground) }
-            // Achat désactivé tant que Play Billing n'est pas branché (conformité stores).
-            DMButton("Bientôt via Google Play", style = DMButtonStyle.OUTLINE, enabled = false) { }
+            DMButton("S'abonner par carte", modifier = Modifier.fillMaxWidth(), enabled = enabled, onClick = onSubscribe)
         }
     }
 }
