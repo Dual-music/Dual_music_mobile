@@ -90,6 +90,10 @@ import com.dualmusic.feature.live.LiveViewModel
 import com.dualmusic.feature.notifications.NotificationRepository
 import com.dualmusic.feature.notifications.NotificationsScreen
 import com.dualmusic.feature.notifications.NotificationsViewModel
+import com.dualmusic.feature.profile.BecomeRoleScreen
+import com.dualmusic.feature.profile.BecomeRoleViewModel
+import com.dualmusic.feature.profile.EditProfileScreen
+import com.dualmusic.feature.profile.EditProfileViewModel
 import com.dualmusic.feature.profile.ProfileRepository
 import com.dualmusic.feature.profile.ProfileScreen
 import com.dualmusic.feature.profile.ProfileViewModel
@@ -187,6 +191,12 @@ class AppContainer(context: Context) {
 
     /** Nouveau ViewModel de profil (identité + statistiques). */
     fun makeProfileViewModel(): ProfileViewModel = ProfileViewModel(profileRepository)
+
+    /** Nouveau ViewModel d'édition du profil (avec upload d'avatar). */
+    fun makeEditProfileViewModel(): EditProfileViewModel = EditProfileViewModel(profileRepository, mediaUploader)
+
+    /** Nouveau ViewModel des candidatures de rôle (devenir artiste/manager). */
+    fun makeBecomeRoleViewModel(): BecomeRoleViewModel = BecomeRoleViewModel(profileRepository)
 
     /** Nouveau ViewModel du centre de notifications (in-app + temps réel). */
     fun makeNotificationsViewModel(): NotificationsViewModel =
@@ -497,6 +507,14 @@ private fun ProfileSection(
             val creatorVm: CreatorViewModel = viewModel { container.makeCreatorViewModel() }
             CreatorScreen(viewModel = creatorVm)
         }
+        13 -> SubScreen(title = "Modifier le profil", onBack = { onSub(0) }) {
+            val editVm: EditProfileViewModel = viewModel { container.makeEditProfileViewModel() }
+            EditProfileScreen(viewModel = editVm, onSaved = { onSub(0) })
+        }
+        14 -> SubScreen(title = "Devenir artiste ou manager", onBack = { onSub(0) }) {
+            val roleVm: BecomeRoleViewModel = viewModel { container.makeBecomeRoleViewModel() }
+            BecomeRoleScreen(viewModel = roleVm)
+        }
         else -> {
             val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
             ProfileScreen(
@@ -510,6 +528,8 @@ private fun ProfileSection(
                 onOpenSponsor = { onSub(11) },
                 onOpenCreator = { onSub(12) },
                 onOpenNotifications = { onSub(2) },
+                onOpenEdit = { onSub(13) },
+                onOpenBecomeRole = { onSub(14) },
                 onSignOut = onSignOut,
             )
         }

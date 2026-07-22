@@ -27,12 +27,16 @@ dependencies {
     implementation(project(":shared-domain"))
     implementation(project(":core:network"))
     implementation(project(":core:ui"))
+    // Upload de l'avatar (édition de profil).
+    implementation(project(":core:upload"))
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.animation:animation")
+    // Picker média système (avatar).
+    implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
 

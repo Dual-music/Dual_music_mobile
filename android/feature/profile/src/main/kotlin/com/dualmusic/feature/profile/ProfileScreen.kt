@@ -106,6 +106,8 @@ fun ProfileScreen(
     onOpenSponsor: () -> Unit,
     onOpenCreator: () -> Unit,
     onOpenNotifications: () -> Unit,
+    onOpenEdit: () -> Unit,
+    onOpenBecomeRole: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
@@ -173,8 +175,9 @@ fun ProfileScreen(
             ))
         }
 
-        // Action principale toujours visible.
+        // Actions principales toujours visibles.
         DMButton("Mon portefeuille", onClick = onOpenWallet)
+        DMButton("Modifier le profil", style = DMButtonStyle.SECONDARY, onClick = onOpenEdit)
 
         // Menu déroulant (sections), filtré par rôle.
         AnimatedVisibility(visible = menuOpen) {
@@ -182,6 +185,10 @@ fun ProfileScreen(
                 if (canCreate) {
                     DMButton("Espace créateur", style = DMButtonStyle.SECONDARY, onClick = onOpenCreator)
                     DMButton("Retirer mes crédits", style = DMButtonStyle.SECONDARY, onClick = onOpenWithdrawal)
+                }
+                // Réservé aux fans : demander à devenir artiste ou manager (gating admin).
+                if (isPureFan) {
+                    DMButton("Devenir artiste ou manager", style = DMButtonStyle.SECONDARY, onClick = onOpenBecomeRole)
                 }
                 DMButton("Sponsoring", style = DMButtonStyle.SECONDARY, onClick = onOpenSponsor)
                 DMButton("Replays", style = DMButtonStyle.SECONDARY, onClick = onOpenReplays)
