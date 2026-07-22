@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dualmusic.core.ui.components.CreditPill
+import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMCard
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.wallet.RevenueEvent
@@ -39,7 +40,7 @@ import com.dualmusic.domain.wallet.SpendItem
  * @param viewModel source d'état (solde + historiques).
  */
 @Composable
-fun WalletScreen(viewModel: WalletViewModel) {
+fun WalletScreen(viewModel: WalletViewModel, onOpenRecharge: () -> Unit = {}) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     var tab by remember { mutableIntStateOf(0) }
@@ -69,6 +70,8 @@ fun WalletScreen(viewModel: WalletViewModel) {
                 )
             }
         }
+
+        DMButton("Recharger des crédits", modifier = Modifier.fillMaxWidth(), onClick = onOpenRecharge)
 
         ui.error?.let { Text(it, color = colors.destructive) }
         if (ui.isLoading) CircularProgressIndicator(color = colors.primary)

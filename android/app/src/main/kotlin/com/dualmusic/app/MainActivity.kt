@@ -106,6 +106,8 @@ import com.dualmusic.feature.wallet.WalletRepository
 import com.dualmusic.feature.withdrawal.WithdrawalRepository
 import com.dualmusic.feature.withdrawal.WithdrawalScreen
 import com.dualmusic.feature.withdrawal.WithdrawalViewModel
+import com.dualmusic.feature.wallet.RechargeScreen
+import com.dualmusic.feature.wallet.RechargeViewModel
 import com.dualmusic.feature.wallet.WalletScreen
 import com.dualmusic.feature.wallet.WalletViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -188,6 +190,9 @@ class AppContainer(context: Context) {
 
     /** Nouveau ViewModel de portefeuille (solde + historiques). */
     fun makeWalletViewModel(): WalletViewModel = WalletViewModel(walletRepository)
+
+    /** Nouveau ViewModel de recharge de crédits (Mobile Money). */
+    fun makeRechargeViewModel(): RechargeViewModel = RechargeViewModel(api)
 
     /** Nouveau ViewModel de profil (identité + statistiques). */
     fun makeProfileViewModel(): ProfileViewModel = ProfileViewModel(profileRepository)
@@ -457,7 +462,11 @@ private fun ProfileSection(
     when (sub) {
         1 -> SubScreen(title = "Mon portefeuille", onBack = { onSub(0) }) {
             val walletVm: WalletViewModel = viewModel { container.makeWalletViewModel() }
-            WalletScreen(viewModel = walletVm)
+            WalletScreen(viewModel = walletVm, onOpenRecharge = { onSub(15) })
+        }
+        15 -> SubScreen(title = "Recharger des crédits", onBack = { onSub(1) }) {
+            val rechargeVm: RechargeViewModel = viewModel { container.makeRechargeViewModel() }
+            RechargeScreen(viewModel = rechargeVm)
         }
         2 -> SubScreen(title = "Notifications", onBack = { onSub(0) }) {
             val notifVm: NotificationsViewModel = viewModel { container.makeNotificationsViewModel() }
