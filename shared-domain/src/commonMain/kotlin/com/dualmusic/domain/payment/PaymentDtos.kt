@@ -22,6 +22,8 @@ data class CinetpayInitRequest(
     /** Code pays ISO-2 (ex. `CI`, `CM`). */
     val countryCode: String,
     val phone: String? = null,
+    /** Opérateur Mobile Money (code d'un `operators` du pays) ; optionnel. */
+    val paymentMethod: String? = null,
 )
 
 /** Réponse de `POST /payments/cinetpay/init`. */

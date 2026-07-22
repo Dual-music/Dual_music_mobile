@@ -60,6 +60,8 @@ import kotlinx.serialization.json.Json
 data class RechargeUiState(
     val countries: List<CinetpayCountry> = emptyList(),
     val selected: CinetpayCountry? = null,
+    /** Code de l'opérateur Mobile Money choisi (ex. `OM`, `MOMO`). */
+    val operator: String? = null,
     val amount: String = "",
     val phone: String = "",
     val loading: Boolean = false,
@@ -92,13 +94,18 @@ class RechargeViewModel(private val api: ApiClient) : ViewModel() {
                     ListSerializer(CinetpayCountry.serializer()),
                 )
             }.getOrDefault(emptyList())
-            _uiState.update { it.copy(countries = countries, selected = it.selected ?: countries.firstOrNull()) }
+            _uiState.update { s ->
+                val sel = s.selected ?: countries.firstOrNull()
+                s.copy(countries = countries, selected = sel, operator = s.operator ?: sel?.operators?.firstOrNull()?.code)
+            }
         }
     }
 
     fun onAmountChange(v: String) = _uiState.update { it.copy(amount = v.filter { c -> c.isDigit() }, message = null) }
     fun onPhoneChange(v: String) = _uiState.update { it.copy(phone = v, message = null) }
-    fun onCountrySelected(c: CinetpayCountry) = _uiState.update { it.copy(selected = c, message = null) }
+    fun onCountrySelected(c: CinetpayCountry) =
+        _uiState.update { it.copy(selected = c, operator = c.operators.firstOrNull()?.code, message = null) }
+    fun onOperatorSelected(code: String) = _uiState.update { it.copy(operator = code, message = null) }
 
     /** Initie le paiement ; en cas de succès, expose l'URL à ouvrir. */
     fun pay() {
@@ -111,7 +118,12 @@ class RechargeViewModel(private val api: ApiClient) : ViewModel() {
             _uiState.update { it.copy(loading = true, message = null) }
             val body = json.encodeToString(
                 CinetpayInitRequest.serializer(),
-                CinetpayInitRequest(amount = amount, countryCode = country.countryCode, phone = s.phone.trim().ifBlank { null }),
+                CinetpayInitRequest(
+                    amount = amount,
+                    countryCode = country.countryCode,
+                    phone = s.phone.trim().ifBlank { null },
+                    paymentMethod = s.operator ?: country.operators.firstOrNull()?.code,
+                ),
             )
             val key = java.util.UUID.randomUUID().toString()
             runCatching {
@@ -178,6 +190,7 @@ fun RechargeScreen(viewModel: RechargeViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                 )
                 CountrySelector(ui, viewModel)
+                if (!ui.selected?.operators.isNullOrEmpty()) OperatorSelector(ui, viewModel)
                 OutlinedTextField(
                     value = ui.phone,
                     onValueChange = viewModel::onPhoneChange,
@@ -224,6 +237,42 @@ private fun CountrySelector(ui: RechargeUiState, vm: RechargeViewModel) {
                     DropdownMenuItem(
                         text = { Text("${c.countryName ?: c.countryCode} ${c.phonePrefix ?: ""}") },
                         onClick = { vm.onCountrySelected(c); expanded = false },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Sélecteur d'opérateur Mobile Money (selon le pays choisi). */
+@Composable
+private fun OperatorSelector(ui: RechargeUiState, vm: RechargeViewModel) {
+    val colors = DualMusicTheme.colors
+    var expanded by remember { mutableStateOf(false) }
+    val operators = ui.selected?.operators ?: emptyList()
+    val currentLabel = operators.firstOrNull { it.code == ui.operator }?.let { it.label ?: it.code }
+        ?: ui.operator ?: "Choisir…"
+    Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
+        Text("Opérateur", color = colors.mutedForeground)
+        Box {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(DualMusicTheme.radii.md))
+                    .border(1.dp, colors.border, RoundedCornerShape(DualMusicTheme.radii.md))
+                    .clickable { expanded = true }
+                    .padding(DualMusicTheme.spacing.md),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(currentLabel, color = colors.foreground)
+                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = colors.mutedForeground)
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                operators.forEach { op ->
+                    DropdownMenuItem(
+                        text = { Text(op.label ?: op.code) },
+                        onClick = { vm.onOperatorSelected(op.code); expanded = false },
                     )
                 }
             }
