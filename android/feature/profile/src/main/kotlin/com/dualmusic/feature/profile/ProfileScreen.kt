@@ -1,6 +1,5 @@
 package com.dualmusic.feature.profile
 
-import androidx.compose.animation.AnimatedVisibility
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -16,7 +15,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,10 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,8 +34,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import com.dualmusic.core.ui.components.DMButton
-import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.auth.MeResponse
@@ -97,23 +90,10 @@ class ProfileViewModel(private val repository: ProfileRepository) : ViewModel() 
 @Composable
 fun ProfileScreen(
     viewModel: ProfileViewModel,
-    onOpenWallet: () -> Unit,
-    onOpenWithdrawal: () -> Unit,
-    onOpenReplays: () -> Unit,
-    onOpenGiftShop: () -> Unit,
-    onOpenReferral: () -> Unit,
-    onOpenSubscription: () -> Unit,
-    onOpenSponsor: () -> Unit,
-    onOpenCreator: () -> Unit,
-    onOpenNotifications: () -> Unit,
-    onOpenEdit: () -> Unit,
-    onOpenBecomeArtist: () -> Unit,
-    onOpenBecomeManager: () -> Unit,
-    onSignOut: () -> Unit,
+    onOpenMenu: () -> Unit,
 ) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
-    var menuOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.load() }
 
@@ -121,8 +101,6 @@ fun ProfileScreen(
     val isArtist = UserRole.ARTIST in roles
     val isManager = UserRole.MANAGER in roles
     val isAdmin = UserRole.ADMIN in roles
-    // Outils créateur + retrait de crédits : réservés artiste/manager/admin (comme le web).
-    val canCreate = isArtist || isManager || isAdmin
     val isPureFan = !isArtist && !isManager && !isAdmin
 
     Column(
@@ -133,19 +111,15 @@ fun ProfileScreen(
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.lg),
     ) {
-        // Barre : titre + icône menu (déroule/replie la liste des sections).
+        // Barre : titre + icône menu (ouvre le menu en pop-up).
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Mon profil", color = colors.foreground, fontWeight = FontWeight.Bold)
-            IconButton(onClick = { menuOpen = !menuOpen }) {
-                Icon(
-                    imageVector = if (menuOpen) Icons.Filled.Close else Icons.Filled.Menu,
-                    contentDescription = if (menuOpen) "Fermer le menu" else "Ouvrir le menu",
-                    tint = colors.foreground,
-                )
+            Text("Mon espace", color = colors.foreground, fontWeight = FontWeight.Bold)
+            IconButton(onClick = onOpenMenu) {
+                Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = colors.foreground)
             }
         }
 
@@ -176,31 +150,6 @@ fun ProfileScreen(
             ))
         }
 
-        // Actions principales toujours visibles.
-        DMButton("Mon portefeuille", onClick = onOpenWallet)
-        DMButton("Modifier le profil", style = DMButtonStyle.SECONDARY, onClick = onOpenEdit)
-
-        // Menu déroulant (sections), filtré par rôle.
-        AnimatedVisibility(visible = menuOpen) {
-            Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                if (canCreate) {
-                    DMButton("Espace créateur", style = DMButtonStyle.SECONDARY, onClick = onOpenCreator)
-                    DMButton("Retirer mes crédits", style = DMButtonStyle.SECONDARY, onClick = onOpenWithdrawal)
-                }
-                // Réservé aux fans : demander à devenir artiste ou manager (gating admin).
-                if (isPureFan) {
-                    DMButton("Devenir artiste", style = DMButtonStyle.SECONDARY, onClick = onOpenBecomeArtist)
-                    DMButton("Devenir manager", style = DMButtonStyle.SECONDARY, onClick = onOpenBecomeManager)
-                }
-                DMButton("Sponsoring", style = DMButtonStyle.SECONDARY, onClick = onOpenSponsor)
-                DMButton("Replays", style = DMButtonStyle.SECONDARY, onClick = onOpenReplays)
-                DMButton("Boutique de cadeaux", style = DMButtonStyle.SECONDARY, onClick = onOpenGiftShop)
-                DMButton("Parrainage", style = DMButtonStyle.SECONDARY, onClick = onOpenReferral)
-                DMButton("Abonnements", style = DMButtonStyle.SECONDARY, onClick = onOpenSubscription)
-                DMButton("Notifications", style = DMButtonStyle.SECONDARY, onClick = onOpenNotifications)
-                DMButton("Se déconnecter", style = DMButtonStyle.OUTLINE, onClick = onSignOut)
-            }
-        }
     }
 }
 

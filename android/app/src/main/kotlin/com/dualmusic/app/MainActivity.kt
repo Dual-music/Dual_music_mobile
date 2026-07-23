@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.ui.graphics.Brush
@@ -52,6 +53,7 @@ import com.dualmusic.core.ui.components.DMPageHeader
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.model.Competition
 import com.dualmusic.domain.model.Duel
+import com.dualmusic.domain.model.UserRole
 import com.dualmusic.domain.model.Live
 import com.dualmusic.domain.replay.ReplayVideo
 import com.dualmusic.feature.auth.AuthRepository
@@ -159,6 +161,9 @@ class AppContainer(context: Context) {
     // Upload média (presign → PUT → confirm), partagé par sponsor + créateur.
     private val mediaUploader = MediaUploader(api)
 
+    /** Thème (clair/sombre/système), persistant. */
+    val themeController = ThemeController(appContext)
+
     /** Repository d'authentification prêt à l'emploi. */
     val authRepository = AuthRepository(api, tokenStore, API_BASE_URL)
 
@@ -225,6 +230,11 @@ class AppContainer(context: Context) {
 
     /** Nouveau ViewModel de profil (identité + statistiques). */
     fun makeProfileViewModel(): ProfileViewModel = ProfileViewModel(profileRepository)
+
+    /** Vrai si l'admin a ouvert les candidatures manager (gating de l'entrée de menu). */
+    suspend fun managerRequestsEnabled(): Boolean =
+        runCatching { profileRepository.requestsEnabled(com.dualmusic.domain.role.RoleEndpoints.MANAGER_REQUESTS_ENABLED) }
+            .getOrDefault(false)
 
     /** Nouveau ViewModel d'édition du profil (avec upload d'avatar). */
     fun makeEditProfileViewModel(): EditProfileViewModel = EditProfileViewModel(profileRepository, mediaUploader)
@@ -328,7 +338,13 @@ class MainActivity : ComponentActivity() {
         container = AppContainer(this)
         enableEdgeToEdge()
         setContent {
-            DualMusicTheme {
+            val themeMode by container.themeController.mode.collectAsStateWithLifecycle()
+            val darkTheme = when (themeMode) {
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            }
+            DualMusicTheme(darkTheme = darkTheme) {
                 val vm: AuthViewModel = viewModel { AuthViewModel(container.authRepository) }
                 LaunchedEffect(Unit) { vm.bootstrap() }
 
@@ -590,24 +606,34 @@ private fun ProfileSection(
             val roleVm: BecomeRoleViewModel = viewModel { container.makeBecomeRoleViewModel() }
             BecomeManagerScreen(viewModel = roleVm)
         }
+        17 -> SubScreen(title = "Préférences", onBack = { onSub(0) }) {
+            val mode by container.themeController.mode.collectAsStateWithLifecycle()
+            PreferencesScreen(currentMode = mode, onSelectMode = { container.themeController.set(it) })
+        }
+        18 -> SubScreen(title = "Suivis", onBack = { onSub(0) }) {
+            ArtistsScreen(viewModel = viewModel { container.makeArtistsViewModel() })
+        }
         else -> {
+            var showMenu by remember { mutableStateOf(false) }
+            var managerEnabled by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { managerEnabled = container.managerRequestsEnabled() }
+
             val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
-            ProfileScreen(
-                viewModel = profileVm,
-                onOpenWallet = { onSub(1) },
-                onOpenWithdrawal = { onSub(3) },
-                onOpenReplays = { onSub(4) },
-                onOpenGiftShop = { onSub(5) },
-                onOpenReferral = { onSub(7) },
-                onOpenSubscription = { onSub(8) },
-                onOpenSponsor = { onSub(11) },
-                onOpenCreator = { onSub(12) },
-                onOpenNotifications = { onSub(2) },
-                onOpenEdit = { onSub(13) },
-                onOpenBecomeArtist = { onSub(14) },
-                onOpenBecomeManager = { onSub(16) },
-                onSignOut = onSignOut,
-            )
+            val profileState by profileVm.uiState.collectAsStateWithLifecycle()
+            val roles = profileState.me?.roles ?: emptyList()
+            val canCreate = roles.any { it == UserRole.ARTIST || it == UserRole.MANAGER || it == UserRole.ADMIN }
+
+            ProfileScreen(viewModel = profileVm, onOpenMenu = { showMenu = true })
+            if (showMenu) {
+                ProfileMenuSheet(
+                    isPureFan = !canCreate,
+                    canCreate = canCreate,
+                    managerEnabled = managerEnabled,
+                    onNavigate = { showMenu = false; onSub(it) },
+                    onSignOut = { showMenu = false; onSignOut() },
+                    onDismiss = { showMenu = false },
+                )
+            }
         }
     }
 }
