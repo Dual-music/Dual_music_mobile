@@ -1,16 +1,30 @@
 package com.dualmusic.app
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
@@ -19,52 +33,62 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.dualmusic.core.ui.components.DMButton
-import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMLogo
 import com.dualmusic.core.ui.theme.DualMusicTheme
 
+/** Dégradé de marque (violet → rose) réutilisé pour le titre et les accents. */
+private val BrandGradient = Brush.linearGradient(listOf(Color(0xFFB07CFF), Color(0xFFFF4FA3)))
+
 /**
- * Barre supérieure de l'app (hors profil) : logo à gauche, notifications + accès profil à
- * droite — reprend la barre du web en version mobile. Masquée dans la section profil (qui
- * possède déjà son propre en-tête).
+ * Barre supérieure de l'app (hors profil) : logo + notifications + accès profil.
+ *
+ * Fond en **dégradé de marque** qui remonte derrière la **barre d'état** (via
+ * [statusBarsPadding] appliqué APRÈS le fond) : la ligne système (heure, réseau, batterie)
+ * est ainsi colorée, et le contenu de la barre descend sous elle (pas de superposition).
  *
  * @param onOpenNotifications ouvre le centre de notifications.
  * @param onOpenProfile ouvre la section profil.
  */
 @Composable
 fun TopBar(onOpenNotifications: () -> Unit, onOpenProfile: () -> Unit) {
-    val colors = DualMusicTheme.colors
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(colors.card)
-            .padding(horizontal = DualMusicTheme.spacing.md, vertical = DualMusicTheme.spacing.xs),
+            .background(
+                Brush.horizontalGradient(listOf(Color(0xFF3A1D6E), Color(0xFF6D28D9), Color(0xFF9D2FB0))),
+            )
+            .statusBarsPadding()
+            .padding(horizontal = DualMusicTheme.spacing.md, vertical = DualMusicTheme.spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DMLogo(height = 32.dp)
         Box(modifier = Modifier.weight(1f))
         IconButton(onClick = onOpenNotifications) {
-            Icon(Icons.Filled.Notifications, contentDescription = "Notifications", tint = colors.foreground)
+            Icon(Icons.Filled.Notifications, contentDescription = "Notifications", tint = Color.White)
         }
         IconButton(onClick = onOpenProfile) {
-            Icon(Icons.Filled.Person, contentDescription = "Profil", tint = colors.primaryGlow)
+            Icon(Icons.Filled.Person, contentDescription = "Profil", tint = Color.White)
         }
     }
 }
 
 /**
- * Page d'accueil : bannière plein écran (même image de fond que le web) avec le logo, le
- * slogan et **3 accès rapides** — Lifestyle, Classement, Artistes (à la place des boutons
- * « Commencer / Voir les duels » du web).
+ * Page d'accueil : bannière plein écran (image de fond du web) avec **logo au-dessus du
+ * titre** (dégradé), un court slogan, et **3 accès rapides** sous forme de grosses icônes
+ * animées (Lifestyle, Classement, Artistes) alignées en bas. Tient sans défilement.
  *
  * @param onOpenLifestyle ouvre la page Lifestyle (vidéos + blog).
  * @param onOpenClassement ouvre les classements.
@@ -77,57 +101,98 @@ fun HomeScreen(
     onOpenArtistes: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        // Image de fond (bannière web) + voile dégradé pour la lisibilité du texte.
         Image(
             painter = painterResource(id = R.drawable.hero_bg),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
         )
+        // Voile dégradé pour la lisibilité.
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xCC0B0614), Color(0x990B0614), Color(0xE60B0614)),
-                    ),
-                ),
+                .background(Brush.verticalGradient(listOf(Color(0xCC0B0614), Color(0x880B0614), Color(0xF20B0614)))),
         )
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(DualMusicTheme.spacing.xl),
+                .padding(horizontal = DualMusicTheme.spacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
         ) {
-            DMLogo(height = 72.dp)
+            Spacer(Modifier.weight(1f))
+
+            DMLogo(height = 84.dp)
             Text(
                 "Participez aux duels musicaux en direct",
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 26.sp,
+                style = TextStyle(brush = BrandGradient),
+                fontWeight = FontWeight.Black,
+                fontSize = 30.sp,
+                lineHeight = 34.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = DualMusicTheme.spacing.lg),
             )
             Text(
-                "Votez pour vos artistes préférés, offrez des cadeaux virtuels et vivez l'expérience ultime de la compétition musicale.",
-                color = Color.White.copy(alpha = 0.85f),
+                "Votez pour vos artistes, offrez des cadeaux et vivez la compétition musicale.",
+                color = Color.White.copy(alpha = 0.82f),
                 textAlign = TextAlign.Center,
+                fontSize = 14.sp,
                 modifier = Modifier.padding(top = DualMusicTheme.spacing.sm),
             )
 
-            Column(
-                modifier = Modifier
-                    .padding(top = DualMusicTheme.spacing.xl)
-                    .widthIn(max = 320.dp)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            Spacer(Modifier.weight(1f))
+
+            // 3 accès rapides, grosses icônes animées, bien espacées.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.Top,
             ) {
-                DMButton("🎬  Lifestyle", modifier = Modifier.fillMaxWidth(), onClick = onOpenLifestyle)
-                DMButton("🏆  Classement", style = DMButtonStyle.SECONDARY, modifier = Modifier.fillMaxWidth(), onClick = onOpenClassement)
-                DMButton("🎤  Artistes", style = DMButtonStyle.SECONDARY, modifier = Modifier.fillMaxWidth(), onClick = onOpenArtistes)
+                HomeAccess("Lifestyle", Icons.Filled.Movie, pulseMs = 1100, onClick = onOpenLifestyle)
+                HomeAccess("Classement", Icons.Filled.EmojiEvents, pulseMs = 1400, onClick = onOpenClassement)
+                HomeAccess("Artistes", Icons.Filled.Mic, pulseMs = 1700, onClick = onOpenArtistes)
             }
+
+            Spacer(Modifier.height(DualMusicTheme.spacing.xxl))
         }
+    }
+}
+
+/**
+ * Accès rapide de l'accueil : pastille circulaire en dégradé de marque, icône blanche,
+ * **pulsation** continue (durée [pulseMs] décalée par accès pour un effet vivant), + libellé.
+ */
+@Composable
+private fun HomeAccess(label: String, icon: ImageVector, pulseMs: Int, onClick: () -> Unit) {
+    val transition = rememberInfiniteTransition(label = label)
+    val scale by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.09f,
+        animationSpec = infiniteRepeatable(tween(pulseMs), RepeatMode.Reverse),
+        label = "scale",
+    )
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(84.dp)
+                .scale(scale)
+                .shadow(16.dp, CircleShape)
+                .clip(CircleShape)
+                .background(BrandGradient)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(40.dp))
+        }
+        Text(
+            label,
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
+            modifier = Modifier
+                .padding(top = DualMusicTheme.spacing.sm)
+                .width(88.dp),
+            textAlign = TextAlign.Center,
+        )
     }
 }

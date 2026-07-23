@@ -9,7 +9,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -374,7 +378,6 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
     var homeOpen by remember { mutableIntStateOf(0) }
     var openDuel by remember { mutableStateOf<Duel?>(null) }
     var openCompetition by remember { mutableStateOf<Competition?>(null) }
-    val colors = DualMusicTheme.colors
 
     // Quitte le profil et sélectionne un onglet bas.
     fun goTab(t: Int) { tab = t; showProfile = false }
@@ -390,37 +393,56 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
             }
         },
         bottomBar = {
-            NavigationBar(containerColor = colors.card) {
-                NavigationBarItem(
-                    selected = !showProfile && tab == 0,
-                    onClick = { goTab(0) },
-                    icon = { Icon(Icons.Filled.Home, contentDescription = null) },
-                    label = { Text("Accueil") },
-                )
-                NavigationBarItem(
-                    selected = !showProfile && tab == 1,
-                    onClick = { goTab(1) },
-                    icon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
-                    label = { Text("Lives") },
-                )
-                NavigationBarItem(
-                    selected = !showProfile && tab == 2,
-                    onClick = { goTab(2); openDuel = null },
-                    icon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) },
-                    label = { Text("Duels") },
-                )
-                NavigationBarItem(
-                    selected = !showProfile && tab == 3,
-                    onClick = { goTab(3) },
-                    icon = { Icon(Icons.Filled.MusicNote, contentDescription = null) },
-                    label = { Text("Concerts") },
-                )
-                NavigationBarItem(
-                    selected = !showProfile && tab == 4,
-                    onClick = { goTab(4); openCompetition = null },
-                    icon = { Icon(Icons.Filled.Leaderboard, contentDescription = null) },
-                    label = { Text("Compét.") },
-                )
+            // Barre basse colorée (dégradé violet) + items en blanc/rose.
+            val navItemColors = NavigationBarItemDefaults.colors(
+                selectedIconColor = Color.White,
+                selectedTextColor = Color.White,
+                indicatorColor = Color(0x66FF4FA3),
+                unselectedIconColor = Color.White.copy(alpha = 0.6f),
+                unselectedTextColor = Color.White.copy(alpha = 0.6f),
+            )
+            Box(
+                modifier = Modifier.background(
+                    Brush.horizontalGradient(listOf(Color(0xFF2A1257), Color(0xFF3A1D6E))),
+                ),
+            ) {
+                NavigationBar(containerColor = Color.Transparent) {
+                    NavigationBarItem(
+                        selected = !showProfile && tab == 0,
+                        onClick = { goTab(0) },
+                        icon = { Icon(Icons.Filled.Home, contentDescription = null) },
+                        label = { Text("Accueil") },
+                        colors = navItemColors,
+                    )
+                    NavigationBarItem(
+                        selected = !showProfile && tab == 1,
+                        onClick = { goTab(1) },
+                        icon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
+                        label = { Text("Lives") },
+                        colors = navItemColors,
+                    )
+                    NavigationBarItem(
+                        selected = !showProfile && tab == 2,
+                        onClick = { goTab(2); openDuel = null },
+                        icon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) },
+                        label = { Text("Duels") },
+                        colors = navItemColors,
+                    )
+                    NavigationBarItem(
+                        selected = !showProfile && tab == 3,
+                        onClick = { goTab(3) },
+                        icon = { Icon(Icons.Filled.MusicNote, contentDescription = null) },
+                        label = { Text("Concerts") },
+                        colors = navItemColors,
+                    )
+                    NavigationBarItem(
+                        selected = !showProfile && tab == 4,
+                        onClick = { goTab(4); openCompetition = null },
+                        icon = { Icon(Icons.Filled.Leaderboard, contentDescription = null) },
+                        label = { Text("Compét.") },
+                        colors = navItemColors,
+                    )
+                }
             }
         },
     ) { padding ->
