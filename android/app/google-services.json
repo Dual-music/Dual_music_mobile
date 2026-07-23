@@ -12,7 +12,20 @@
           "package_name": "com.dualmusic.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "663210356103-v58nnug4q09fms3slpm438hs9l9rh4lp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dualmusic.app",
+            "certificate_hash": "1e894f88d884b913e16dd047234c1002a537c6ee"
+          }
+        },
+        {
+          "client_id": "663210356103-ujh7o2g4tgrpc84e1fj5fg5o0lijqnft.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDqXHwZZjW3trx3w-hrgakMeR3x_lxlTXQ"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "663210356103-ujh7o2g4tgrpc84e1fj5fg5o0lijqnft.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

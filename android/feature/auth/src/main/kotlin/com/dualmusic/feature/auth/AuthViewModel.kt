@@ -88,6 +88,20 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     /** Change de mode (connexion/inscription/oublié/reset), en nettoyant messages. */
     fun setMode(mode: AuthMode) = _uiState.update { it.copy(mode = mode, error = null, info = null) }
 
+    /** Connexion via ID token Google (obtenu par Credential Manager côté écran). */
+    fun signInWithGoogle(idToken: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSubmitting = true, error = null) }
+            runCatching { repository.loginWithGoogle(idToken) }
+                .onSuccess { _authState.value = AuthState.SignedIn(it.user) }
+                .onFailure { e -> _uiState.update { it.copy(error = e.message ?: "Connexion Google impossible.") } }
+            _uiState.update { it.copy(isSubmitting = false) }
+        }
+    }
+
+    /** Remonte une erreur du sélecteur Google (annulation, pas de compte…). */
+    fun onGoogleError(message: String?) = _uiState.update { it.copy(error = message) }
+
     /** Réhydrate la session au lancement (via le refresh token persisté). */
     fun bootstrap() {
         viewModelScope.launch {

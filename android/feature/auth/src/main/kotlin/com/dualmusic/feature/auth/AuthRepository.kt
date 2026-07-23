@@ -6,6 +6,7 @@ import com.dualmusic.core.network.TokenStore
 import com.dualmusic.domain.auth.AuthEndpoints
 import com.dualmusic.domain.auth.AuthSession
 import com.dualmusic.domain.auth.ForgotPasswordRequest
+import com.dualmusic.domain.auth.GoogleNativeRequest
 import com.dualmusic.domain.auth.LoginRequest
 import com.dualmusic.domain.auth.ResetPasswordRequest
 import com.dualmusic.domain.auth.MeResponse
@@ -42,6 +43,17 @@ class AuthRepository(
     suspend fun register(request: RegisterRequest): AuthSession {
         val body = json.encodeToString(RegisterRequest.serializer(), request)
         val session: AuthSession = api.request(Endpoint.post(AuthEndpoints.REGISTER, body).copy(anonymous = true))
+        tokenStore.setTokens(session.accessToken, session.refreshToken)
+        return session
+    }
+
+    /**
+     * Connexion Google **native** : envoie l'ID token (obtenu via Credential Manager) au
+     * backend qui le vérifie, résout/crée le compte et renvoie une session. La persiste.
+     */
+    suspend fun loginWithGoogle(idToken: String): AuthSession {
+        val body = json.encodeToString(GoogleNativeRequest.serializer(), GoogleNativeRequest(idToken))
+        val session: AuthSession = api.request(Endpoint.post(AuthEndpoints.OAUTH_GOOGLE_NATIVE, body).copy(anonymous = true))
         tokenStore.setTokens(session.accessToken, session.refreshToken)
         return session
     }

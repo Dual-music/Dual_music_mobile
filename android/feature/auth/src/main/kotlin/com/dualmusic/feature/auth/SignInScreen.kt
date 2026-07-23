@@ -39,6 +39,9 @@ import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
 import com.dualmusic.core.ui.components.DMLogo
 import com.dualmusic.core.ui.theme.DualMusicTheme
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 
 /**
  * Écran d'authentification — connexion, inscription, mot de passe oublié, réinitialisation.
@@ -56,6 +59,8 @@ fun SignInScreen(
 ) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
@@ -89,7 +94,18 @@ fun SignInScreen(
                 )
 
                 if (ui.mode == AuthMode.LOGIN) {
-                    DMButton("Continuer avec Google", style = DMButtonStyle.OUTLINE, onClick = onGoogle)
+                    DMButton(
+                        title = "Continuer avec Google",
+                        style = DMButtonStyle.OUTLINE,
+                        enabled = !ui.isSubmitting,
+                        onClick = {
+                            scope.launch {
+                                runCatching { requestGoogleIdToken(context) }
+                                    .onSuccess { viewModel.signInWithGoogle(it) }
+                                    .onFailure { viewModel.onGoogleError(it.message ?: "Connexion Google annulée.") }
+                            }
+                        },
+                    )
                 }
 
                 ModeLinks(ui, viewModel)
