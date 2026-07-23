@@ -95,7 +95,8 @@ import com.dualmusic.feature.live.LiveViewModel
 import com.dualmusic.feature.notifications.NotificationRepository
 import com.dualmusic.feature.notifications.NotificationsScreen
 import com.dualmusic.feature.notifications.NotificationsViewModel
-import com.dualmusic.feature.profile.BecomeRoleScreen
+import com.dualmusic.feature.profile.BecomeArtistScreen
+import com.dualmusic.feature.profile.BecomeManagerScreen
 import com.dualmusic.feature.profile.BecomeRoleViewModel
 import com.dualmusic.feature.profile.EditProfileScreen
 import com.dualmusic.feature.profile.EditProfileViewModel
@@ -537,7 +538,7 @@ private fun ProfileSection(
         }
         5 -> SubScreen(title = "Boutique de cadeaux", onBack = { onSub(0) }) {
             val shopVm: GiftShopViewModel = viewModel { container.makeGiftShopViewModel() }
-            GiftShopScreen(viewModel = shopVm)
+            GiftShopScreen(viewModel = shopVm, onOpenRecharge = { onSub(15) })
         }
         7 -> SubScreen(title = "Parrainage", onBack = { onSub(0) }) {
             val refVm: ReferralViewModel = viewModel { container.makeReferralViewModel() }
@@ -559,9 +560,13 @@ private fun ProfileSection(
             val editVm: EditProfileViewModel = viewModel { container.makeEditProfileViewModel() }
             EditProfileScreen(viewModel = editVm, onSaved = { onSub(0) })
         }
-        14 -> SubScreen(title = "Devenir artiste ou manager", onBack = { onSub(0) }) {
+        14 -> SubScreen(title = "Devenir artiste", onBack = { onSub(0) }) {
             val roleVm: BecomeRoleViewModel = viewModel { container.makeBecomeRoleViewModel() }
-            BecomeRoleScreen(viewModel = roleVm)
+            BecomeArtistScreen(viewModel = roleVm)
+        }
+        16 -> SubScreen(title = "Devenir manager", onBack = { onSub(0) }) {
+            val roleVm: BecomeRoleViewModel = viewModel { container.makeBecomeRoleViewModel() }
+            BecomeManagerScreen(viewModel = roleVm)
         }
         else -> {
             val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
@@ -577,7 +582,8 @@ private fun ProfileSection(
                 onOpenCreator = { onSub(12) },
                 onOpenNotifications = { onSub(2) },
                 onOpenEdit = { onSub(13) },
-                onOpenBecomeRole = { onSub(14) },
+                onOpenBecomeArtist = { onSub(14) },
+                onOpenBecomeManager = { onSub(16) },
                 onSignOut = onSignOut,
             )
         }

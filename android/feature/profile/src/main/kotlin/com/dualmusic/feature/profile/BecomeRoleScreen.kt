@@ -104,35 +104,21 @@ class BecomeRoleViewModel(private val repository: ProfileRepository) : ViewModel
 }
 
 /**
- * Écran « Devenir artiste / Devenir manager » (réservé aux fans). Chaque section est ouverte,
- * fermée (réglage admin) ou déjà en attente.
+ * Écran dédié **« Devenir artiste »** (réservé aux fans) — formulaire séparé, comme le web.
+ * Ouvert, fermé (réglage admin) ou déjà en attente.
  *
- * @param viewModel source d'état.
+ * @param viewModel source d'état (partagée avec l'écran manager).
  */
 @Composable
-fun BecomeRoleScreen(viewModel: BecomeRoleViewModel) {
+fun BecomeArtistScreen(viewModel: BecomeRoleViewModel) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
-
     LaunchedEffect(Unit) { viewModel.load() }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DualMusicTheme.gradients.hero)
-            .verticalScroll(rememberScrollState())
-            .padding(DualMusicTheme.spacing.lg),
-        verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.lg),
-    ) {
+    var description by remember { mutableStateOf("") }
+    RoleColumn {
         ui.message?.let { Text(it, color = colors.primaryGlow) }
-
-        // --- Artiste ---
-        var description by remember { mutableStateOf("") }
-        RoleCard(
-            title = "Devenir artiste",
-            enabled = ui.artistEnabled,
-            pending = ui.artistPending,
-        ) {
+        RoleCard(title = "Devenir artiste", enabled = ui.artistEnabled, pending = ui.artistPending) {
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
@@ -146,15 +132,26 @@ fun BecomeRoleScreen(viewModel: BecomeRoleViewModel) {
                 onClick = { viewModel.applyArtist(description) },
             )
         }
+    }
+}
 
-        // --- Manager ---
-        var bio by remember { mutableStateOf("") }
-        var experience by remember { mutableStateOf("") }
-        RoleCard(
-            title = "Devenir manager",
-            enabled = ui.managerEnabled,
-            pending = ui.managerPending,
-        ) {
+/**
+ * Écran dédié **« Devenir manager »** (réservé aux fans) — formulaire séparé, comme le web.
+ * ⚠️ N'apparaît côté profil que si l'admin a ouvert les candidatures manager.
+ *
+ * @param viewModel source d'état (partagée avec l'écran artiste).
+ */
+@Composable
+fun BecomeManagerScreen(viewModel: BecomeRoleViewModel) {
+    val ui by viewModel.uiState.collectAsStateWithLifecycle()
+    val colors = DualMusicTheme.colors
+    LaunchedEffect(Unit) { viewModel.load() }
+
+    var bio by remember { mutableStateOf("") }
+    var experience by remember { mutableStateOf("") }
+    RoleColumn {
+        ui.message?.let { Text(it, color = colors.primaryGlow) }
+        RoleCard(title = "Devenir manager", enabled = ui.managerEnabled, pending = ui.managerPending) {
             OutlinedTextField(
                 value = bio,
                 onValueChange = { bio = it },
@@ -175,6 +172,20 @@ fun BecomeRoleScreen(viewModel: BecomeRoleViewModel) {
             )
         }
     }
+}
+
+/** Conteneur commun (fond dégradé + scroll + padding) des écrans de candidature. */
+@Composable
+private fun RoleColumn(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(DualMusicTheme.gradients.hero)
+            .verticalScroll(rememberScrollState())
+            .padding(DualMusicTheme.spacing.lg),
+        verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.lg),
+        content = content,
+    )
 }
 
 /**

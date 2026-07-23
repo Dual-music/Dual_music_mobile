@@ -107,7 +107,8 @@ fun ProfileScreen(
     onOpenCreator: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenEdit: () -> Unit,
-    onOpenBecomeRole: () -> Unit,
+    onOpenBecomeArtist: () -> Unit,
+    onOpenBecomeManager: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
@@ -188,7 +189,8 @@ fun ProfileScreen(
                 }
                 // Réservé aux fans : demander à devenir artiste ou manager (gating admin).
                 if (isPureFan) {
-                    DMButton("Devenir artiste ou manager", style = DMButtonStyle.SECONDARY, onClick = onOpenBecomeRole)
+                    DMButton("Devenir artiste", style = DMButtonStyle.SECONDARY, onClick = onOpenBecomeArtist)
+                    DMButton("Devenir manager", style = DMButtonStyle.SECONDARY, onClick = onOpenBecomeManager)
                 }
                 DMButton("Sponsoring", style = DMButtonStyle.SECONDARY, onClick = onOpenSponsor)
                 DMButton("Replays", style = DMButtonStyle.SECONDARY, onClick = onOpenReplays)

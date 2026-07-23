@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,6 +46,7 @@ import kotlinx.coroutines.launch
 data class GiftShopUiState(
     val catalog: List<VirtualGift> = emptyList(),
     val inventory: List<InventoryItem> = emptyList(),
+    val balance: Double = 0.0,
     val isLoading: Boolean = false,
     val message: String? = null,
 )
@@ -65,17 +67,19 @@ class GiftShopViewModel(private val repository: GiftShopRepository) : ViewModel(
             _uiState.update { it.copy(isLoading = true) }
             val catalog = runCatching { repository.catalog() }.getOrDefault(emptyList())
             val inventory = runCatching { repository.inventory() }.getOrDefault(emptyList())
-            _uiState.update { it.copy(catalog = catalog, inventory = inventory, isLoading = false) }
+            val balance = repository.balance()
+            _uiState.update { it.copy(catalog = catalog, inventory = inventory, balance = balance, isLoading = false) }
         }
     }
 
-    /** Achète un cadeau, puis rafraîchit l'inventaire. */
+    /** Achète un cadeau, puis rafraîchit l'inventaire + le solde. */
     fun buy(gift: VirtualGift) {
         viewModelScope.launch {
             val ok = repository.purchase(gift.id, 1)
             if (ok) {
                 val inventory = runCatching { repository.inventory() }.getOrDefault(_uiState.value.inventory)
-                _uiState.update { it.copy(inventory = inventory, message = "✅ ${gift.name} acheté !") }
+                val balance = repository.balance()
+                _uiState.update { it.copy(inventory = inventory, balance = balance, message = "✅ ${gift.name} acheté !") }
             } else {
                 _uiState.update { it.copy(message = "Achat impossible (solde insuffisant ?).") }
             }
@@ -90,7 +94,7 @@ class GiftShopViewModel(private val repository: GiftShopRepository) : ViewModel(
  * @param viewModel état + actions.
  */
 @Composable
-fun GiftShopScreen(viewModel: GiftShopViewModel) {
+fun GiftShopScreen(viewModel: GiftShopViewModel, onOpenRecharge: () -> Unit = {}) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
 
@@ -108,6 +112,28 @@ fun GiftShopScreen(viewModel: GiftShopViewModel) {
         horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
     ) {
+        // Solde en haut + accès recharge (comme le web).
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            DMCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text("Mon solde", color = colors.mutedForeground)
+                        Text(
+                            formatCredits(ui.balance),
+                            color = colors.foreground,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp,
+                        )
+                    }
+                    DMButton("Recharger", onClick = onOpenRecharge)
+                }
+            }
+        }
+
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
                 Text(
