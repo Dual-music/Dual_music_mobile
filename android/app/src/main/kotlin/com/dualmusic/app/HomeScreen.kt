@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dualmusic.core.ui.components.DMLogo
+import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 
 /** Dégradé de marque (violet → rose) réutilisé pour le titre et les accents. */
@@ -101,6 +102,7 @@ fun HomeScreen(
     onOpenClassement: () -> Unit,
     onOpenArtistes: () -> Unit,
 ) {
+    val s = LocalStrings.current
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
             painter = painterResource(id = R.drawable.hero_bg),
@@ -125,7 +127,7 @@ fun HomeScreen(
 
             DMLogo(height = 84.dp)
             Text(
-                "Participez aux duels musicaux en direct",
+                s.homeTitle,
                 style = TextStyle(brush = BrandGradient),
                 fontWeight = FontWeight.Black,
                 fontSize = 30.sp,
@@ -134,7 +136,7 @@ fun HomeScreen(
                 modifier = Modifier.padding(top = DualMusicTheme.spacing.lg),
             )
             Text(
-                "Votez pour vos artistes, offrez des cadeaux et vivez la compétition musicale.",
+                s.homeSubtitle,
                 color = Color.White.copy(alpha = 0.82f),
                 textAlign = TextAlign.Center,
                 fontSize = 14.sp,
@@ -149,9 +151,9 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.Top,
             ) {
-                HomeAccess("Lifestyle", Icons.Filled.Movie, pulseMs = 1100, onClick = onOpenLifestyle)
-                HomeAccess("Classement", Icons.Filled.EmojiEvents, pulseMs = 1400, onClick = onOpenClassement)
-                HomeAccess("Artistes", Icons.Filled.Mic, pulseMs = 1700, onClick = onOpenArtistes)
+                HomeAccess(s.lifestyle, Icons.Filled.Movie, pulseMs = 1100, onClick = onOpenLifestyle)
+                HomeAccess(s.ranking, Icons.Filled.EmojiEvents, pulseMs = 1400, onClick = onOpenClassement)
+                HomeAccess(s.artists, Icons.Filled.Mic, pulseMs = 1700, onClick = onOpenArtistes)
             }
 
             Spacer(Modifier.height(DualMusicTheme.spacing.xxl))

@@ -164,6 +164,7 @@ class AppContainer(context: Context) {
 
     /** Thème (clair/sombre/système), persistant. */
     val themeController = ThemeController(appContext)
+    val languageController = LanguageController(appContext)
 
     /** Repository d'authentification prêt à l'emploi. */
     val authRepository = AuthRepository(api, tokenStore, API_BASE_URL)
@@ -355,6 +356,10 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.DARK -> true
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
             }
+            val language by container.languageController.language.collectAsStateWithLifecycle()
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.dualmusic.core.ui.i18n.LocalStrings provides com.dualmusic.core.ui.i18n.stringsFor(language),
+            ) {
             DualMusicTheme(darkTheme = darkTheme) {
                 val vm: AuthViewModel = viewModel { AuthViewModel(container.authRepository) }
                 LaunchedEffect(Unit) { vm.bootstrap() }
@@ -381,6 +386,7 @@ class MainActivity : ComponentActivity() {
                     is AuthState.PendingProfileCompletion -> ProfileCompletionScreen(viewModel = vm)
                     else -> SignInScreen(viewModel = vm, onGoogle = { /* TODO(lot suivant): OAuth Google + deeplink */ })
                 }
+            }
             }
         }
     }
@@ -421,6 +427,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
         },
         bottomBar = {
             // Barre basse colorée (dégradé violet) + items en blanc/rose.
+            val navS = com.dualmusic.core.ui.i18n.LocalStrings.current
             val navItemColors = NavigationBarItemDefaults.colors(
                 selectedIconColor = Color.White,
                 selectedTextColor = Color.White,
@@ -438,35 +445,35 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                         selected = !showProfile && tab == 0,
                         onClick = { goTab(0) },
                         icon = { Icon(Icons.Filled.Home, contentDescription = null) },
-                        label = { Text("Accueil") },
+                        label = { Text(navS.navHome) },
                         colors = navItemColors,
                     )
                     NavigationBarItem(
                         selected = !showProfile && tab == 1,
                         onClick = { goTab(1) },
                         icon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
-                        label = { Text("Lives") },
+                        label = { Text(navS.navLives) },
                         colors = navItemColors,
                     )
                     NavigationBarItem(
                         selected = !showProfile && tab == 2,
                         onClick = { goTab(2); openDuel = null },
                         icon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) },
-                        label = { Text("Duels") },
+                        label = { Text(navS.navDuels) },
                         colors = navItemColors,
                     )
                     NavigationBarItem(
                         selected = !showProfile && tab == 3,
                         onClick = { goTab(3) },
                         icon = { Icon(Icons.Filled.MusicNote, contentDescription = null) },
-                        label = { Text("Concerts") },
+                        label = { Text(navS.navConcerts) },
                         colors = navItemColors,
                     )
                     NavigationBarItem(
                         selected = !showProfile && tab == 4,
                         onClick = { goTab(4); openCompetition = null },
                         icon = { Icon(Icons.Filled.Leaderboard, contentDescription = null) },
-                        label = { Text("Compét.") },
+                        label = { Text(navS.navCompetitions) },
                         colors = navItemColors,
                     )
                 }
@@ -619,6 +626,7 @@ private fun ProfileSection(
         }
         17 -> SubScreen(title = "Préférences", onBack = { onSub(0) }) {
             val mode by container.themeController.mode.collectAsStateWithLifecycle()
+            val lang by container.languageController.language.collectAsStateWithLifecycle()
             var deletionAt by remember { mutableStateOf<String?>(null) }
             var refresh by remember { mutableIntStateOf(0) }
             val prefScope = rememberCoroutineScope()
@@ -626,6 +634,8 @@ private fun ProfileSection(
             PreferencesScreen(
                 currentMode = mode,
                 onSelectMode = { container.themeController.set(it) },
+                currentLanguage = lang,
+                onSelectLanguage = { container.languageController.set(it) },
                 deletionScheduledAt = deletionAt,
                 onRequestDeletion = { prefScope.launch { runCatching { container.requestAccountDeletion() }; refresh++ } },
                 onCancelDeletion = { prefScope.launch { runCatching { container.cancelAccountDeletion() }; refresh++ } },
