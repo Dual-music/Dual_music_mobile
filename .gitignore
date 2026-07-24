@@ -38,3 +38,7 @@ shared-domain/build/
 **/fastlane/Preview.html
 **/fastlane/screenshots/**/*.png
 **/fastlane/test_output/
+
+# Secrets Firebase — clé de service (NE JAMAIS committer)
+**/*firebase-adminsdk*.json
+docs/google-services*.json
