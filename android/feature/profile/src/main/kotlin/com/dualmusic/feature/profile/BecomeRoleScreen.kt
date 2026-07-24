@@ -72,13 +72,21 @@ class BecomeRoleViewModel(private val repository: ProfileRepository) : ViewModel
         }
     }
 
-    /** Soumet une candidature artiste (description ≥ 10 caractères). */
-    fun applyArtist(description: String) {
+    /** Soumet une candidature artiste (description ≥ 10 caractères) — mêmes champs que le web. */
+    fun applyArtist(description: String, documentUrl: String, socialLinks: Map<String, String>) {
         if (description.trim().length < 10) {
             _uiState.update { it.copy(message = "Décris ton projet (au moins 10 caractères).") }
             return
         }
-        submit { repository.applyArtist(ApplyArtistRequest(description = description.trim())) }
+        submit {
+            repository.applyArtist(
+                ApplyArtistRequest(
+                    description = description.trim(),
+                    socialLinks = socialLinks.filterValues { it.isNotBlank() },
+                    justificationDocumentUrl = documentUrl.trim().ifBlank { null },
+                ),
+            )
+        }
     }
 
     /** Soumet une candidature manager (bio + expérience requises). */
@@ -116,23 +124,70 @@ fun BecomeArtistScreen(viewModel: BecomeRoleViewModel) {
     LaunchedEffect(Unit) { viewModel.load() }
 
     var description by remember { mutableStateOf("") }
+    var documentUrl by remember { mutableStateOf("") }
+    var instagram by remember { mutableStateOf("") }
+    var tiktok by remember { mutableStateOf("") }
+    var youtube by remember { mutableStateOf("") }
+    var twitter by remember { mutableStateOf("") }
+    var facebook by remember { mutableStateOf("") }
+    var spotify by remember { mutableStateOf("") }
+
     RoleColumn {
         ui.message?.let { Text(it, color = colors.primaryGlow) }
         RoleCard(title = "Devenir artiste", enabled = ui.artistEnabled, pending = ui.artistPending) {
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
-                label = { Text("Présente ton projet musical") },
+                label = { Text("Présente ton projet musical *") },
                 modifier = Modifier.fillMaxWidth(),
             )
+            OutlinedTextField(
+                value = documentUrl,
+                onValueChange = { documentUrl = it },
+                label = { Text("Lien d'un document justificatif (optionnel)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text("Réseaux sociaux (optionnel)", color = colors.mutedForeground)
+            SocialField("Instagram", instagram) { instagram = it }
+            SocialField("TikTok", tiktok) { tiktok = it }
+            SocialField("YouTube", youtube) { youtube = it }
+            SocialField("X (Twitter)", twitter) { twitter = it }
+            SocialField("Facebook", facebook) { facebook = it }
+            SocialField("Spotify", spotify) { spotify = it }
             DMButton(
                 if (ui.submitting) "Envoi…" else "Envoyer ma candidature",
                 enabled = !ui.submitting,
                 modifier = Modifier.fillMaxWidth(),
-                onClick = { viewModel.applyArtist(description) },
+                onClick = {
+                    viewModel.applyArtist(
+                        description = description,
+                        documentUrl = documentUrl,
+                        socialLinks = mapOf(
+                            "instagram" to instagram,
+                            "tiktok" to tiktok,
+                            "youtube" to youtube,
+                            "twitter" to twitter,
+                            "facebook" to facebook,
+                            "spotify" to spotify,
+                        ),
+                    )
+                },
             )
         }
     }
+}
+
+/** Champ de lien d'un réseau social. */
+@Composable
+private fun SocialField(label: String, value: String, onChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 /**
