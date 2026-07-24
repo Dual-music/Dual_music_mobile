@@ -75,7 +75,7 @@ fun SignInScreen(
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.lg),
     ) {
         DMLogo(height = 72.dp, modifier = Modifier.padding(top = DualMusicTheme.spacing.xxl))
-        Text(subtitleFor(ui.mode), color = colors.mutedForeground, textAlign = TextAlign.Center)
+        Text(subtitleFor(ui.mode, com.dualmusic.core.ui.i18n.LocalStrings.current), color = colors.mutedForeground, textAlign = TextAlign.Center)
 
         DMCard {
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md)) {
@@ -90,7 +90,7 @@ fun SignInScreen(
                 ui.error?.let { Text(it, color = colors.destructive) }
 
                 DMButton(
-                    title = submitLabel(ui.mode, ui.isSubmitting),
+                    title = submitLabel(ui.mode, ui.isSubmitting, com.dualmusic.core.ui.i18n.LocalStrings.current),
                     isLoading = ui.isSubmitting,
                     enabled = ui.canSubmit,
                     onClick = viewModel::submit,
@@ -98,14 +98,14 @@ fun SignInScreen(
 
                 if (ui.mode == AuthMode.LOGIN) {
                     DMButton(
-                        title = "Continuer avec Google",
+                        title = com.dualmusic.core.ui.i18n.LocalStrings.current.continueWithGoogle,
                         style = DMButtonStyle.OUTLINE,
                         enabled = !ui.isSubmitting,
                         onClick = {
                             scope.launch {
                                 runCatching { requestGoogleIdToken(context) }
                                     .onSuccess { viewModel.signInWithGoogle(it) }
-                                    .onFailure { viewModel.onGoogleError(it.message ?: "Connexion Google annulée.") }
+                                    .onFailure { viewModel.onGoogleError(it.message ?: com.dualmusic.core.ui.i18n.LocalStrings.current.googleCancelled) }
                             }
                         },
                     )
@@ -121,7 +121,7 @@ fun SignInScreen(
 @Composable
 private fun LoginFields(ui: SignInUiState, vm: AuthViewModel) {
     EmailField(ui.email, vm::onEmailChange)
-    PasswordField(ui.password, vm::onPasswordChange, label = "Mot de passe")
+    PasswordField(ui.password, vm::onPasswordChange, label = com.dualmusic.core.ui.i18n.LocalStrings.current.password)
 }
 
 /**
@@ -132,13 +132,13 @@ private fun LoginFields(ui: SignInUiState, vm: AuthViewModel) {
 @Composable
 private fun RegisterFields(ui: SignInUiState, vm: AuthViewModel) {
     EmailField(ui.email, vm::onEmailChange)
-    PasswordField(ui.password, vm::onPasswordChange, label = "Mot de passe *", supporting = "Au moins 8 caractères")
+    PasswordField(ui.password, vm::onPasswordChange, label = com.dualmusic.core.ui.i18n.LocalStrings.current.passwordStar, supporting = com.dualmusic.core.ui.i18n.LocalStrings.current.atLeast8)
     PasswordField(
         ui.confirmPassword,
         vm::onConfirmPasswordChange,
-        label = "Confirmer le mot de passe *",
+        label = com.dualmusic.core.ui.i18n.LocalStrings.current.confirmPasswordStar,
         supporting = if (ui.confirmPassword.isNotEmpty() && ui.confirmPassword != ui.password) {
-            "Les mots de passe ne correspondent pas"
+            com.dualmusic.core.ui.i18n.LocalStrings.current.passwordsDontMatch
         } else {
             null
         },
@@ -149,7 +149,7 @@ private fun RegisterFields(ui: SignInUiState, vm: AuthViewModel) {
 @Composable
 private fun ForgotFields(ui: SignInUiState, vm: AuthViewModel) {
     val colors = DualMusicTheme.colors
-    Text("Reçois un code par email pour réinitialiser ton mot de passe.", color = colors.mutedForeground)
+    Text(com.dualmusic.core.ui.i18n.LocalStrings.current.forgotHint, color = colors.mutedForeground)
     EmailField(ui.email, vm::onEmailChange)
 }
 
@@ -160,12 +160,12 @@ private fun ResetFields(ui: SignInUiState, vm: AuthViewModel) {
     OutlinedTextField(
         value = ui.resetCode,
         onValueChange = vm::onResetCodeChange,
-        label = { Text("Code reçu par email") },
+        label = { Text(com.dualmusic.core.ui.i18n.LocalStrings.current.codeFromEmail) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.fillMaxWidth(),
     )
-    PasswordField(ui.newPassword, vm::onNewPasswordChange, label = "Nouveau mot de passe", supporting = "Au moins 8 caractères")
+    PasswordField(ui.newPassword, vm::onNewPasswordChange, label = com.dualmusic.core.ui.i18n.LocalStrings.current.newPassword, supporting = com.dualmusic.core.ui.i18n.LocalStrings.current.atLeast8)
 }
 
 /** Liens de navigation entre modes (oublié / bascule connexion-inscription / retour). */
@@ -174,12 +174,12 @@ private fun ModeLinks(ui: SignInUiState, vm: AuthViewModel) {
     val colors = DualMusicTheme.colors
     when (ui.mode) {
         AuthMode.LOGIN -> {
-            LinkText("Mot de passe oublié ?") { vm.setMode(AuthMode.FORGOT) }
-            LinkText("Pas de compte ? S'inscrire") { vm.setMode(AuthMode.REGISTER) }
+            LinkText(com.dualmusic.core.ui.i18n.LocalStrings.current.forgotPassword) { vm.setMode(AuthMode.FORGOT) }
+            LinkText(com.dualmusic.core.ui.i18n.LocalStrings.current.noAccountSignUp) { vm.setMode(AuthMode.REGISTER) }
         }
-        AuthMode.REGISTER -> LinkText("Déjà un compte ? Se connecter") { vm.setMode(AuthMode.LOGIN) }
-        AuthMode.FORGOT -> LinkText("Retour à la connexion") { vm.setMode(AuthMode.LOGIN) }
-        AuthMode.RESET -> LinkText("Retour à la connexion") { vm.setMode(AuthMode.LOGIN) }
+        AuthMode.REGISTER -> LinkText(com.dualmusic.core.ui.i18n.LocalStrings.current.alreadyAccountSignIn) { vm.setMode(AuthMode.LOGIN) }
+        AuthMode.FORGOT -> LinkText(com.dualmusic.core.ui.i18n.LocalStrings.current.backToLogin) { vm.setMode(AuthMode.LOGIN) }
+        AuthMode.RESET -> LinkText(com.dualmusic.core.ui.i18n.LocalStrings.current.backToLogin) { vm.setMode(AuthMode.LOGIN) }
     }
 }
 
@@ -189,7 +189,7 @@ internal fun CountryField(ui: SignInUiState, vm: AuthViewModel) {
     val colors = DualMusicTheme.colors
     var expanded by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
-        Text("Pays *", color = colors.mutedForeground)
+        Text(com.dualmusic.core.ui.i18n.LocalStrings.current.countryStar, color = colors.mutedForeground)
         Box {
             Row(
                 modifier = Modifier
@@ -202,7 +202,7 @@ internal fun CountryField(ui: SignInUiState, vm: AuthViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("${ui.country.name} (${ui.country.dial})", color = colors.foreground)
-                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Choisir un pays", tint = colors.mutedForeground)
+                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = com.dualmusic.core.ui.i18n.LocalStrings.current.chooseCountry, tint = colors.mutedForeground)
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 Countries.ALL.forEach { c ->
@@ -225,8 +225,8 @@ private fun EmailField(value: String, onChange: (String) -> Unit) {
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
-        label = { Text("Email") },
-        placeholder = { Text("votremail@exemple.com") },
+        label = { Text(com.dualmusic.core.ui.i18n.LocalStrings.current.email) },
+        placeholder = { Text(com.dualmusic.core.ui.i18n.LocalStrings.current.emailPlaceholder) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
         modifier = Modifier.fillMaxWidth(),
@@ -262,17 +262,17 @@ private fun LinkText(text: String, onClick: () -> Unit) {
     )
 }
 
-private fun subtitleFor(mode: AuthMode): String = when (mode) {
-    AuthMode.LOGIN -> "Connecte-toi pour rejoindre les lives"
-    AuthMode.REGISTER -> "Crée ton compte pour rejoindre les lives"
-    AuthMode.FORGOT -> "Réinitialiser le mot de passe"
-    AuthMode.RESET -> "Saisis le code reçu et ton nouveau mot de passe"
+private fun subtitleFor(mode: AuthMode, s: com.dualmusic.core.ui.i18n.Strings): String = when (mode) {
+    AuthMode.LOGIN -> s.authLoginSubtitle
+    AuthMode.REGISTER -> s.authRegisterSubtitle
+    AuthMode.FORGOT -> s.resetPasswordTitle
+    AuthMode.RESET -> s.authResetSubtitle
 }
 
-private fun submitLabel(mode: AuthMode, submitting: Boolean): String = when {
-    submitting -> "Veuillez patienter…"
-    mode == AuthMode.LOGIN -> "Se connecter"
-    mode == AuthMode.REGISTER -> "Créer mon compte"
-    mode == AuthMode.FORGOT -> "Envoyer le code"
-    else -> "Réinitialiser"
+private fun submitLabel(mode: AuthMode, submitting: Boolean, s: com.dualmusic.core.ui.i18n.Strings): String = when {
+    submitting -> s.pleaseWait
+    mode == AuthMode.LOGIN -> s.signIn
+    mode == AuthMode.REGISTER -> s.createAccount
+    mode == AuthMode.FORGOT -> s.sendCode
+    else -> s.reset
 }
