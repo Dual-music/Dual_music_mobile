@@ -81,7 +81,7 @@ fun CompetitionsListScreen(
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Text("Compétitions", color = colors.foreground, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Text(com.dualmusic.core.ui.i18n.LocalStrings.current.screenCompetitions, color = colors.foreground, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
 
         if (isLoading) CircularProgressIndicator(color = colors.primary)
         if (!isLoading && competitions.isEmpty()) {

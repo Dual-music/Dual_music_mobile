@@ -81,7 +81,7 @@ fun ConcertsListScreen(
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Text("Concerts", color = colors.foreground, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Text(com.dualmusic.core.ui.i18n.LocalStrings.current.screenConcerts, color = colors.foreground, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
 
         if (isLoading) CircularProgressIndicator(color = colors.primary)
         if (!isLoading && concerts.isEmpty()) {

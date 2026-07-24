@@ -490,13 +490,13 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                 )
             } else when (tab) {
                 0 -> when (homeOpen) {
-                    1 -> SubScreen(title = "Lifestyle", onBack = { homeOpen = 0 }) {
+                    1 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.lifestyle, onBack = { homeOpen = 0 }) {
                         ContentScreen(viewModel = viewModel { container.makeContentViewModel() })
                     }
-                    2 -> SubScreen(title = "Classement", onBack = { homeOpen = 0 }) {
+                    2 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.ranking, onBack = { homeOpen = 0 }) {
                         LeaderboardScreen(viewModel = viewModel { container.makeLeaderboardViewModel() })
                     }
-                    3 -> SubScreen(title = "Artistes", onBack = { homeOpen = 0 }) {
+                    3 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.artists, onBack = { homeOpen = 0 }) {
                         ArtistsScreen(viewModel = viewModel { container.makeArtistsViewModel() })
                     }
                     else -> HomeScreen(

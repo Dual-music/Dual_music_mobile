@@ -43,6 +43,18 @@ data class Strings(
     val cancelDeletion: String,
     val confirm: String,
     val cancel: String,
+    // Titres d'écrans catalogue.
+    val screenDuels: String,
+    val screenConcerts: String,
+    val screenCompetitions: String,
+    val screenArtists: String,
+    val screenDiscover: String,
+    val screenRankings: String,
+    // Communs.
+    val loading: String,
+    val retry: String,
+    val save: String,
+    val emptyGeneric: String,
 )
 
 /** Chaînes françaises (langue par défaut). */
@@ -72,6 +84,16 @@ val FrStrings = Strings(
     cancelDeletion = "Annuler la suppression",
     confirm = "Confirmer",
     cancel = "Annuler",
+    screenDuels = "Duels",
+    screenConcerts = "Concerts",
+    screenCompetitions = "Compétitions",
+    screenArtists = "Artistes",
+    screenDiscover = "Découvrir",
+    screenRankings = "Classements",
+    loading = "Chargement…",
+    retry = "Réessayer",
+    save = "Enregistrer",
+    emptyGeneric = "Rien à afficher pour le moment.",
 )
 
 /** Chaînes anglaises. */
@@ -101,6 +123,16 @@ val EnStrings = Strings(
     cancelDeletion = "Cancel deletion",
     confirm = "Confirm",
     cancel = "Cancel",
+    screenDuels = "Duels",
+    screenConcerts = "Concerts",
+    screenCompetitions = "Competitions",
+    screenArtists = "Artists",
+    screenDiscover = "Discover",
+    screenRankings = "Rankings",
+    loading = "Loading…",
+    retry = "Retry",
+    save = "Save",
+    emptyGeneric = "Nothing to show yet.",
 )
 
 /** Renvoie la table de chaînes d'une langue. */
