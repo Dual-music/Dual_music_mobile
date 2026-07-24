@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 
 /**
@@ -59,39 +60,40 @@ fun ProfileMenuSheet(
     onDismiss: () -> Unit,
 ) {
     val colors = DualMusicTheme.colors
+    val s = LocalStrings.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = colors.card) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
             Text(
-                "Mon espace",
+                s.menuMySpace,
                 color = colors.mutedForeground,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = DualMusicTheme.spacing.lg, vertical = DualMusicTheme.spacing.sm),
             )
-            MenuRow(Icons.Filled.Dashboard, "Dashboard") { onNavigate(0) }
-            MenuRow(Icons.Filled.Favorite, "Suivis") { onNavigate(18) }
-            MenuRow(Icons.Filled.CardMembership, "Abonnement") { onNavigate(8) }
-            MenuRow(Icons.Filled.CreditCard, "Mes transactions") { onNavigate(1) }
-            MenuRow(Icons.Filled.CardGiftcard, "Programme de Parrainage") { onNavigate(7) }
-            MenuRow(Icons.Filled.Campaign, "Sponsor") { onNavigate(11) }
+            MenuRow(Icons.Filled.Dashboard, s.menuDashboard) { onNavigate(0) }
+            MenuRow(Icons.Filled.Favorite, s.menuFollowing) { onNavigate(18) }
+            MenuRow(Icons.Filled.CardMembership, s.menuSubscription) { onNavigate(8) }
+            MenuRow(Icons.Filled.CreditCard, s.menuTransactions) { onNavigate(1) }
+            MenuRow(Icons.Filled.CardGiftcard, s.menuReferral) { onNavigate(7) }
+            MenuRow(Icons.Filled.Campaign, s.menuSponsor) { onNavigate(11) }
             // Réservé aux fans : candidatures de rôle (manager selon gating admin).
             if (isPureFan) {
-                MenuRow(Icons.Filled.PersonAdd, "Devenir Artiste") { onNavigate(14) }
-                if (managerEnabled) MenuRow(Icons.Filled.Business, "Devenir Manager") { onNavigate(16) }
+                MenuRow(Icons.Filled.PersonAdd, s.menuBecomeArtist) { onNavigate(14) }
+                if (managerEnabled) MenuRow(Icons.Filled.Business, s.menuBecomeManager) { onNavigate(16) }
             }
             // Réservé artiste/manager/admin : outils créateur + revenus.
             if (canCreate) {
-                MenuRow(Icons.Filled.Star, "Espace créateur") { onNavigate(12) }
-                MenuRow(Icons.Filled.AccountBalanceWallet, "Retirer mes crédits") { onNavigate(3) }
-                MenuRow(Icons.Filled.PlayArrow, "Replays") { onNavigate(4) }
-                MenuRow(Icons.Filled.Redeem, "Boutique de cadeaux") { onNavigate(5) }
+                MenuRow(Icons.Filled.Star, s.menuCreatorSpace) { onNavigate(12) }
+                MenuRow(Icons.Filled.AccountBalanceWallet, s.menuWithdraw) { onNavigate(3) }
+                MenuRow(Icons.Filled.PlayArrow, s.menuReplays) { onNavigate(4) }
+                MenuRow(Icons.Filled.Redeem, s.menuGiftShop) { onNavigate(5) }
             }
-            MenuRow(Icons.Filled.Edit, "Modifier le profil") { onNavigate(13) }
-            MenuRow(Icons.Filled.Tune, "Préférences") { onNavigate(17) }
-            MenuRow(Icons.Filled.Notifications, "Notifs") { onNavigate(2) }
+            MenuRow(Icons.Filled.Edit, s.menuEditProfile) { onNavigate(13) }
+            MenuRow(Icons.Filled.Tune, s.preferences) { onNavigate(17) }
+            MenuRow(Icons.Filled.Notifications, s.notifications) { onNavigate(2) }
             HorizontalDivider(modifier = Modifier.padding(vertical = DualMusicTheme.spacing.xs))
-            MenuRow(Icons.Filled.Logout, "Déconnexion", tint = colors.destructive, onClick = onSignOut)
+            MenuRow(Icons.Filled.Logout, s.menuSignOut, tint = colors.destructive, onClick = onSignOut)
         }
     }
 }

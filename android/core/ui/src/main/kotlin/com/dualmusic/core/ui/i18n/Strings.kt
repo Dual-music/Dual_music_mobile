@@ -55,6 +55,22 @@ data class Strings(
     val retry: String,
     val save: String,
     val emptyGeneric: String,
+    // Menu profil (pop-up).
+    val menuMySpace: String,
+    val menuDashboard: String,
+    val menuFollowing: String,
+    val menuSubscription: String,
+    val menuTransactions: String,
+    val menuReferral: String,
+    val menuSponsor: String,
+    val menuBecomeArtist: String,
+    val menuBecomeManager: String,
+    val menuCreatorSpace: String,
+    val menuWithdraw: String,
+    val menuReplays: String,
+    val menuGiftShop: String,
+    val menuEditProfile: String,
+    val menuSignOut: String,
 )
 
 /** Chaînes françaises (langue par défaut). */
@@ -94,6 +110,21 @@ val FrStrings = Strings(
     retry = "Réessayer",
     save = "Enregistrer",
     emptyGeneric = "Rien à afficher pour le moment.",
+    menuMySpace = "Mon espace",
+    menuDashboard = "Tableau de bord",
+    menuFollowing = "Suivis",
+    menuSubscription = "Abonnement",
+    menuTransactions = "Mes transactions",
+    menuReferral = "Programme de parrainage",
+    menuSponsor = "Sponsor",
+    menuBecomeArtist = "Devenir artiste",
+    menuBecomeManager = "Devenir manager",
+    menuCreatorSpace = "Espace créateur",
+    menuWithdraw = "Retirer mes crédits",
+    menuReplays = "Replays",
+    menuGiftShop = "Boutique de cadeaux",
+    menuEditProfile = "Modifier le profil",
+    menuSignOut = "Déconnexion",
 )
 
 /** Chaînes anglaises. */
@@ -133,6 +164,21 @@ val EnStrings = Strings(
     retry = "Retry",
     save = "Save",
     emptyGeneric = "Nothing to show yet.",
+    menuMySpace = "My space",
+    menuDashboard = "Dashboard",
+    menuFollowing = "Following",
+    menuSubscription = "Subscription",
+    menuTransactions = "My transactions",
+    menuReferral = "Referral program",
+    menuSponsor = "Sponsor",
+    menuBecomeArtist = "Become an artist",
+    menuBecomeManager = "Become a manager",
+    menuCreatorSpace = "Creator space",
+    menuWithdraw = "Withdraw credits",
+    menuReplays = "Replays",
+    menuGiftShop = "Gift shop",
+    menuEditProfile = "Edit profile",
+    menuSignOut = "Sign out",
 )
 
 /** Renvoie la table de chaînes d'une langue. */
