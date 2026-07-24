@@ -36,6 +36,16 @@ class ProfileRepository(private val api: ApiClient) {
         api.request<Unit>(Endpoint.patch(UserEndpoints.UPDATE_ME, body))
     }
 
+    /** Programme la suppression du compte (grâce 20 jours). */
+    suspend fun requestAccountDeletion() {
+        api.request<Unit>(Endpoint.post(UserEndpoints.ME_DELETION))
+    }
+
+    /** Annule une suppression de compte programmée. */
+    suspend fun cancelAccountDeletion() {
+        api.request<Unit>(Endpoint.delete(UserEndpoints.ME_DELETION))
+    }
+
     /** Change le mot de passe (utilisateur connecté). */
     suspend fun changePassword(currentPassword: String, newPassword: String) {
         val body = json.encodeToString(

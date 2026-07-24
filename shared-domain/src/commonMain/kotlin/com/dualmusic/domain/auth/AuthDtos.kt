@@ -24,6 +24,8 @@ data class AuthUser(
     @SerialName("phoneVerified") val phoneVerified: Boolean = false,
     @SerialName("emailVerified") val emailVerified: Boolean = false,
     @SerialName("isBanned") val isBanned: Boolean = false,
+    /** Date de suppression programmée (ISO) si le compte est en délai de grâce, sinon null. */
+    val deletionScheduledAt: String? = null,
 )
 
 /** Session renvoyée par login/register/refresh. */

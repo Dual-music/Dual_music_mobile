@@ -68,6 +68,9 @@ object UserEndpoints {
     /** Mise à jour du profil du caller. */
     const val UPDATE_ME = "/users/me"
 
+    /** Suppression de compte à effet différé (POST = programmer, DELETE = annuler). */
+    const val ME_DELETION = "/users/me/deletion"
+
     /** Badges d'un utilisateur. */
     fun badges(id: String) = "/users/$id/badges"
 }

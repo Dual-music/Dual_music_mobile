@@ -126,6 +126,7 @@ import com.dualmusic.domain.notification.NotificationEndpoints
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
 /**
@@ -235,6 +236,16 @@ class AppContainer(context: Context) {
     suspend fun managerRequestsEnabled(): Boolean =
         runCatching { profileRepository.requestsEnabled(com.dualmusic.domain.role.RoleEndpoints.MANAGER_REQUESTS_ENABLED) }
             .getOrDefault(false)
+
+    /** Date (ISO) de suppression programmée du compte, ou null si actif. */
+    suspend fun accountDeletionScheduledAt(): String? =
+        runCatching { profileRepository.me().user.deletionScheduledAt }.getOrNull()
+
+    /** Programme la suppression du compte (grâce 20 jours). */
+    suspend fun requestAccountDeletion() = profileRepository.requestAccountDeletion()
+
+    /** Annule la suppression programmée. */
+    suspend fun cancelAccountDeletion() = profileRepository.cancelAccountDeletion()
 
     /** Nouveau ViewModel d'édition du profil (avec upload d'avatar). */
     fun makeEditProfileViewModel(): EditProfileViewModel = EditProfileViewModel(profileRepository, mediaUploader)
@@ -608,7 +619,17 @@ private fun ProfileSection(
         }
         17 -> SubScreen(title = "Préférences", onBack = { onSub(0) }) {
             val mode by container.themeController.mode.collectAsStateWithLifecycle()
-            PreferencesScreen(currentMode = mode, onSelectMode = { container.themeController.set(it) })
+            var deletionAt by remember { mutableStateOf<String?>(null) }
+            var refresh by remember { mutableIntStateOf(0) }
+            val prefScope = rememberCoroutineScope()
+            LaunchedEffect(refresh) { deletionAt = container.accountDeletionScheduledAt() }
+            PreferencesScreen(
+                currentMode = mode,
+                onSelectMode = { container.themeController.set(it) },
+                deletionScheduledAt = deletionAt,
+                onRequestDeletion = { prefScope.launch { runCatching { container.requestAccountDeletion() }; refresh++ } },
+                onCancelDeletion = { prefScope.launch { runCatching { container.cancelAccountDeletion() }; refresh++ } },
+            )
         }
         18 -> SubScreen(title = "Suivis", onBack = { onSub(0) }) {
             ArtistsScreen(viewModel = viewModel { container.makeArtistsViewModel() })

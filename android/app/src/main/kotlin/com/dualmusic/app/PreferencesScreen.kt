@@ -14,9 +14,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import com.dualmusic.core.ui.components.DMButton
+import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
 import com.dualmusic.core.ui.theme.DualMusicTheme
 
@@ -28,7 +34,13 @@ import com.dualmusic.core.ui.theme.DualMusicTheme
  * @param onSelectMode change le thème.
  */
 @Composable
-fun PreferencesScreen(currentMode: ThemeMode, onSelectMode: (ThemeMode) -> Unit) {
+fun PreferencesScreen(
+    currentMode: ThemeMode,
+    onSelectMode: (ThemeMode) -> Unit,
+    deletionScheduledAt: String? = null,
+    onRequestDeletion: () -> Unit = {},
+    onCancelDeletion: () -> Unit = {},
+) {
     val colors = DualMusicTheme.colors
     Column(
         modifier = Modifier
@@ -63,6 +75,45 @@ fun PreferencesScreen(currentMode: ThemeMode, onSelectMode: (ThemeMode) -> Unit)
             "D'autres langues arriveront prochainement.",
             color = colors.mutedForeground,
         )
+
+        // --- Compte (zone sensible) ---
+        Text("Compte", color = colors.foreground, fontWeight = FontWeight.Bold)
+        DMCard(modifier = Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                if (deletionScheduledAt != null) {
+                    Text(
+                        "⚠️ Ton compte sera supprimé le ${deletionScheduledAt.take(10)}. " +
+                            "Tu peux encore l'annuler.",
+                        color = colors.destructive,
+                    )
+                    DMButton("Annuler la suppression", onClick = onCancelDeletion)
+                } else {
+                    var confirm by remember { mutableStateOf(false) }
+                    if (!confirm) {
+                        DMButton("Supprimer mon compte", style = DMButtonStyle.OUTLINE, onClick = { confirm = true })
+                    } else {
+                        Text(
+                            "Un délai de 20 jours te permettra d'annuler avant la suppression définitive. Confirmer ?",
+                            color = colors.mutedForeground,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                            DMButton(
+                                "Confirmer",
+                                style = DMButtonStyle.OUTLINE,
+                                modifier = Modifier.weight(1f),
+                                onClick = { confirm = false; onRequestDeletion() },
+                            )
+                            DMButton(
+                                "Annuler",
+                                style = DMButtonStyle.SECONDARY,
+                                modifier = Modifier.weight(1f),
+                                onClick = { confirm = false },
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
