@@ -174,7 +174,7 @@ fun RechargeScreen(viewModel: RechargeViewModel) {
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Text("Recharger des crédits", color = colors.foreground, fontWeight = FontWeight.Bold)
+        Text(com.dualmusic.core.ui.i18n.LocalStrings.current.rechargeCredits, color = colors.foreground, fontWeight = FontWeight.Bold)
         Text(
             "Paie par Mobile Money. Ton compte est crédité automatiquement après le paiement.",
             color = colors.mutedForeground,
@@ -185,7 +185,7 @@ fun RechargeScreen(viewModel: RechargeViewModel) {
                 OutlinedTextField(
                     value = ui.amount,
                     onValueChange = viewModel::onAmountChange,
-                    label = { Text("Montant (crédits)") },
+                    label = { Text(com.dualmusic.core.ui.i18n.LocalStrings.current.amountCredits) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -194,7 +194,7 @@ fun RechargeScreen(viewModel: RechargeViewModel) {
                 OutlinedTextField(
                     value = ui.phone,
                     onValueChange = viewModel::onPhoneChange,
-                    label = { Text("Numéro Mobile Money (optionnel)") },
+                    label = { Text(com.dualmusic.core.ui.i18n.LocalStrings.current.mobileMoneyNumber) },
                     placeholder = { Text("${ui.selected?.phonePrefix ?: ""}...") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     modifier = Modifier.fillMaxWidth(),
@@ -217,7 +217,7 @@ private fun CountrySelector(ui: RechargeUiState, vm: RechargeViewModel) {
     val colors = DualMusicTheme.colors
     var expanded by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
-        Text("Pays", color = colors.mutedForeground)
+        Text(com.dualmusic.core.ui.i18n.LocalStrings.current.country, color = colors.mutedForeground)
         Box {
             Row(
                 modifier = Modifier
@@ -253,7 +253,7 @@ private fun OperatorSelector(ui: RechargeUiState, vm: RechargeViewModel) {
     val currentLabel = operators.firstOrNull { it.code == ui.operator }?.let { it.label ?: it.code }
         ?: ui.operator ?: "Choisir…"
     Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
-        Text("Opérateur", color = colors.mutedForeground)
+        Text(com.dualmusic.core.ui.i18n.LocalStrings.current.operator, color = colors.mutedForeground)
         Box {
             Row(
                 modifier = Modifier

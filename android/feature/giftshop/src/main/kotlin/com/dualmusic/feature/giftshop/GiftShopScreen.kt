@@ -121,7 +121,7 @@ fun GiftShopScreen(viewModel: GiftShopViewModel, onOpenRecharge: () -> Unit = {}
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column {
-                        Text("Mon solde", color = colors.mutedForeground)
+                        Text(com.dualmusic.core.ui.i18n.LocalStrings.current.myBalance, color = colors.mutedForeground)
                         Text(
                             formatCredits(ui.balance),
                             color = colors.foreground,
@@ -129,7 +129,7 @@ fun GiftShopScreen(viewModel: GiftShopViewModel, onOpenRecharge: () -> Unit = {}
                             fontSize = 22.sp,
                         )
                     }
-                    DMButton("Recharger", onClick = onOpenRecharge)
+                    DMButton(com.dualmusic.core.ui.i18n.LocalStrings.current.recharge, onClick = onOpenRecharge)
                 }
             }
         }
@@ -199,7 +199,7 @@ private fun GiftCard(gift: VirtualGift, owned: Int, onBuy: () -> Unit) {
         ) {
             Text(gift.name, color = colors.foreground, fontWeight = FontWeight.Bold)
             Text(formatCredits(gift.price), color = colors.accent, fontWeight = FontWeight.Bold)
-            DMButton("Acheter", modifier = Modifier.fillMaxWidth(), onClick = onBuy)
+            DMButton(com.dualmusic.core.ui.i18n.LocalStrings.current.buy, modifier = Modifier.fillMaxWidth(), onClick = onBuy)
         }
     }
 }

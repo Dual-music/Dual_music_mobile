@@ -71,15 +71,15 @@ fun WalletScreen(viewModel: WalletViewModel, onOpenRecharge: () -> Unit = {}) {
             }
         }
 
-        DMButton("Recharger des crédits", modifier = Modifier.fillMaxWidth(), onClick = onOpenRecharge)
+        DMButton(com.dualmusic.core.ui.i18n.LocalStrings.current.rechargeCredits, modifier = Modifier.fillMaxWidth(), onClick = onOpenRecharge)
 
         ui.error?.let { Text(it, color = colors.destructive) }
         if (ui.isLoading) CircularProgressIndicator(color = colors.primary)
 
         // --- Historiques ---
         TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = colors.foreground) {
-            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Dépenses") })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Revenus") })
+            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(com.dualmusic.core.ui.i18n.LocalStrings.current.walletExpenses) })
+            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(com.dualmusic.core.ui.i18n.LocalStrings.current.walletIncome) })
         }
 
         LazyColumn(

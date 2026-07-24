@@ -71,6 +71,17 @@ data class Strings(
     val menuGiftShop: String,
     val menuEditProfile: String,
     val menuSignOut: String,
+    // Portefeuille / recharge / boutique.
+    val walletExpenses: String,
+    val walletIncome: String,
+    val rechargeCredits: String,
+    val amountCredits: String,
+    val mobileMoneyNumber: String,
+    val operator: String,
+    val country: String,
+    val buy: String,
+    val myBalance: String,
+    val recharge: String,
 )
 
 /** Chaînes françaises (langue par défaut). */
@@ -125,6 +136,16 @@ val FrStrings = Strings(
     menuGiftShop = "Boutique de cadeaux",
     menuEditProfile = "Modifier le profil",
     menuSignOut = "Déconnexion",
+    walletExpenses = "Dépenses",
+    walletIncome = "Revenus",
+    rechargeCredits = "Recharger des crédits",
+    amountCredits = "Montant (crédits)",
+    mobileMoneyNumber = "Numéro Mobile Money (optionnel)",
+    operator = "Opérateur",
+    country = "Pays",
+    buy = "Acheter",
+    myBalance = "Mon solde",
+    recharge = "Recharger",
 )
 
 /** Chaînes anglaises. */
@@ -179,6 +200,16 @@ val EnStrings = Strings(
     menuGiftShop = "Gift shop",
     menuEditProfile = "Edit profile",
     menuSignOut = "Sign out",
+    walletExpenses = "Expenses",
+    walletIncome = "Income",
+    rechargeCredits = "Top up credits",
+    amountCredits = "Amount (credits)",
+    mobileMoneyNumber = "Mobile Money number (optional)",
+    operator = "Operator",
+    country = "Country",
+    buy = "Buy",
+    myBalance = "My balance",
+    recharge = "Top up",
 )
 
 /** Renvoie la table de chaînes d'une langue. */
