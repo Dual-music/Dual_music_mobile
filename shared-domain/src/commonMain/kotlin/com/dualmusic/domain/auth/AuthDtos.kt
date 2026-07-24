@@ -77,6 +77,13 @@ data class VerifyOtpRequest(val code: String)
 @Serializable
 data class ForgotPasswordRequest(val email: String)
 
+/** Corps de `POST /auth/password/change` (utilisateur connecté). */
+@Serializable
+data class ChangePasswordRequest(
+    val currentPassword: String? = null,
+    val newPassword: String,
+)
+
 /** Corps de `POST /auth/password/reset` — code reçu par email + nouveau mot de passe. */
 @Serializable
 data class ResetPasswordRequest(
@@ -106,6 +113,7 @@ object AuthEndpoints {
     const val OTP_EMAIL_VERIFY = "/auth/otp/email/verify"
     const val PASSWORD_FORGOT = "/auth/password/forgot"
     const val PASSWORD_RESET = "/auth/password/reset"
+    const val PASSWORD_CHANGE = "/auth/password/change"
     const val OAUTH_GOOGLE_START = "/auth/oauth/google"
     /** Proposé (à créer côté backend) pour l'auth Google native mobile. */
     const val OAUTH_GOOGLE_NATIVE = "/auth/oauth/google/native"

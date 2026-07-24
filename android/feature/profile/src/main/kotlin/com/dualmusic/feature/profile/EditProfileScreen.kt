@@ -4,27 +4,42 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,6 +51,8 @@ import com.dualmusic.core.ui.components.DMRemoteImage
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.core.upload.MediaUploader
 import com.dualmusic.core.upload.readLocalMedia
+import com.dualmusic.domain.geo.Countries
+import com.dualmusic.domain.geo.Country
 import com.dualmusic.domain.upload.UploadCategory
 import com.dualmusic.domain.user.UpdateProfileRequest
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,16 +66,23 @@ data class EditProfileUiState(
     val fullName: String = "",
     val bio: String = "",
     val avatarUrl: String? = null,
+    val country: Country = Countries.DEFAULT,
+    val phone: String = "",
+    val currentPassword: String = "",
+    val newPassword: String = "",
     val uploading: Boolean = false,
     val saving: Boolean = false,
+    val changingPassword: Boolean = false,
     val message: String? = null,
+    val passwordMessage: String? = null,
 )
 
 /**
- * ViewModel d'édition du profil : préremplit depuis `/auth/me`, gère l'upload d'avatar et
- * l'enregistrement (`PATCH /users/me`).
+ * ViewModel d'édition du profil : préremplit depuis `/auth/me`, gère l'upload d'avatar,
+ * l'enregistrement (`PATCH /users/me` — nom, bio, pays, numéro) et le **changement de mot
+ * de passe** (`POST /auth/password/change`).
  *
- * @param repository lectures + écriture profil.
+ * @param repository lectures + écriture profil + mot de passe.
  * @param uploader upload de l'avatar (catégorie `avatar`).
  */
 class EditProfileViewModel(
@@ -74,13 +98,22 @@ class EditProfileViewModel(
         viewModelScope.launch {
             val me = runCatching { repository.me() }.getOrNull() ?: return@launch
             _uiState.update {
-                it.copy(fullName = me.profile?.fullName ?: "", avatarUrl = me.profile?.avatarUrl)
+                it.copy(
+                    fullName = me.profile?.fullName ?: "",
+                    avatarUrl = me.profile?.avatarUrl,
+                    country = Countries.byCode(me.profile?.countryCode),
+                    phone = me.profile?.phone ?: "",
+                )
             }
         }
     }
 
     fun onNameChange(v: String) = _uiState.update { it.copy(fullName = v, message = null) }
     fun onBioChange(v: String) = _uiState.update { it.copy(bio = v, message = null) }
+    fun onCountrySelected(c: Country) = _uiState.update { it.copy(country = c, message = null) }
+    fun onPhoneChange(v: String) = _uiState.update { it.copy(phone = v.filter { c -> c.isDigit() }, message = null) }
+    fun onCurrentPasswordChange(v: String) = _uiState.update { it.copy(currentPassword = v, passwordMessage = null) }
+    fun onNewPasswordChange(v: String) = _uiState.update { it.copy(newPassword = v, passwordMessage = null) }
     fun setMessage(text: String?) = _uiState.update { it.copy(message = text) }
 
     /** Upload l'avatar sélectionné et mémorise son URL. */
@@ -93,7 +126,7 @@ class EditProfileViewModel(
         }
     }
 
-    /** Enregistre le profil, puis exécute [onDone] en cas de succès. */
+    /** Enregistre le profil (nom, bio, pays, numéro), puis exécute [onDone] en cas de succès. */
     fun save(onDone: () -> Unit) {
         val s = _uiState.value
         viewModelScope.launch {
@@ -104,6 +137,9 @@ class EditProfileViewModel(
                         fullName = s.fullName.trim().ifBlank { null },
                         bio = s.bio.trim().ifBlank { null },
                         avatarUrl = s.avatarUrl,
+                        countryCode = s.country.code,
+                        phone = s.phone.trim().ifBlank { null },
+                        phoneCountryCode = s.country.dial,
                     ),
                 )
             }.onSuccess {
@@ -112,10 +148,29 @@ class EditProfileViewModel(
             }.onFailure { e -> _uiState.update { it.copy(saving = false, message = e.message ?: "Enregistrement impossible.") } }
         }
     }
+
+    /** Change le mot de passe (nouveau ≥ 8 caractères). */
+    fun changePassword() {
+        val s = _uiState.value
+        if (s.newPassword.length < 8) {
+            _uiState.update { it.copy(passwordMessage = "Le nouveau mot de passe doit faire au moins 8 caractères.") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(changingPassword = true, passwordMessage = null) }
+            runCatching { repository.changePassword(s.currentPassword, s.newPassword) }
+                .onSuccess {
+                    _uiState.update {
+                        it.copy(changingPassword = false, currentPassword = "", newPassword = "", passwordMessage = "✅ Mot de passe changé.")
+                    }
+                }
+                .onFailure { e -> _uiState.update { it.copy(changingPassword = false, passwordMessage = e.message ?: "Changement impossible.") } }
+        }
+    }
 }
 
 /**
- * Écran d'édition du profil : avatar (upload), nom, bio.
+ * Écran d'édition du profil : avatar, nom, bio, **pays**, **numéro**, et **mot de passe**.
  *
  * @param viewModel source d'état.
  * @param onSaved appelé après un enregistrement réussi (retour au profil).
@@ -169,6 +224,7 @@ fun EditProfileScreen(viewModel: EditProfileViewModel, onSaved: () -> Unit) {
             onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
         )
 
+        // --- Informations ---
         DMCard(modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md)) {
                 OutlinedTextField(
@@ -184,12 +240,88 @@ fun EditProfileScreen(viewModel: EditProfileViewModel, onSaved: () -> Unit) {
                     label = { Text("Bio") },
                     modifier = Modifier.fillMaxWidth(),
                 )
+
+                Text("Pays", color = colors.mutedForeground)
+                CountryDropdown(ui.country, viewModel::onCountrySelected)
+
+                OutlinedTextField(
+                    value = ui.phone,
+                    onValueChange = viewModel::onPhoneChange,
+                    label = { Text("Numéro de téléphone") },
+                    prefix = { Text("${ui.country.dial} ") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
                 ui.message?.let { Text(it, color = colors.primaryGlow) }
                 DMButton(
                     if (ui.saving) "Enregistrement…" else "Enregistrer",
                     enabled = !ui.saving && !ui.uploading,
                     modifier = Modifier.fillMaxWidth(),
                     onClick = { viewModel.save(onSaved) },
+                )
+            }
+        }
+
+        // --- Changement de mot de passe ---
+        DMCard(modifier = Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md)) {
+                Text("Changer le mot de passe", color = colors.foreground, fontWeight = FontWeight.Bold)
+                OutlinedTextField(
+                    value = ui.currentPassword,
+                    onValueChange = viewModel::onCurrentPasswordChange,
+                    label = { Text("Mot de passe actuel") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = ui.newPassword,
+                    onValueChange = viewModel::onNewPasswordChange,
+                    label = { Text("Nouveau mot de passe") },
+                    supportingText = { Text("Au moins 8 caractères") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                ui.passwordMessage?.let { Text(it, color = colors.primaryGlow) }
+                DMButton(
+                    if (ui.changingPassword) "Changement…" else "Changer le mot de passe",
+                    style = DMButtonStyle.SECONDARY,
+                    enabled = !ui.changingPassword,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = viewModel::changePassword,
+                )
+            }
+        }
+    }
+}
+
+/** Sélecteur de pays (menu déroulant). */
+@Composable
+private fun CountryDropdown(current: Country, onSelect: (Country) -> Unit) {
+    val colors = DualMusicTheme.colors
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(DualMusicTheme.radii.md))
+                .border(1.dp, colors.border, RoundedCornerShape(DualMusicTheme.radii.md))
+                .clickable { expanded = true }
+                .padding(DualMusicTheme.spacing.md),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("${current.name} (${current.dial})", color = colors.foreground)
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = colors.mutedForeground)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            Countries.ALL.forEach { c ->
+                DropdownMenuItem(
+                    text = { Text("${c.name} (${c.dial})") },
+                    onClick = { onSelect(c); expanded = false },
                 )
             }
         }

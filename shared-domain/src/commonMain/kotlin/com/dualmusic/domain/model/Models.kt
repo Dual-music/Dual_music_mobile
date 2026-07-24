@@ -25,6 +25,8 @@ data class DisplayProfile(
     /** Nom de scène (artistes). Peut être absent → retomber sur [fullName]. */
     @SerialName("stage_name") val stageName: String? = null,
     @SerialName("country_code") val countryCode: String? = null,
+    val phone: String? = null,
+    @SerialName("phone_country_code") val phoneCountryCode: String? = null,
 ) {
     /** Nom à afficher : nom de scène si présent, sinon nom complet, sinon un repli court. */
     val displayName: String

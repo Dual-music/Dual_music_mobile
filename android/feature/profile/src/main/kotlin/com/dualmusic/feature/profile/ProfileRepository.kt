@@ -2,6 +2,8 @@ package com.dualmusic.feature.profile
 
 import com.dualmusic.core.network.ApiClient
 import com.dualmusic.core.network.Endpoint
+import com.dualmusic.domain.auth.AuthEndpoints
+import com.dualmusic.domain.auth.ChangePasswordRequest
 import com.dualmusic.domain.auth.MeResponse
 import com.dualmusic.domain.role.ApplyArtistRequest
 import com.dualmusic.domain.role.ApplyManagerRequest
@@ -32,6 +34,15 @@ class ProfileRepository(private val api: ApiClient) {
     suspend fun updateProfile(request: UpdateProfileRequest) {
         val body = json.encodeToString(UpdateProfileRequest.serializer(), request)
         api.request<Unit>(Endpoint.patch(UserEndpoints.UPDATE_ME, body))
+    }
+
+    /** Change le mot de passe (utilisateur connecté). */
+    suspend fun changePassword(currentPassword: String, newPassword: String) {
+        val body = json.encodeToString(
+            ChangePasswordRequest.serializer(),
+            ChangePasswordRequest(currentPassword = currentPassword.ifBlank { null }, newPassword = newPassword),
+        )
+        api.request<Unit>(Endpoint.post(AuthEndpoints.PASSWORD_CHANGE, body))
     }
 
     /** Candidature artiste. */

@@ -1,7 +1,7 @@
-package com.dualmusic.feature.auth
+package com.dualmusic.domain.geo
 
 /**
- * Pays sélectionnable à l'inscription.
+ * Pays sélectionnable (inscription, édition de profil).
  *
  * @property code code ISO-2 (envoyé au backend en `countryCode`, ex. `CI`).
  * @property name nom affiché.
@@ -10,8 +10,8 @@ package com.dualmusic.feature.auth
 data class Country(val code: String, val name: String, val dial: String)
 
 /**
- * Liste (curatée) des pays pour l'inscription — marchés cibles de Dual Music (Afrique
- * francophone + Europe + quelques grands marchés). Défaut : France.
+ * Liste (curatée) des pays — marchés cibles de Dual Music (Afrique francophone + Europe +
+ * quelques grands marchés). Partagée entre l'inscription et l'édition de profil. Défaut : France.
  */
 object Countries {
     val ALL: List<Country> = listOf(
@@ -51,4 +51,10 @@ object Countries {
 
     /** Pays par défaut (France). */
     val DEFAULT: Country = ALL.first { it.code == "FR" }
+
+    /** Retrouve un pays par son code ISO-2, sinon [DEFAULT]. */
+    fun byCode(code: String?): Country = ALL.firstOrNull { it.code == code } ?: DEFAULT
+
+    /** Retrouve un pays par son indicatif (`+225`), sinon `null`. */
+    fun byDial(dial: String?): Country? = ALL.firstOrNull { it.dial == dial }
 }
