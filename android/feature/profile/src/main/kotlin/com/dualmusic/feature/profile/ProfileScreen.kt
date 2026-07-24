@@ -157,7 +157,12 @@ fun ProfileScreen(
 @Composable
 private fun ProfileHero(me: MeResponse?, roleLabel: String) {
     val colors = DualMusicTheme.colors
-    val displayName = me?.profile?.displayName ?: me?.user?.email ?: "Profil"
+    // Nom : nom du profil s'il existe, sinon la partie locale de l'email (jamais l'email
+    // complet — il est déjà affiché en dessous), pour ne pas le dupliquer.
+    val realName = me?.profile?.displayName?.takeIf { it.isNotBlank() && it != "Utilisateur" }
+    val displayName = realName
+        ?: me?.user?.email?.substringBefore("@")?.replaceFirstChar { it.uppercase() }
+        ?: "Utilisateur"
     val avatarUrl = me?.profile?.avatarUrl
 
     DMCard {
