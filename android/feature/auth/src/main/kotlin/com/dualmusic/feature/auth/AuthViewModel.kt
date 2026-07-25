@@ -97,7 +97,7 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
             _uiState.update { it.copy(isSubmitting = true, error = null) }
             runCatching { repository.loginWithGoogle(idToken) }
                 .onSuccess { _authState.value = AuthState.SignedIn(it.user) }
-                .onFailure { e -> _uiState.update { it.copy(error = e.message ?: "Connexion Google impossible.") } }
+                .onFailure { e -> _uiState.update { it.copy(error = e.message ?: com.dualmusic.core.ui.i18n.appStrings.errGoogleSignInFailed) } }
             _uiState.update { it.copy(isSubmitting = false) }
         }
     }
@@ -174,7 +174,7 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         val pending = _authState.value as? AuthState.PendingProfileCompletion ?: return
         val s = _uiState.value
         if (s.fullName.isBlank()) {
-            _uiState.update { it.copy(error = "Le nom est requis.") }
+            _uiState.update { it.copy(error = com.dualmusic.core.ui.i18n.appStrings.errNameRequired) }
             return
         }
         viewModelScope.launch {

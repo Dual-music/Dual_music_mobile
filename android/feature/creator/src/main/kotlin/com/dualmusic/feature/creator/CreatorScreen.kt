@@ -121,7 +121,7 @@ class CreatorViewModel(
             _uiState.update { it.copy(uploadingCover = true, message = null) }
             runCatching { uploader.upload(media, com.dualmusic.domain.upload.UploadCategory.IMAGE) }
                 .onSuccess { url -> _uiState.update { it.copy(coverUrl = url, uploadingCover = false) } }
-                .onFailure { e -> _uiState.update { it.copy(uploadingCover = false, message = e.message ?: "Échec de l'upload.") } }
+                .onFailure { e -> _uiState.update { it.copy(uploadingCover = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.uploadFailed) } }
         }
     }
 
@@ -143,7 +143,7 @@ class CreatorViewModel(
         onDone: () -> Unit,
     ) {
         if (title.isBlank() || scheduledDate.isBlank()) {
-            _uiState.update { it.copy(message = "Titre et date sont requis.") }
+            _uiState.update { it.copy(message = com.dualmusic.core.ui.i18n.appStrings.errTitleDateRequired) }
             return
         }
         viewModelScope.launch {
@@ -163,11 +163,11 @@ class CreatorViewModel(
             )
             runCatching { api.request<Unit>(Endpoint.post(ConcertEndpoints.ARTIST_LIST, body)) }
                 .onSuccess {
-                    _uiState.update { it.copy(submitting = false, coverUrl = null, message = "✅ Concert créé — en attente de validation.") }
+                    _uiState.update { it.copy(submitting = false, coverUrl = null, message = com.dualmusic.core.ui.i18n.appStrings.concertCreated) }
                     load()
                     onDone()
                 }
-                .onFailure { e -> _uiState.update { it.copy(submitting = false, message = e.message ?: "Création impossible.") } }
+                .onFailure { e -> _uiState.update { it.copy(submitting = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.errCreateFailed) } }
         }
     }
 

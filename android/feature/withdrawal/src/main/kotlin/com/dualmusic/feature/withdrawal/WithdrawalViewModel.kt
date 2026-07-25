@@ -2,6 +2,7 @@ package com.dualmusic.feature.withdrawal
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dualmusic.core.ui.i18n.appStrings
 import com.dualmusic.domain.api.DomainError
 import com.dualmusic.domain.model.WithdrawalNet
 import com.dualmusic.domain.model.WithdrawalRequest
@@ -96,15 +97,15 @@ class WithdrawalViewModel(private val repository: WithdrawalRepository) : ViewMo
         val state = _uiState.value
         val amount = state.amount.toDoubleOrNull()
         if (amount == null || amount <= 0) {
-            _uiState.update { it.copy(error = "Montant invalide") }
+            _uiState.update { it.copy(error = appStrings.errInvalidAmount) }
             return
         }
         if (state.selectedMethodId == null) {
-            _uiState.update { it.copy(error = "Choisis une méthode de retrait") }
+            _uiState.update { it.copy(error = appStrings.errChooseMethod) }
             return
         }
         if (!pin.matches(Regex("^\\d{6}$"))) {
-            _uiState.update { it.copy(error = "Le code PIN doit contenir 6 chiffres") }
+            _uiState.update { it.copy(error = appStrings.errPin6) }
             return
         }
         viewModelScope.launch {

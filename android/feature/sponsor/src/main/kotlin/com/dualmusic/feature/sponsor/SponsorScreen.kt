@@ -154,7 +154,7 @@ class SponsorViewModel(
             val ok = runCatching {
                 api.request<Unit>(Endpoint.post(SponsorEndpoints.pay(id), idempotencyKey = key))
             }.isSuccess
-            _uiState.update { it.copy(message = if (ok) "✅ Sponsoring payé." else "Paiement impossible.") }
+            _uiState.update { it.copy(message = if (ok) com.dualmusic.core.ui.i18n.appStrings.sponsorPaid else com.dualmusic.core.ui.i18n.appStrings.errPaymentFailed) }
             if (ok) load()
         }
     }
@@ -180,7 +180,7 @@ class SponsorViewModel(
                         )
                     }
                 }
-                .onFailure { e -> _uiState.update { it.copy(uploadingMedia = false, message = e.message ?: "Échec de l'upload.") } }
+                .onFailure { e -> _uiState.update { it.copy(uploadingMedia = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.uploadFailed) } }
         }
     }
 
@@ -198,7 +198,7 @@ class SponsorViewModel(
     fun createRequest(event: SponsorableEvent, description: String, onDone: () -> Unit) {
         val s = _uiState.value
         if (s.mediaUrl == null || s.mediaType == null) {
-            _uiState.update { it.copy(message = "Ajoutez d'abord un média.") }
+            _uiState.update { it.copy(message = com.dualmusic.core.ui.i18n.appStrings.errAddMediaFirst) }
             return
         }
         viewModelScope.launch {
@@ -217,12 +217,12 @@ class SponsorViewModel(
             runCatching { api.request<Unit>(Endpoint.post(SponsorEndpoints.CREATE, body)) }
                 .onSuccess {
                     _uiState.update {
-                        it.copy(submitting = false, mediaUrl = null, mediaType = null, mediaDurationSeconds = 0, message = "✅ Demande envoyée — en attente de validation.")
+                        it.copy(submitting = false, mediaUrl = null, mediaType = null, mediaDurationSeconds = 0, message = com.dualmusic.core.ui.i18n.appStrings.requestSent)
                     }
                     load()
                     onDone()
                 }
-                .onFailure { e -> _uiState.update { it.copy(submitting = false, message = e.message ?: "Envoi impossible.") } }
+                .onFailure { e -> _uiState.update { it.copy(submitting = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed) } }
         }
     }
 }

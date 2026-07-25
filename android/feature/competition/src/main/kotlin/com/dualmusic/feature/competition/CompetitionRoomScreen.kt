@@ -97,7 +97,7 @@ class CompetitionRoomViewModel(
         viewModelScope.launch {
             runCatching { repository.vote(competitionId, candidateId, credits) }
                 .onSuccess { refresh() }
-                .onFailure { _error.value = it.message ?: "Vote impossible" }
+                .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.errVoteFailed }
         }
     }
 

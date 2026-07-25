@@ -112,8 +112,8 @@ class RechargeViewModel(private val api: ApiClient) : ViewModel() {
         val s = _uiState.value
         val amount = s.amount.toIntOrNull()
         val country = s.selected
-        if (amount == null || amount < 1) { _uiState.update { it.copy(message = "Saisis un montant valide.") }; return }
-        if (country == null) { _uiState.update { it.copy(message = "Choisis un pays.") }; return }
+        if (amount == null || amount < 1) { _uiState.update { it.copy(message = com.dualmusic.core.ui.i18n.appStrings.errEnterValidAmount) }; return }
+        if (country == null) { _uiState.update { it.copy(message = com.dualmusic.core.ui.i18n.appStrings.errChooseCountry) }; return }
         viewModelScope.launch {
             _uiState.update { it.copy(loading = true, message = null) }
             val body = json.encodeToString(
@@ -132,9 +132,9 @@ class RechargeViewModel(private val api: ApiClient) : ViewModel() {
                     CinetpayInitResponse.serializer(),
                 )
             }.onSuccess { res ->
-                _uiState.update { it.copy(loading = false, paymentUrl = res.paymentUrl, message = "Ouverture du paiement…") }
+                _uiState.update { it.copy(loading = false, paymentUrl = res.paymentUrl, message = com.dualmusic.core.ui.i18n.appStrings.openingPayment) }
             }.onFailure { e ->
-                _uiState.update { it.copy(loading = false, message = e.message ?: "Recharge impossible.") }
+                _uiState.update { it.copy(loading = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.errRechargeFailed) }
             }
         }
     }
@@ -229,7 +229,7 @@ private fun CountrySelector(ui: RechargeUiState, vm: RechargeViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(ui.selected?.countryName ?: ui.selected?.countryCode ?: "Choisir…", color = colors.foreground)
+                Text(ui.selected?.countryName ?: ui.selected?.countryCode ?: LocalStrings.current.chooseDots, color = colors.foreground)
                 Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = colors.mutedForeground)
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -251,7 +251,7 @@ private fun OperatorSelector(ui: RechargeUiState, vm: RechargeViewModel) {
     var expanded by remember { mutableStateOf(false) }
     val operators = ui.selected?.operators ?: emptyList()
     val currentLabel = operators.firstOrNull { it.code == ui.operator }?.let { it.label ?: it.code }
-        ?: ui.operator ?: "Choisir…"
+        ?: ui.operator ?: LocalStrings.current.chooseDots
     Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
         Text(com.dualmusic.core.ui.i18n.LocalStrings.current.operator, color = colors.mutedForeground)
         Box {

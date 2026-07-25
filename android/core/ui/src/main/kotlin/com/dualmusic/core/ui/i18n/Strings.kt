@@ -250,6 +250,32 @@ data class Strings(
     val noCandidatesHint: String,
     val timerRunning: String,
     val artistSingular: String,
+    // Messages d'erreur / succès (ViewModels).
+    val errInvalidAmount: String,
+    val errChooseMethod: String,
+    val errPin6: String,
+    val errPurchaseFailed: String,
+    val errEnterValidAmount: String,
+    val errChooseCountry: String,
+    val openingPayment: String,
+    val errRechargeFailed: String,
+    val errVoteFailed: String,
+    val errSubscriptionUnavailable: String,
+    val errAddMediaFirst: String,
+    val errTitleDateRequired: String,
+    val errCreateFailed: String,
+    val errCodeInvalid: String,
+    val errGoogleSignInFailed: String,
+    val errNameRequired: String,
+    val errPaymentFailed: String,
+    val sponsorPaid: String,
+    val requestSent: String,
+    val concertCreated: String,
+    val live: String,
+    val chooseDots: String,
+    val profileUpdated: String,
+    val passwordChanged: String,
+    val fan: String,
 )
 
 /** Chaînes françaises (langue par défaut). */
@@ -477,6 +503,31 @@ val FrStrings = Strings(
     noCandidatesHint = "Le classement s'affichera dès les premières candidatures.",
     timerRunning = "⏱ Minuteur en cours",
     artistSingular = "Artiste",
+    errInvalidAmount = "Montant invalide",
+    errChooseMethod = "Choisis une méthode de retrait",
+    errPin6 = "Le code PIN doit contenir 6 chiffres",
+    errPurchaseFailed = "Achat impossible (solde insuffisant ?).",
+    errEnterValidAmount = "Saisis un montant valide.",
+    errChooseCountry = "Choisis un pays.",
+    openingPayment = "Ouverture du paiement…",
+    errRechargeFailed = "Recharge impossible.",
+    errVoteFailed = "Vote impossible",
+    errSubscriptionUnavailable = "Abonnement indisponible.",
+    errAddMediaFirst = "Ajoutez d'abord un média.",
+    errTitleDateRequired = "Titre et date sont requis.",
+    errCreateFailed = "Création impossible.",
+    errCodeInvalid = "Code incorrect ou expiré.",
+    errGoogleSignInFailed = "Connexion Google impossible.",
+    errNameRequired = "Le nom est requis.",
+    errPaymentFailed = "Paiement impossible.",
+    sponsorPaid = "✅ Sponsoring payé.",
+    requestSent = "✅ Demande envoyée — en attente de validation.",
+    concertCreated = "✅ Concert créé — en attente de validation.",
+    live = "Live",
+    chooseDots = "Choisir…",
+    profileUpdated = "✅ Profil mis à jour.",
+    passwordChanged = "✅ Mot de passe changé.",
+    fan = "Fan",
 )
 
 /** Chaînes anglaises. */
@@ -704,6 +755,31 @@ val EnStrings = Strings(
     noCandidatesHint = "The ranking will appear once candidacies start.",
     timerRunning = "⏱ Timer running",
     artistSingular = "Artist",
+    errInvalidAmount = "Invalid amount",
+    errChooseMethod = "Choose a withdrawal method",
+    errPin6 = "The PIN must be 6 digits",
+    errPurchaseFailed = "Purchase failed (insufficient balance?).",
+    errEnterValidAmount = "Enter a valid amount.",
+    errChooseCountry = "Choose a country.",
+    openingPayment = "Opening payment…",
+    errRechargeFailed = "Top-up failed.",
+    errVoteFailed = "Vote failed",
+    errSubscriptionUnavailable = "Subscription unavailable.",
+    errAddMediaFirst = "Add media first.",
+    errTitleDateRequired = "Title and date are required.",
+    errCreateFailed = "Creation failed.",
+    errCodeInvalid = "Wrong or expired code.",
+    errGoogleSignInFailed = "Google sign-in failed.",
+    errNameRequired = "Name is required.",
+    errPaymentFailed = "Payment failed.",
+    sponsorPaid = "✅ Sponsorship paid.",
+    requestSent = "✅ Request sent — pending review.",
+    concertCreated = "✅ Concert created — pending review.",
+    live = "Live",
+    chooseDots = "Choose…",
+    profileUpdated = "✅ Profile updated.",
+    passwordChanged = "✅ Password changed.",
+    fan = "Fan",
 )
 
 /** Renvoie la table de chaînes d'une langue. */
@@ -717,3 +793,17 @@ fun stringsFor(language: Language): Strings = when (language) {
  * Par défaut : français.
  */
 val LocalStrings = staticCompositionLocalOf { FrStrings }
+
+/**
+ * Chaînes courantes accessibles **hors contexte @Composable** (ex. ViewModels, pour les
+ * messages d'erreur). Mises à jour par [setAppLanguage] au démarrage et à chaque changement
+ * de langue. Toujours cohérentes avec [LocalStrings] côté UI.
+ */
+@Volatile
+var appStrings: Strings = FrStrings
+    private set
+
+/** Met à jour la langue globale (UI hors composable). Appelé par le contrôleur de langue. */
+fun setAppLanguage(language: Language) {
+    appStrings = stringsFor(language)
+}

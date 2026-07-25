@@ -81,7 +81,7 @@ class GiftShopViewModel(private val repository: GiftShopRepository) : ViewModel(
                 val balance = repository.balance()
                 _uiState.update { it.copy(inventory = inventory, balance = balance, message = "✅ ${gift.name} acheté !") }
             } else {
-                _uiState.update { it.copy(message = "Achat impossible (solde insuffisant ?).") }
+                _uiState.update { it.copy(message = com.dualmusic.core.ui.i18n.appStrings.errPurchaseFailed) }
             }
         }
     }

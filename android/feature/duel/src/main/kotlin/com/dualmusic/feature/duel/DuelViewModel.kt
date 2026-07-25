@@ -113,7 +113,7 @@ class DuelViewModel(
     fun vote(artistId: String, amount: Double) {
         viewModelScope.launch {
             runCatching { wallet.vote(duelId = duelId, artistId = artistId, amount = amount) }
-                .onFailure { _error.value = it.message ?: "Vote impossible" }
+                .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.errVoteFailed }
         }
     }
 

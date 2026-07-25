@@ -18,7 +18,7 @@ data class DuelChatMessage(
     val content: String,
     val user: DisplayProfile? = null,
 ) {
-    val authorName: String get() = user?.displayName ?: "Fan"
+    val authorName: String get() = user?.displayName ?: com.dualmusic.core.ui.i18n.appStrings.fan
 }
 
 /**

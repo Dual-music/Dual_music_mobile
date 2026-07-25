@@ -85,8 +85,8 @@ class SubscriptionViewModel(private val api: ApiClient) : ViewModel() {
             val body = json.encodeToString(StripeSubscriptionRequest.serializer(), StripeSubscriptionRequest(plan))
             runCatching {
                 api.request(Endpoint.post(PaymentEndpoints.STRIPE_SUBSCRIPTION, body), StripeCheckoutResponse.serializer())
-            }.onSuccess { res -> _uiState.update { it.copy(loading = false, checkoutUrl = res.url, message = "Ouverture du paiement…") } }
-                .onFailure { e -> _uiState.update { it.copy(loading = false, message = e.message ?: "Abonnement indisponible.") } }
+            }.onSuccess { res -> _uiState.update { it.copy(loading = false, checkoutUrl = res.url, message = com.dualmusic.core.ui.i18n.appStrings.openingPayment) } }
+                .onFailure { e -> _uiState.update { it.copy(loading = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.errSubscriptionUnavailable) } }
         }
     }
 

@@ -85,7 +85,7 @@ fun OtpVerifyScreen(
                 submitting = true; error = null
                 runCatching { repository.verifyPhoneOtp(code) }
                     .onSuccess { onVerified() }
-                    .onFailure { error = "Code incorrect ou expiré." }
+                    .onFailure { error = com.dualmusic.core.ui.i18n.appStrings.errCodeInvalid }
                 submitting = false
             }
         }

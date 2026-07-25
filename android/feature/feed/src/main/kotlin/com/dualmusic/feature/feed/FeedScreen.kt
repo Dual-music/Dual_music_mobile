@@ -92,7 +92,7 @@ private fun Poster(item: Live) {
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(item.artist?.displayName ?: "Live", color = Color.White)
+            Text(item.artist?.displayName ?: com.dualmusic.core.ui.i18n.LocalStrings.current.live, color = Color.White)
             item.title?.let { Text(it, color = Color.White.copy(alpha = 0.8f)) }
             Icon(
                 Icons.Filled.PlayArrow,

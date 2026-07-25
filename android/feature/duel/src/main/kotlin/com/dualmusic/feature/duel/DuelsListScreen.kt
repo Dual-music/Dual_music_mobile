@@ -116,7 +116,7 @@ private fun DuelRow(duel: Duel, onClick: () -> Unit) {
         ) {
             Column {
                 Text(
-                    "${duel.artist1?.displayName ?: "Artiste 1"}  vs  ${duel.artist2?.displayName ?: "Artiste 2"}",
+                    "${duel.artist1?.displayName ?: com.dualmusic.core.ui.i18n.LocalStrings.current.artist1}  vs  ${duel.artist2?.displayName ?: com.dualmusic.core.ui.i18n.LocalStrings.current.artist2}",
                     color = colors.foreground,
                     fontWeight = FontWeight.Bold,
                 )

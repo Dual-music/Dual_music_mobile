@@ -76,7 +76,7 @@ class BecomeRoleViewModel(private val repository: ProfileRepository) : ViewModel
     /** Soumet une candidature artiste (description ≥ 10 caractères) — mêmes champs que le web. */
     fun applyArtist(description: String, documentUrl: String, socialLinks: Map<String, String>) {
         if (description.trim().length < 10) {
-            _uiState.update { it.copy(message = "Décris ton projet (au moins 10 caractères).") }
+            _uiState.update { it.copy(message = com.dualmusic.core.ui.i18n.appStrings.artistDescMinError) }
             return
         }
         submit {
@@ -93,7 +93,7 @@ class BecomeRoleViewModel(private val repository: ProfileRepository) : ViewModel
     /** Soumet une candidature manager (bio + expérience requises). */
     fun applyManager(bio: String, experience: String) {
         if (bio.trim().length < 10 || experience.trim().length < 5) {
-            _uiState.update { it.copy(message = "Renseigne ta bio et ton expérience.") }
+            _uiState.update { it.copy(message = com.dualmusic.core.ui.i18n.appStrings.managerFieldsRequired) }
             return
         }
         submit { repository.applyManager(ApplyManagerRequest(bio = bio.trim(), experience = experience.trim())) }
@@ -107,7 +107,7 @@ class BecomeRoleViewModel(private val repository: ProfileRepository) : ViewModel
                     _uiState.update { it.copy(submitting = false, message = "✅ Demande envoyée — en attente de validation.") }
                     load()
                 }
-                .onFailure { e -> _uiState.update { it.copy(submitting = false, message = e.message ?: "Envoi impossible.") } }
+                .onFailure { e -> _uiState.update { it.copy(submitting = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed) } }
         }
     }
 }

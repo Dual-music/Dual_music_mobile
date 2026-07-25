@@ -123,7 +123,7 @@ class EditProfileViewModel(
             _uiState.update { it.copy(uploading = true, message = null) }
             runCatching { uploader.upload(media, UploadCategory.AVATAR) }
                 .onSuccess { url -> _uiState.update { it.copy(uploading = false, avatarUrl = url) } }
-                .onFailure { e -> _uiState.update { it.copy(uploading = false, message = e.message ?: "Échec de l'upload.") } }
+                .onFailure { e -> _uiState.update { it.copy(uploading = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.uploadFailed) } }
         }
     }
 
@@ -144,9 +144,9 @@ class EditProfileViewModel(
                     ),
                 )
             }.onSuccess {
-                _uiState.update { it.copy(saving = false, message = "✅ Profil mis à jour.") }
+                _uiState.update { it.copy(saving = false, message = com.dualmusic.core.ui.i18n.appStrings.profileUpdated) }
                 onDone()
-            }.onFailure { e -> _uiState.update { it.copy(saving = false, message = e.message ?: "Enregistrement impossible.") } }
+            }.onFailure { e -> _uiState.update { it.copy(saving = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.saveFailed) } }
         }
     }
 
@@ -154,7 +154,7 @@ class EditProfileViewModel(
     fun changePassword() {
         val s = _uiState.value
         if (s.newPassword.length < 8) {
-            _uiState.update { it.copy(passwordMessage = "Le nouveau mot de passe doit faire au moins 8 caractères.") }
+            _uiState.update { it.copy(passwordMessage = com.dualmusic.core.ui.i18n.appStrings.newPasswordTooShort) }
             return
         }
         viewModelScope.launch {
@@ -162,10 +162,10 @@ class EditProfileViewModel(
             runCatching { repository.changePassword(s.currentPassword, s.newPassword) }
                 .onSuccess {
                     _uiState.update {
-                        it.copy(changingPassword = false, currentPassword = "", newPassword = "", passwordMessage = "✅ Mot de passe changé.")
+                        it.copy(changingPassword = false, currentPassword = "", newPassword = "", passwordMessage = com.dualmusic.core.ui.i18n.appStrings.passwordChanged)
                     }
                 }
-                .onFailure { e -> _uiState.update { it.copy(changingPassword = false, passwordMessage = e.message ?: "Changement impossible.") } }
+                .onFailure { e -> _uiState.update { it.copy(changingPassword = false, passwordMessage = e.message ?: com.dualmusic.core.ui.i18n.appStrings.changeFailed) } }
         }
     }
 }
