@@ -90,22 +90,13 @@ class ContentViewModel(private val repository: ContentRepository) : ViewModel() 
 @Composable
 fun ContentScreen(viewModel: ContentViewModel) {
     val videos by viewModel.videos.collectAsStateWithLifecycle()
-    val blogs by viewModel.blogs.collectAsStateWithLifecycle()
-    val colors = DualMusicTheme.colors
-    val strings = LocalStrings.current
-    var tab by remember { mutableIntStateOf(0) }
     var openVideo by remember { mutableStateOf<LifestyleVideo?>(null) }
-    var openBlog by remember { mutableStateOf<BlogPost?>(null) }
 
     androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.load() }
 
-    // Superpositions plein écran (lecteur / article).
+    // Superposition plein écran (lecteur vidéo lifestyle).
     openVideo?.let { video ->
         LifestylePlayer(video, onLike = { viewModel.like(video.id) }, onView = { viewModel.view(video.id) }, onBack = { openVideo = null })
-        return
-    }
-    openBlog?.let { post ->
-        BlogDetail(post, onBack = { openBlog = null })
         return
     }
 
@@ -116,19 +107,8 @@ fun ContentScreen(viewModel: ContentViewModel) {
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = colors.foreground) {
-            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(strings.lifestyle) })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(strings.blog) })
-        }
-
-        if (tab == 0) {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                items(videos) { v -> VideoRow(v) { openVideo = v } }
-            }
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                items(blogs) { b -> BlogRow(b) { openBlog = b } }
-            }
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+            items(videos) { v -> VideoRow(v) { openVideo = v } }
         }
     }
 }

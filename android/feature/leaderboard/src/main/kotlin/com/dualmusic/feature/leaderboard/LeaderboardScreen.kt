@@ -41,6 +41,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.lazy.items
+import com.dualmusic.domain.leaderboard.LeaderboardSeason
 import kotlinx.serialization.builtins.ListSerializer
 
 /**
@@ -56,15 +58,24 @@ class LeaderboardViewModel(private val api: ApiClient) : ViewModel() {
     private val _donors = MutableStateFlow<List<LeaderboardEntry>>(emptyList())
     val donors: StateFlow<List<LeaderboardEntry>> = _donors.asStateFlow()
 
+    private val _seasons = MutableStateFlow<List<com.dualmusic.domain.leaderboard.LeaderboardSeason>>(emptyList())
+    val seasons: StateFlow<List<com.dualmusic.domain.leaderboard.LeaderboardSeason>> = _seasons.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    /** Charge les deux classements. */
+    /** Charge les classements (artistes, donateurs) + les saisons (périodique). */
     fun load() {
         viewModelScope.launch {
             _isLoading.value = true
             _artists.value = fetch(LeaderboardEndpoints.ARTISTS)
             _donors.value = fetch(LeaderboardEndpoints.DONORS)
+            _seasons.value = runCatching {
+                api.request(
+                    Endpoint.get(LeaderboardEndpoints.SEASONS),
+                    ListSerializer(com.dualmusic.domain.leaderboard.LeaderboardSeason.serializer()),
+                )
+            }.getOrDefault(emptyList())
             _isLoading.value = false
         }
     }
@@ -84,6 +95,7 @@ class LeaderboardViewModel(private val api: ApiClient) : ViewModel() {
 fun LeaderboardScreen(viewModel: LeaderboardViewModel) {
     val artists by viewModel.artists.collectAsStateWithLifecycle()
     val donors by viewModel.donors.collectAsStateWithLifecycle()
+    val seasons by viewModel.seasons.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
@@ -101,21 +113,36 @@ fun LeaderboardScreen(viewModel: LeaderboardViewModel) {
         TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = colors.foreground) {
             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(strings.artists) })
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(strings.donors) })
+            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text(strings.periodic) })
         }
 
         if (isLoading) DMLoadingBox(Modifier.fillMaxWidth().weight(1f))
 
-        val list = if (tab == 0) artists else donors
-        if (!isLoading && list.isEmpty()) {
-            DMEmptyState(
-                title = strings.emptyRanking,
-                subtitle = strings.emptyRankingHint,
-                icon = Icons.Filled.Star,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-            itemsIndexed(list) { index, entry -> EntryRow(index + 1, entry) }
+        if (tab == 2) {
+            if (!isLoading && seasons.isEmpty()) {
+                DMEmptyState(
+                    title = strings.emptyRanking,
+                    subtitle = strings.emptyRankingHint,
+                    icon = Icons.Filled.Star,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                items(seasons) { season -> SeasonRow(season) }
+            }
+        } else {
+            val list = if (tab == 0) artists else donors
+            if (!isLoading && list.isEmpty()) {
+                DMEmptyState(
+                    title = strings.emptyRanking,
+                    subtitle = strings.emptyRankingHint,
+                    icon = Icons.Filled.Star,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                itemsIndexed(list) { index, entry -> EntryRow(index + 1, entry) }
+            }
         }
     }
 }
@@ -132,6 +159,32 @@ private fun EntryRow(rank: Int, entry: LeaderboardEntry) {
         ) {
             Text("${medal(rank)}  ${entry.displayName}", color = colors.foreground, fontWeight = FontWeight.Bold)
             Text("${entry.total.toInt()}", color = colors.accent, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+/** Ligne d'une saison (classement périodique) : nom, période, statut, récompense. */
+@Composable
+private fun SeasonRow(season: LeaderboardSeason) {
+    val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
+    DMCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            androidx.compose.foundation.layout.Column {
+                Text(season.name, color = colors.foreground, fontWeight = FontWeight.Bold)
+                val period = listOfNotNull(season.startDate?.take(10), season.endDate?.take(10)).joinToString(" → ")
+                if (period.isNotBlank()) Text(period, color = colors.mutedForeground)
+                if (season.isMysteryReward) Text(strings.mysteryReward, color = colors.accent)
+            }
+            Text(
+                if (season.isActive) strings.seasonActive else strings.seasonEnded,
+                color = if (season.isActive) colors.primary else colors.mutedForeground,
+                fontWeight = FontWeight.Bold,
+            )
         }
     }
 }

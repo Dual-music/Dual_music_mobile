@@ -25,12 +25,28 @@ data class LeaderboardEntry(
             ?: "Utilisateur"
 }
 
+/**
+ * Saison de classement (onglet « Périodique » du web) — `GET /leaderboards/seasons`.
+ */
+@Serializable
+data class LeaderboardSeason(
+    val id: String,
+    val name: String,
+    val type: String? = null,
+    @SerialName("start_date") val startDate: String? = null,
+    @SerialName("end_date") val endDate: String? = null,
+    @SerialName("is_active") val isActive: Boolean = false,
+    @SerialName("is_mystery_reward") val isMysteryReward: Boolean = false,
+)
+
 /** Chemins REST des classements (source unique, partagée). */
 object LeaderboardEndpoints {
     /** Classement des artistes (all-time), par votes/cadeaux reçus. */
     const val ARTISTS = "/leaderboards/artists"
     /** Classement des donateurs (all-time), par crédits offerts. */
     const val DONORS = "/leaderboards/donors"
+    /** Saisons (classement périodique). */
+    const val SEASONS = "/leaderboards/seasons"
     /** Gagnants de saisons. */
     const val WINNERS = "/leaderboards/winners"
 }
