@@ -48,6 +48,7 @@ import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
 import com.dualmusic.core.ui.components.DMRemoteImage
+import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.core.upload.MediaUploader
 import com.dualmusic.core.upload.readLocalMedia
@@ -179,6 +180,7 @@ class EditProfileViewModel(
 fun EditProfileScreen(viewModel: EditProfileViewModel, onSaved: () -> Unit) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -189,7 +191,7 @@ fun EditProfileScreen(viewModel: EditProfileViewModel, onSaved: () -> Unit) {
             scope.launch {
                 runCatching { readLocalMedia(context, uri, maxBytes = 5L * 1024 * 1024) }
                     .onSuccess { viewModel.uploadAvatar(it) }
-                    .onFailure { viewModel.setMessage(it.message ?: "Fichier illisible.") }
+                    .onFailure { viewModel.setMessage(it.message ?: strings.fileUnreadable) }
             }
         }
     }
@@ -213,13 +215,13 @@ fun EditProfileScreen(viewModel: EditProfileViewModel, onSaved: () -> Unit) {
         ) {
             val url = ui.avatarUrl
             if (!url.isNullOrBlank()) {
-                DMRemoteImage(url = url, contentDescription = "Avatar", modifier = Modifier.size(96.dp).clip(CircleShape))
+                DMRemoteImage(url = url, contentDescription = strings.avatar, modifier = Modifier.size(96.dp).clip(CircleShape))
             } else {
                 Text(ui.fullName.take(1).uppercase().ifBlank { "?" }, color = colors.foreground, fontWeight = FontWeight.Bold)
             }
         }
         DMButton(
-            if (ui.uploading) "Upload…" else "Changer la photo",
+            if (ui.uploading) strings.uploading else strings.changePhoto,
             style = DMButtonStyle.SECONDARY,
             onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
         )
@@ -230,24 +232,24 @@ fun EditProfileScreen(viewModel: EditProfileViewModel, onSaved: () -> Unit) {
                 OutlinedTextField(
                     value = ui.fullName,
                     onValueChange = viewModel::onNameChange,
-                    label = { Text("Nom complet") },
+                    label = { Text(strings.fullName) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = ui.bio,
                     onValueChange = viewModel::onBioChange,
-                    label = { Text("Bio") },
+                    label = { Text(strings.bio) },
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                Text("Pays", color = colors.mutedForeground)
+                Text(strings.country, color = colors.mutedForeground)
                 CountryDropdown(ui.country, viewModel::onCountrySelected)
 
                 OutlinedTextField(
                     value = ui.phone,
                     onValueChange = viewModel::onPhoneChange,
-                    label = { Text("Numéro de téléphone") },
+                    label = { Text(strings.phoneNumber) },
                     prefix = { Text("${ui.country.dial} ") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
@@ -256,7 +258,7 @@ fun EditProfileScreen(viewModel: EditProfileViewModel, onSaved: () -> Unit) {
 
                 ui.message?.let { Text(it, color = colors.primaryGlow) }
                 DMButton(
-                    if (ui.saving) "Enregistrement…" else "Enregistrer",
+                    if (ui.saving) strings.saving else strings.save,
                     enabled = !ui.saving && !ui.uploading,
                     modifier = Modifier.fillMaxWidth(),
                     onClick = { viewModel.save(onSaved) },
@@ -267,11 +269,11 @@ fun EditProfileScreen(viewModel: EditProfileViewModel, onSaved: () -> Unit) {
         // --- Changement de mot de passe ---
         DMCard(modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md)) {
-                Text("Changer le mot de passe", color = colors.foreground, fontWeight = FontWeight.Bold)
+                Text(strings.changePassword, color = colors.foreground, fontWeight = FontWeight.Bold)
                 OutlinedTextField(
                     value = ui.currentPassword,
                     onValueChange = viewModel::onCurrentPasswordChange,
-                    label = { Text("Mot de passe actuel") },
+                    label = { Text(strings.currentPassword) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
@@ -279,15 +281,15 @@ fun EditProfileScreen(viewModel: EditProfileViewModel, onSaved: () -> Unit) {
                 OutlinedTextField(
                     value = ui.newPassword,
                     onValueChange = viewModel::onNewPasswordChange,
-                    label = { Text("Nouveau mot de passe") },
-                    supportingText = { Text("Au moins 8 caractères") },
+                    label = { Text(strings.newPassword) },
+                    supportingText = { Text(strings.atLeast8) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 ui.passwordMessage?.let { Text(it, color = colors.primaryGlow) }
                 DMButton(
-                    if (ui.changingPassword) "Changement…" else "Changer le mot de passe",
+                    if (ui.changingPassword) strings.changing else strings.changePassword,
                     style = DMButtonStyle.SECONDARY,
                     enabled = !ui.changingPassword,
                     modifier = Modifier.fillMaxWidth(),

@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMCard
+import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.role.ApplyArtistRequest
 import com.dualmusic.domain.role.ApplyManagerRequest
@@ -121,6 +122,7 @@ class BecomeRoleViewModel(private val repository: ProfileRepository) : ViewModel
 fun BecomeArtistScreen(viewModel: BecomeRoleViewModel) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     LaunchedEffect(Unit) { viewModel.load() }
 
     var description by remember { mutableStateOf("") }
@@ -134,21 +136,21 @@ fun BecomeArtistScreen(viewModel: BecomeRoleViewModel) {
 
     RoleColumn {
         ui.message?.let { Text(it, color = colors.primaryGlow) }
-        RoleCard(title = "Devenir artiste", enabled = ui.artistEnabled, pending = ui.artistPending) {
+        RoleCard(title = strings.menuBecomeArtist, enabled = ui.artistEnabled, pending = ui.artistPending) {
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
-                label = { Text("Présente ton projet musical *") },
+                label = { Text(strings.artistProjectLabel) },
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = documentUrl,
                 onValueChange = { documentUrl = it },
-                label = { Text("Lien d'un document justificatif (optionnel)") },
+                label = { Text(strings.justificationDocLabel) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Text("Réseaux sociaux (optionnel)", color = colors.mutedForeground)
+            Text(strings.socialNetworksOptional, color = colors.mutedForeground)
             SocialField("Instagram", instagram) { instagram = it }
             SocialField("TikTok", tiktok) { tiktok = it }
             SocialField("YouTube", youtube) { youtube = it }
@@ -156,7 +158,7 @@ fun BecomeArtistScreen(viewModel: BecomeRoleViewModel) {
             SocialField("Facebook", facebook) { facebook = it }
             SocialField("Spotify", spotify) { spotify = it }
             DMButton(
-                if (ui.submitting) "Envoi…" else "Envoyer ma candidature",
+                if (ui.submitting) strings.sending else strings.sendApplication,
                 enabled = !ui.submitting,
                 modifier = Modifier.fillMaxWidth(),
                 onClick = {
@@ -200,27 +202,28 @@ private fun SocialField(label: String, value: String, onChange: (String) -> Unit
 fun BecomeManagerScreen(viewModel: BecomeRoleViewModel) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     LaunchedEffect(Unit) { viewModel.load() }
 
     var bio by remember { mutableStateOf("") }
     var experience by remember { mutableStateOf("") }
     RoleColumn {
         ui.message?.let { Text(it, color = colors.primaryGlow) }
-        RoleCard(title = "Devenir manager", enabled = ui.managerEnabled, pending = ui.managerPending) {
+        RoleCard(title = strings.menuBecomeManager, enabled = ui.managerEnabled, pending = ui.managerPending) {
             OutlinedTextField(
                 value = bio,
                 onValueChange = { bio = it },
-                label = { Text("Bio") },
+                label = { Text(strings.bio) },
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = experience,
                 onValueChange = { experience = it },
-                label = { Text("Expérience") },
+                label = { Text(strings.managerExpLabel) },
                 modifier = Modifier.fillMaxWidth(),
             )
             DMButton(
-                if (ui.submitting) "Envoi…" else "Envoyer ma candidature",
+                if (ui.submitting) strings.sending else strings.sendApplication,
                 enabled = !ui.submitting,
                 modifier = Modifier.fillMaxWidth(),
                 onClick = { viewModel.applyManager(bio, experience) },
@@ -255,15 +258,13 @@ private fun RoleCard(
     form: @Composable () -> Unit,
 ) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     DMCard(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
             Text(title, color = colors.foreground, fontWeight = FontWeight.Bold)
             when {
-                pending -> Text("⏳ Ta demande est en attente de validation.", color = colors.mutedForeground)
-                !enabled -> Text(
-                    "Les candidatures sont actuellement fermées. L'administrateur désigne directement les promotions.",
-                    color = colors.mutedForeground,
-                )
+                pending -> Text(strings.applicationPending, color = colors.mutedForeground)
+                !enabled -> Text(strings.applicationsClosed, color = colors.mutedForeground)
                 else -> form()
             }
         }
