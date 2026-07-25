@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.CircularProgressIndicator
+import com.dualmusic.core.ui.components.DMLoadingBox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -85,7 +85,7 @@ fun DuelsListScreen(
         Text(com.dualmusic.core.ui.i18n.LocalStrings.current.screenDuels, color = colors.foreground, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
 
         if (isLoading) {
-            CircularProgressIndicator(color = colors.primary)
+            DMLoadingBox(Modifier.fillMaxWidth().weight(1f))
         }
         if (!isLoading && duels.isEmpty()) {
             DMEmptyState(

@@ -32,6 +32,7 @@ import com.dualmusic.core.ui.components.DMCard
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import com.dualmusic.core.ui.components.DMEmptyState
+import com.dualmusic.core.ui.components.DMLoadingBox
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.leaderboard.LeaderboardEndpoints
@@ -102,7 +103,7 @@ fun LeaderboardScreen(viewModel: LeaderboardViewModel) {
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(strings.donors) })
         }
 
-        if (isLoading) CircularProgressIndicator(color = colors.primary)
+        if (isLoading) DMLoadingBox(Modifier.fillMaxWidth().weight(1f))
 
         val list = if (tab == 0) artists else donors
         if (!isLoading && list.isEmpty()) {

@@ -25,6 +25,7 @@ import com.dualmusic.core.ui.components.DMCard
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import com.dualmusic.core.ui.components.DMEmptyState
+import com.dualmusic.core.ui.components.DMLoadingBox
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.replay.ReplayVideo
@@ -83,7 +84,7 @@ fun ReplaysListScreen(
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
 
-        if (isLoading) CircularProgressIndicator(color = colors.primary)
+        if (isLoading) DMLoadingBox(Modifier.fillMaxWidth().weight(1f))
         if (!isLoading && replays.isEmpty()) {
             DMEmptyState(
                 title = strings.noReplays,

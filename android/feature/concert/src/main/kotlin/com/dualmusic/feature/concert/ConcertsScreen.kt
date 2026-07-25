@@ -25,6 +25,7 @@ import com.dualmusic.core.ui.components.DMCard
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import com.dualmusic.core.ui.components.DMEmptyState
+import com.dualmusic.core.ui.components.DMLoadingBox
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.model.Concert
 import com.dualmusic.domain.model.EventStatus
@@ -83,7 +84,7 @@ fun ConcertsListScreen(
     ) {
         Text(com.dualmusic.core.ui.i18n.LocalStrings.current.screenConcerts, color = colors.foreground, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
 
-        if (isLoading) CircularProgressIndicator(color = colors.primary)
+        if (isLoading) DMLoadingBox(Modifier.fillMaxWidth().weight(1f))
         if (!isLoading && concerts.isEmpty()) {
             DMEmptyState(
                 title = "Aucun concert programmé",
