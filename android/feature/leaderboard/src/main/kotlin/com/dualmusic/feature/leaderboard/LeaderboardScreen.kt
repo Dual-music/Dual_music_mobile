@@ -32,6 +32,7 @@ import com.dualmusic.core.ui.components.DMCard
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import com.dualmusic.core.ui.components.DMEmptyState
+import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.leaderboard.LeaderboardEndpoints
 import com.dualmusic.domain.leaderboard.LeaderboardEntry
@@ -84,6 +85,7 @@ fun LeaderboardScreen(viewModel: LeaderboardViewModel) {
     val donors by viewModel.donors.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     var tab by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) { viewModel.load() }
@@ -96,8 +98,8 @@ fun LeaderboardScreen(viewModel: LeaderboardViewModel) {
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
         TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = colors.foreground) {
-            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Artistes") })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Donateurs") })
+            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(strings.artists) })
+            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(strings.donors) })
         }
 
         if (isLoading) CircularProgressIndicator(color = colors.primary)
@@ -105,8 +107,8 @@ fun LeaderboardScreen(viewModel: LeaderboardViewModel) {
         val list = if (tab == 0) artists else donors
         if (!isLoading && list.isEmpty()) {
             DMEmptyState(
-                title = "Classement vide",
-                subtitle = "Le classement se remplira avec l'activité de la plateforme.",
+                title = strings.emptyRanking,
+                subtitle = strings.emptyRankingHint,
                 icon = Icons.Filled.Star,
                 modifier = Modifier.weight(1f),
             )

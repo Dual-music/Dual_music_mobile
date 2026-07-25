@@ -25,6 +25,7 @@ import com.dualmusic.core.ui.components.DMCard
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import com.dualmusic.core.ui.components.DMEmptyState
+import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.replay.ReplayVideo
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -70,6 +71,7 @@ fun ReplaysListScreen(
     val replays by viewModel.replays.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
 
     LaunchedEffect(Unit) { viewModel.load() }
 
@@ -84,8 +86,8 @@ fun ReplaysListScreen(
         if (isLoading) CircularProgressIndicator(color = colors.primary)
         if (!isLoading && replays.isEmpty()) {
             DMEmptyState(
-                title = "Aucune rediffusion disponible",
-                subtitle = "Les rediffusions débloquées apparaîtront ici.",
+                title = strings.noReplays,
+                subtitle = strings.noReplaysHint,
                 icon = Icons.Filled.PlayArrow,
                 modifier = Modifier.weight(1f),
             )
@@ -101,6 +103,7 @@ fun ReplaysListScreen(
 @Composable
 private fun ReplayRow(replay: ReplayVideo, onClick: () -> Unit) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     DMCard(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -108,13 +111,13 @@ private fun ReplayRow(replay: ReplayVideo, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column {
-                Text("▶  ${replay.title ?: "Rediffusion"}", color = colors.foreground, fontWeight = FontWeight.Bold)
-                Text("${replay.viewsCount} vues", color = colors.mutedForeground)
+                Text("▶  ${replay.title ?: strings.replay}", color = colors.foreground, fontWeight = FontWeight.Bold)
+                Text("${replay.viewsCount} ${strings.views}", color = colors.mutedForeground)
             }
             if (replay.requiresUnlock) {
-                Text("🔒 ${replay.replayPrice.toInt()} crédits", color = colors.accent, fontWeight = FontWeight.Bold)
+                Text("🔒 ${replay.replayPrice.toInt()} ${strings.credits}", color = colors.accent, fontWeight = FontWeight.Bold)
             } else {
-                Text("Gratuit", color = colors.mutedForeground)
+                Text(strings.free, color = colors.mutedForeground)
             }
         }
     }

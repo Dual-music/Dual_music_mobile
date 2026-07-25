@@ -28,6 +28,7 @@ import com.dualmusic.core.ui.components.DMCard
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import com.dualmusic.core.ui.components.DMEmptyState
+import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.artist.ArtistEndpoints
 import com.dualmusic.domain.artist.ArtistSummary
@@ -102,6 +103,7 @@ fun ArtistsScreen(viewModel: ArtistsViewModel) {
     val following by viewModel.following.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
 
     LaunchedEffect(Unit) { viewModel.load() }
 
@@ -115,8 +117,8 @@ fun ArtistsScreen(viewModel: ArtistsViewModel) {
         if (isLoading) CircularProgressIndicator(color = colors.primary)
         if (!isLoading && artists.isEmpty()) {
             DMEmptyState(
-                title = "Aucun artiste",
-                subtitle = "Les artistes de la plateforme apparaîtront ici.",
+                title = strings.noArtists,
+                subtitle = strings.noArtistsHint,
                 icon = Icons.Filled.Person,
                 modifier = Modifier.weight(1f),
             )
@@ -138,6 +140,7 @@ fun ArtistsScreen(viewModel: ArtistsViewModel) {
 @Composable
 private fun ArtistRow(artist: ArtistSummary, isFollowing: Boolean, onToggle: () -> Unit) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     DMCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -146,10 +149,10 @@ private fun ArtistRow(artist: ArtistSummary, isFollowing: Boolean, onToggle: () 
         ) {
             Column {
                 Text("🎤  ${artist.displayName}", color = colors.foreground, fontWeight = FontWeight.Bold)
-                Text("${artist.followersCount} abonnés", color = colors.mutedForeground)
+                Text("${artist.followersCount} ${strings.followers}", color = colors.mutedForeground)
             }
             DMButton(
-                if (isFollowing) "Suivi" else "Suivre",
+                if (isFollowing) strings.followed else strings.follow,
                 style = if (isFollowing) DMButtonStyle.OUTLINE else DMButtonStyle.PRIMARY,
                 onClick = onToggle,
             )

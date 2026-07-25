@@ -31,6 +31,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMCard
+import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.replay.ReplayVideo
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -95,6 +96,7 @@ fun ReplayPlayerScreen(viewModel: ReplayPlayerViewModel) {
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     val replay = viewModel.replay
 
     LaunchedEffect(Unit) { viewModel.checkAccess() }
@@ -106,7 +108,7 @@ fun ReplayPlayerScreen(viewModel: ReplayPlayerViewModel) {
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Text(replay.title ?: "Rediffusion", color = colors.foreground, fontWeight = FontWeight.Bold)
+        Text(replay.title ?: strings.replay, color = colors.foreground, fontWeight = FontWeight.Bold)
 
         when (unlocked) {
             null -> CircularProgressIndicator(color = colors.primary)
@@ -114,10 +116,10 @@ fun ReplayPlayerScreen(viewModel: ReplayPlayerViewModel) {
                 // Paywall.
                 DMCard {
                     Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                        Text("Cette rediffusion est premium.", color = colors.foreground)
+                        Text(strings.replayPremium, color = colors.foreground)
                         error?.let { Text(it, color = colors.destructive) }
                         DMButton(
-                            if (busy) "Déblocage…" else "Débloquer pour ${replay.replayPrice.toInt()} crédits",
+                            if (busy) strings.unlocking else "${strings.unlockFor} ${replay.replayPrice.toInt()} ${strings.credits}",
                             isLoading = busy,
                             enabled = !busy,
                         ) { viewModel.unlock() }
@@ -127,7 +129,7 @@ fun ReplayPlayerScreen(viewModel: ReplayPlayerViewModel) {
             true -> {
                 val url = replay.videoUrl
                 if (url.isNullOrBlank()) {
-                    Text("Vidéo indisponible.", color = colors.mutedForeground)
+                    Text(strings.videoUnavailable, color = colors.mutedForeground)
                 } else {
                     LaunchedEffect(Unit) { viewModel.registerView() }
                     VideoPlayer(url = url)

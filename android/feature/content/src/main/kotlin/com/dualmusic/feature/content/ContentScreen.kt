@@ -41,6 +41,7 @@ import androidx.media3.ui.PlayerView
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
+import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.content.BlogPost
 import com.dualmusic.domain.content.LifestyleVideo
@@ -91,6 +92,7 @@ fun ContentScreen(viewModel: ContentViewModel) {
     val videos by viewModel.videos.collectAsStateWithLifecycle()
     val blogs by viewModel.blogs.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     var tab by remember { mutableIntStateOf(0) }
     var openVideo by remember { mutableStateOf<LifestyleVideo?>(null) }
     var openBlog by remember { mutableStateOf<BlogPost?>(null) }
@@ -115,8 +117,8 @@ fun ContentScreen(viewModel: ContentViewModel) {
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
         TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = colors.foreground) {
-            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Lifestyle") })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Blog") })
+            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(strings.lifestyle) })
+            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(strings.blog) })
         }
 
         if (tab == 0) {
@@ -135,6 +137,7 @@ fun ContentScreen(viewModel: ContentViewModel) {
 @Composable
 private fun VideoRow(video: LifestyleVideo, onClick: () -> Unit) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     DMCard(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -142,7 +145,7 @@ private fun VideoRow(video: LifestyleVideo, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column {
-                Text("▶  ${video.title ?: "Vidéo"}", color = colors.foreground, fontWeight = FontWeight.Bold)
+                Text("▶  ${video.title ?: strings.video}", color = colors.foreground, fontWeight = FontWeight.Bold)
                 video.artistName?.let { Text(it, color = colors.mutedForeground) }
             }
             Text("❤ ${video.likesCount}", color = colors.accent)
@@ -154,9 +157,10 @@ private fun VideoRow(video: LifestyleVideo, onClick: () -> Unit) {
 @Composable
 private fun BlogRow(post: BlogPost, onClick: () -> Unit) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     DMCard(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
         Column {
-            Text(post.title ?: "Article", color = colors.foreground, fontWeight = FontWeight.Bold)
+            Text(post.title ?: strings.article, color = colors.foreground, fontWeight = FontWeight.Bold)
             post.excerpt?.let { Text(it, color = colors.mutedForeground) }
         }
     }
@@ -172,6 +176,7 @@ private fun LifestylePlayer(
     onBack: () -> Unit,
 ) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     val context = LocalContext.current
     val url = video.videoUrl
 
@@ -179,11 +184,11 @@ private fun LifestylePlayer(
         modifier = Modifier.fillMaxSize().background(DualMusicTheme.gradients.hero).padding(DualMusicTheme.spacing.md),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
     ) {
-        DMButton("← Retour", style = DMButtonStyle.OUTLINE, onClick = onBack)
-        Text(video.title ?: "Vidéo", color = colors.foreground, fontWeight = FontWeight.Bold)
+        DMButton("← ${strings.back}", style = DMButtonStyle.OUTLINE, onClick = onBack)
+        Text(video.title ?: strings.video, color = colors.foreground, fontWeight = FontWeight.Bold)
 
         if (url.isNullOrBlank()) {
-            Text("Vidéo indisponible.", color = colors.mutedForeground)
+            Text(strings.videoUnavailable, color = colors.mutedForeground)
         } else {
             val player = remember {
                 ExoPlayer.Builder(context).build().apply {
@@ -197,7 +202,7 @@ private fun LifestylePlayer(
             Box(modifier = Modifier.fillMaxWidth().aspectRatio(9f / 16f).background(Color.Black)) {
                 AndroidView(modifier = Modifier.fillMaxSize(), factory = { ctx -> PlayerView(ctx).apply { this.player = player } })
             }
-            DMButton("❤ J'aime", onClick = onLike)
+            DMButton("❤ ${strings.likeAction}", onClick = onLike)
         }
     }
 }
@@ -206,6 +211,7 @@ private fun LifestylePlayer(
 @Composable
 private fun BlogDetail(post: BlogPost, onBack: () -> Unit) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -214,9 +220,9 @@ private fun BlogDetail(post: BlogPost, onBack: () -> Unit) {
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        DMButton("← Retour", style = DMButtonStyle.OUTLINE, onClick = onBack)
-        Text(post.title ?: "Article", color = colors.foreground, fontWeight = FontWeight.Bold)
-        post.authorName?.let { Text("Par $it", color = colors.mutedForeground) }
+        DMButton("← ${strings.back}", style = DMButtonStyle.OUTLINE, onClick = onBack)
+        Text(post.title ?: strings.article, color = colors.foreground, fontWeight = FontWeight.Bold)
+        post.authorName?.let { Text("${strings.by} $it", color = colors.mutedForeground) }
         // Contenu brut (le rendu HTML riche sera ajouté ultérieurement).
         Text(post.content ?: post.excerpt ?: "", color = colors.foreground)
     }
