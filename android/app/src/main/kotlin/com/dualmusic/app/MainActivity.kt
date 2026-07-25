@@ -583,7 +583,7 @@ private fun ProfileSection(
     when (sub) {
         1 -> SubScreen(title = "Mon portefeuille", onBack = { onSub(PROFILE_MENU) }) {
             val walletVm: WalletViewModel = viewModel { container.makeWalletViewModel() }
-            WalletScreen(viewModel = walletVm, onOpenRecharge = { onSub(15) })
+            WalletScreen(viewModel = walletVm, onOpenRecharge = { onSub(15) }, canEarn = canCreate)
         }
         15 -> SubScreen(title = "Recharger des crédits", onBack = { onSub(1) }) {
             val rechargeVm: RechargeViewModel = viewModel { container.makeRechargeViewModel() }

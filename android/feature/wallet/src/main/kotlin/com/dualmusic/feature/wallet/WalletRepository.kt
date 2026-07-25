@@ -2,6 +2,8 @@ package com.dualmusic.feature.wallet
 
 import com.dualmusic.core.network.ApiClient
 import com.dualmusic.core.network.Endpoint
+import com.dualmusic.domain.payment.CreditPurchase
+import com.dualmusic.domain.payment.PaymentEndpoints
 import com.dualmusic.domain.wallet.PurchaseGiftRequest
 import com.dualmusic.domain.wallet.RevenueEvent
 import com.dualmusic.domain.wallet.SendGiftRequest
@@ -48,6 +50,10 @@ class WalletRepository(private val api: ApiClient) {
     /** Dépenses du caller (cadeaux envoyés, votes, tickets…), les plus récentes d'abord. */
     suspend fun spending(): List<SpendItem> =
         api.request(Endpoint.get(WalletEndpoints.SPENDING), ListSerializer(SpendItem.serializer()))
+
+    /** Achats de crédits (recharges) du caller — `GET /payments/history`. */
+    suspend fun purchases(): List<CreditPurchase> =
+        api.request(Endpoint.get(PaymentEndpoints.HISTORY), ListSerializer(CreditPurchase.serializer()))
 
     /**
      * Vote payant pour un artiste dans un duel (débit atomique côté serveur).

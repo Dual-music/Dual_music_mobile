@@ -3,6 +3,7 @@ package com.dualmusic.feature.wallet
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dualmusic.domain.api.DomainError
+import com.dualmusic.domain.payment.CreditPurchase
 import com.dualmusic.domain.wallet.RevenueEvent
 import com.dualmusic.domain.wallet.SpendItem
 import com.dualmusic.domain.wallet.WalletBalance
@@ -23,6 +24,7 @@ import kotlinx.coroutines.launch
  */
 data class WalletUiState(
     val balance: WalletBalance = WalletBalance(),
+    val purchases: List<CreditPurchase> = emptyList(),
     val spending: List<SpendItem> = emptyList(),
     val revenues: List<RevenueEvent> = emptyList(),
     val isLoading: Boolean = false,
@@ -51,10 +53,11 @@ class WalletViewModel(private val repository: WalletRepository) : ViewModel() {
                 // Les 3 lectures sont indépendantes : un échec d'historique ne doit pas
                 // masquer le solde, d'où les repli sur liste vide.
                 val balance = repository.balance()
+                val purchases = runCatching { repository.purchases() }.getOrDefault(emptyList())
                 val spending = runCatching { repository.spending() }.getOrDefault(emptyList())
                 val revenues = runCatching { repository.revenues() }.getOrDefault(emptyList())
                 _uiState.update {
-                    it.copy(balance = balance, spending = spending, revenues = revenues, isLoading = false)
+                    it.copy(balance = balance, purchases = purchases, spending = spending, revenues = revenues, isLoading = false)
                 }
             } catch (t: Throwable) {
                 _uiState.update { it.copy(isLoading = false, error = friendlyMessage(t)) }

@@ -56,6 +56,22 @@ data class StripeSubscriptionRequest(val plan: String)
 @Serializable
 data class StripeCheckoutResponse(val url: String)
 
+/**
+ * Achat de crédits (recharge) du caller — élément de `GET /payments/history`.
+ * Reprend l'onglet « Achats de crédits » du web.
+ */
+@Serializable
+data class CreditPurchase(
+    val id: String? = null,
+    @SerialName("credits_amount") val creditsAmount: Double = 0.0,
+    @SerialName("paid_amount") val paidAmount: Double? = null,
+    val currency: String? = null,
+    /** `pending` | `completed` | `failed`… */
+    val status: String? = null,
+    @SerialName("payment_method") val paymentMethod: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
 /** Chemins REST des paiements. */
 object PaymentEndpoints {
     const val CINETPAY_INIT = "/payments/cinetpay/init"

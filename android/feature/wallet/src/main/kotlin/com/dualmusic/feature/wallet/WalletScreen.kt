@@ -29,6 +29,7 @@ import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMCard
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.wallet.RevenueEvent
+import com.dualmusic.domain.payment.CreditPurchase
 import com.dualmusic.domain.wallet.SpendItem
 
 /**
@@ -40,9 +41,10 @@ import com.dualmusic.domain.wallet.SpendItem
  * @param viewModel source d'état (solde + historiques).
  */
 @Composable
-fun WalletScreen(viewModel: WalletViewModel, onOpenRecharge: () -> Unit = {}) {
+fun WalletScreen(viewModel: WalletViewModel, onOpenRecharge: () -> Unit = {}, canEarn: Boolean = false) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val s = com.dualmusic.core.ui.i18n.LocalStrings.current
     var tab by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) { viewModel.load() }
@@ -76,21 +78,47 @@ fun WalletScreen(viewModel: WalletViewModel, onOpenRecharge: () -> Unit = {}) {
         ui.error?.let { Text(it, color = colors.destructive) }
         if (ui.isLoading) CircularProgressIndicator(color = colors.primary)
 
-        // --- Historiques ---
+        // --- Historiques (calqués sur le web : Achats de crédits + Dépenses ; Revenus si earner) ---
         TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = colors.foreground) {
-            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(com.dualmusic.core.ui.i18n.LocalStrings.current.walletExpenses) })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(com.dualmusic.core.ui.i18n.LocalStrings.current.walletIncome) })
+            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(s.creditPurchases) })
+            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(s.walletExpenses) })
+            if (canEarn) {
+                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text(s.walletIncome) })
+            }
         }
 
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
         ) {
-            if (tab == 0) {
-                items(ui.spending) { SpendRow(it) }
-            } else {
-                items(ui.revenues) { RevenueRow(it) }
+            when (tab) {
+                0 -> {
+                    if (ui.purchases.isEmpty()) item { Text(s.noPurchases, color = colors.mutedForeground) }
+                    items(ui.purchases) { PurchaseRow(it) }
+                }
+                1 -> items(ui.spending) { SpendRow(it) }
+                else -> items(ui.revenues) { RevenueRow(it) }
             }
+        }
+    }
+}
+
+/** Ligne d'historique d'un achat de crédits (recharge). */
+@Composable
+private fun PurchaseRow(item: CreditPurchase) {
+    val colors = DualMusicTheme.colors
+    DMCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column {
+                Text(item.paymentMethod ?: "Mobile Money", color = colors.foreground)
+                val date = item.createdAt?.take(10)
+                val status = item.status
+                Text(listOfNotNull(date, status).joinToString(" · "), color = colors.mutedForeground)
+            }
+            Text("+${item.creditsAmount.toInt()}", color = colors.primary, fontWeight = FontWeight.Bold)
         }
     }
 }
