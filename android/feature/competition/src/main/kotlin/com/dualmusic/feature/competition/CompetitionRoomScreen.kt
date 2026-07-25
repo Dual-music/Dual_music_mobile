@@ -26,6 +26,7 @@ import com.dualmusic.core.ui.components.DMCard
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import com.dualmusic.core.ui.components.DMEmptyState
+import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.competition.CompetitionCandidate
 import com.dualmusic.domain.realtime.Realtime
@@ -123,6 +124,7 @@ fun CompetitionRoomScreen(
     val candidates by viewModel.candidates.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
 
     DisposableEffect(Unit) {
         viewModel.start()
@@ -136,12 +138,12 @@ fun CompetitionRoomScreen(
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Text("Classement", color = colors.foreground, fontWeight = FontWeight.Bold)
+        Text(strings.ranking, color = colors.foreground, fontWeight = FontWeight.Bold)
         error?.let { Text(it, color = colors.destructive) }
         if (candidates.isEmpty()) {
             DMEmptyState(
-                title = "Aucun candidat approuvé",
-                subtitle = "Le classement s'affichera dès les premières candidatures.",
+                title = strings.noCandidates,
+                subtitle = strings.noCandidatesHint,
                 icon = Icons.Filled.Star,
                 modifier = Modifier.weight(1f),
             )
@@ -169,6 +171,7 @@ private fun CandidateRow(
     onVote: () -> Unit,
 ) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     DMCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -177,13 +180,13 @@ private fun CandidateRow(
         ) {
             Column {
                 Text(
-                    "${medal(rank)} ${candidate.artist?.displayName ?: "Artiste"}",
+                    "${medal(rank)} ${candidate.artist?.displayName ?: strings.artistSingular}",
                     color = colors.foreground,
                     fontWeight = FontWeight.Bold,
                 )
                 Text("${candidate.score.toInt()} pts", color = colors.mutedForeground)
             }
-            DMButton("Voter ($voteCredits)", onClick = onVote)
+            DMButton("${strings.vote} ($voteCredits)", onClick = onVote)
         }
     }
 }

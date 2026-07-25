@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.gifts.GiftBurst
+import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import io.livekit.android.renderer.SurfaceViewRenderer
 
@@ -55,6 +56,7 @@ fun DuelRoomScreen(
     val videoTrack by viewModel.media.primaryVideoTrack.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
 
     // Démarre/arrête avec le cycle de vie du composable.
     DisposableEffect(Unit) {
@@ -97,14 +99,14 @@ fun DuelRoomScreen(
                 val a1 = duel?.artist1Id
                 val a2 = duel?.artist2Id
                 VoteBar(
-                    leftName = duel?.artist1?.displayName ?: "Artiste 1",
-                    rightName = duel?.artist2?.displayName ?: "Artiste 2",
+                    leftName = duel?.artist1?.displayName ?: strings.artist1,
+                    rightName = duel?.artist2?.displayName ?: strings.artist2,
                     leftTotal = a1?.let { totals[it] } ?: 0.0,
                     rightTotal = a2?.let { totals[it] } ?: 0.0,
                 )
                 if (timer.isRunning) {
                     Text(
-                        "⏱ Minuteur en cours",
+                        strings.timerRunning,
                         color = colors.accent,
                         fontWeight = FontWeight.Bold,
                     )
@@ -117,19 +119,19 @@ fun DuelRoomScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
                     duel?.artist1Id?.let { id ->
                         DMButton(
-                            "Voter ${duel?.artist1?.displayName ?: "Artiste 1"}",
+                            "${strings.vote} ${duel?.artist1?.displayName ?: strings.artist1}",
                             modifier = Modifier.weight(1f),
                         ) { viewModel.vote(id, voteAmount) }
                     }
                     duel?.artist2Id?.let { id ->
                         DMButton(
-                            "Voter ${duel?.artist2?.displayName ?: "Artiste 2"}",
+                            "${strings.vote} ${duel?.artist2?.displayName ?: strings.artist2}",
                             style = DMButtonStyle.SECONDARY,
                             modifier = Modifier.weight(1f),
                         ) { viewModel.vote(id, voteAmount) }
                     }
                 }
-                Text("Un vote = $voteAmount crédits", color = colors.mutedForeground)
+                Text("${strings.oneVote} = $voteAmount ${strings.credits}", color = colors.mutedForeground)
             }
         }
     }

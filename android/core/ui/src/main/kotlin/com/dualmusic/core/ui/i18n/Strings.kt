@@ -242,6 +242,14 @@ data class Strings(
     val mediaReady: String,
     val step1ChooseEvent: String,
     val step2Media: String,
+    val artist1: String,
+    val artist2: String,
+    val vote: String,
+    val oneVote: String,
+    val noCandidates: String,
+    val noCandidatesHint: String,
+    val timerRunning: String,
+    val artistSingular: String,
 )
 
 /** Chaînes françaises (langue par défaut). */
@@ -461,6 +469,14 @@ val FrStrings = Strings(
     mediaReady = "✅ Média prêt",
     step1ChooseEvent = "1. Choisir l'événement",
     step2Media = "2. Média de la pub",
+    artist1 = "Artiste 1",
+    artist2 = "Artiste 2",
+    vote = "Voter",
+    oneVote = "Un vote",
+    noCandidates = "Aucun candidat approuvé",
+    noCandidatesHint = "Le classement s'affichera dès les premières candidatures.",
+    timerRunning = "⏱ Minuteur en cours",
+    artistSingular = "Artiste",
 )
 
 /** Chaînes anglaises. */
@@ -680,6 +696,14 @@ val EnStrings = Strings(
     mediaReady = "✅ Media ready",
     step1ChooseEvent = "1. Choose the event",
     step2Media = "2. Ad media",
+    artist1 = "Artist 1",
+    artist2 = "Artist 2",
+    vote = "Vote",
+    oneVote = "One vote",
+    noCandidates = "No approved candidate",
+    noCandidatesHint = "The ranking will appear once candidacies start.",
+    timerRunning = "⏱ Timer running",
+    artistSingular = "Artist",
 )
 
 /** Renvoie la table de chaînes d'une langue. */
