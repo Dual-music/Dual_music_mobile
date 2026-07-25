@@ -125,7 +125,12 @@ fun HomeScreen(
         ) {
             Spacer(Modifier.weight(1f))
 
-            DMLogo(height = 84.dp)
+            // Même image que l'accueil web (icône « duel » micros croisés).
+            Image(
+                painter = painterResource(id = R.drawable.duel_icon),
+                contentDescription = "Dual Music",
+                modifier = Modifier.size(104.dp),
+            )
             Text(
                 s.homeTitle,
                 style = TextStyle(brush = BrandGradient),
