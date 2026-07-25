@@ -43,6 +43,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Notifications
 import com.dualmusic.core.ui.components.DMEmptyState
+import com.dualmusic.core.ui.i18n.LocalStrings
+import com.dualmusic.core.ui.i18n.Strings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.core.upload.MediaUploader
 import com.dualmusic.core.upload.readLocalMedia
@@ -183,6 +185,7 @@ class CreatorViewModel(
 fun CreatorScreen(viewModel: CreatorViewModel) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     var tab by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) { viewModel.load() }
@@ -196,17 +199,17 @@ fun CreatorScreen(viewModel: CreatorViewModel) {
     ) {
         ui.message?.let { Text(it, color = colors.primary) }
         TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = colors.foreground) {
-            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Défis") })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Mes concerts") })
-            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Créer") })
+            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(strings.tabChallenges) })
+            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(strings.myConcerts) })
+            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text(strings.create) })
         }
 
         when (tab) {
             0 -> {
                 if (ui.duelRequests.isEmpty()) {
                     DMEmptyState(
-                        title = "Aucun défi",
-                        subtitle = "Les défis de duel reçus apparaîtront ici.",
+                        title = strings.noChallenges,
+                        subtitle = strings.noChallengesHint,
                         icon = Icons.Filled.Notifications,
                         modifier = Modifier.weight(1f),
                     )
@@ -225,8 +228,8 @@ fun CreatorScreen(viewModel: CreatorViewModel) {
             1 -> {
                 if (ui.concerts.isEmpty()) {
                     DMEmptyState(
-                        title = "Aucun concert",
-                        subtitle = "Crée ton premier concert depuis l'onglet « Créer ».",
+                        title = strings.noConcerts,
+                        subtitle = strings.noConcertsHint,
                         icon = Icons.Filled.DateRange,
                         modifier = Modifier.weight(1f),
                     )
@@ -248,6 +251,7 @@ private fun CreateConcertForm(
     onCreated: () -> Unit,
 ) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -267,23 +271,23 @@ private fun CreateConcertForm(
             scope.launch {
                 runCatching { readLocalMedia(context, uri, maxBytes = 5L * 1024 * 1024) }
                     .onSuccess { viewModel.uploadCover(it) }
-                    .onFailure { viewModel.setMessage(it.message ?: "Fichier illisible.") }
+                    .onFailure { viewModel.setMessage(it.message ?: strings.fileUnreadable) }
             }
         }
     }
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
         item {
-            OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Titre *") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text(strings.titleRequired) }, modifier = Modifier.fillMaxWidth())
         }
         item {
-            OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text(strings.description) }, modifier = Modifier.fillMaxWidth())
         }
         item {
             OutlinedTextField(
                 value = date,
                 onValueChange = { date = it },
-                label = { Text("Date * (AAAA-MM-JJTHH:MM)") },
+                label = { Text(strings.dateFormatLabel) },
                 placeholder = { Text("2026-08-01T20:00") },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -292,7 +296,7 @@ private fun CreateConcertForm(
             OutlinedTextField(
                 value = price,
                 onValueChange = { price = it },
-                label = { Text("Prix du billet (crédits)") },
+                label = { Text(strings.ticketPriceLabel) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -301,26 +305,26 @@ private fun CreateConcertForm(
             OutlinedTextField(
                 value = maxTickets,
                 onValueChange = { maxTickets = it },
-                label = { Text("Places max (optionnel)") },
+                label = { Text(strings.maxTicketsLabel) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        item { ToggleRow("Autoriser les dédicaces", dedications) { dedications = it } }
-        item { ToggleRow("Autoriser les pubs sponsors", sponsorAds) { sponsorAds = it } }
+        item { ToggleRow(strings.allowDedications, dedications) { dedications = it } }
+        item { ToggleRow(strings.allowSponsorAds, sponsorAds) { sponsorAds = it } }
         item {
             DMCard(modifier = Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
                     Text(
                         when {
-                            ui.uploadingCover -> "Upload de la pochette…"
-                            ui.coverUrl != null -> "✅ Pochette prête."
-                            else -> "Aucune pochette."
+                            ui.uploadingCover -> strings.uploadingCover
+                            ui.coverUrl != null -> strings.coverReady
+                            else -> strings.noCover
                         },
                         color = colors.mutedForeground,
                     )
                     DMButton(
-                        if (ui.coverUrl != null) "Changer la pochette" else "Choisir une pochette",
+                        if (ui.coverUrl != null) strings.changeCover else strings.chooseCover,
                         style = DMButtonStyle.SECONDARY,
                         onClick = {
                             picker.launch(
@@ -335,7 +339,7 @@ private fun CreateConcertForm(
         }
         item {
             DMButton(
-                if (ui.submitting) "Création…" else "Créer le concert",
+                if (ui.submitting) strings.creating else strings.createConcert,
                 onClick = {
                     viewModel.createConcert(
                         title = title,
@@ -376,17 +380,18 @@ private fun DuelRequestRow(
     onDecline: () -> Unit,
 ) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     DMCard(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-            Text(request.message ?: "Défi de duel", color = colors.foreground, fontWeight = FontWeight.Bold)
-            request.proposedDate?.let { Text("Proposé : ${it.take(16)}", color = colors.mutedForeground) }
+            Text(request.message ?: strings.duelChallenge, color = colors.foreground, fontWeight = FontWeight.Bold)
+            request.proposedDate?.let { Text("${strings.proposed} : ${it.take(16)}", color = colors.mutedForeground) }
             if (canRespond) {
                 Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                    DMButton("Accepter", modifier = Modifier.weight(1f), onClick = onAccept)
-                    DMButton("Refuser", style = DMButtonStyle.OUTLINE, modifier = Modifier.weight(1f), onClick = onDecline)
+                    DMButton(strings.accept, modifier = Modifier.weight(1f), onClick = onAccept)
+                    DMButton(strings.decline, style = DMButtonStyle.OUTLINE, modifier = Modifier.weight(1f), onClick = onDecline)
                 }
             } else {
-                Text(statusLabel(request.status), color = colors.mutedForeground)
+                Text(statusLabel(request.status, strings), color = colors.mutedForeground)
             }
         }
     }
@@ -411,9 +416,9 @@ private fun ConcertRow(concert: Concert) {
     }
 }
 
-private fun statusLabel(status: String): String = when (status) {
-    "pending" -> "En attente"
-    "accepted" -> "Accepté"
-    "declined" -> "Refusé"
+private fun statusLabel(status: String, strings: Strings): String = when (status) {
+    "pending" -> strings.statusPending
+    "accepted" -> strings.statusAccepted
+    "declined" -> strings.statusDeclined
     else -> status
 }

@@ -45,6 +45,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import com.dualmusic.core.ui.components.DMEmptyState
+import com.dualmusic.core.ui.i18n.LocalStrings
+import com.dualmusic.core.ui.i18n.Strings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.core.upload.LocalMedia
 import com.dualmusic.core.upload.MediaUploader
@@ -234,6 +236,7 @@ class SponsorViewModel(
 fun SponsorScreen(viewModel: SponsorViewModel) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     var tab by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) { viewModel.load() }
@@ -247,8 +250,8 @@ fun SponsorScreen(viewModel: SponsorViewModel) {
     ) {
         ui.message?.let { Text(it, color = colors.primary) }
         TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = colors.foreground) {
-            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Mes demandes") })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Nouvelle") })
+            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(strings.myRequests) })
+            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(strings.newTab) })
         }
 
         if (tab == 0) MyRequestsTab(ui, viewModel) else NewRequestTab(ui, viewModel) { tab = 0 }
@@ -259,21 +262,22 @@ fun SponsorScreen(viewModel: SponsorViewModel) {
 @Composable
 private fun MyRequestsTab(ui: SponsorUiState, viewModel: SponsorViewModel) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-        item { Text("Tarifs (par durée)", color = colors.mutedForeground) }
+        item { Text(strings.tiersByDuration, color = colors.mutedForeground) }
         items(ui.tiers) { tier ->
             DMCard(modifier = Modifier.fillMaxWidth()) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("${tier.label ?: "Palier"} (${tier.minSeconds}-${tier.maxSeconds}s)", color = colors.foreground)
+                    Text("${tier.label ?: strings.tier} (${tier.minSeconds}-${tier.maxSeconds}s)", color = colors.foreground)
                     Text("${tier.priceCredits.toInt()} cr.", color = colors.accent, fontWeight = FontWeight.Bold)
                 }
             }
         }
-        item { Text("Mes demandes", color = colors.mutedForeground) }
+        item { Text(strings.myRequests, color = colors.mutedForeground) }
         if (ui.requests.isEmpty()) item {
             DMEmptyState(
-                title = "Aucune demande de sponsoring",
-                subtitle = "Crée une demande depuis l'onglet « Nouvelle ».",
+                title = strings.noSponsorRequests,
+                subtitle = strings.noSponsorRequestsHint,
                 icon = Icons.Filled.Star,
             )
         }
@@ -285,6 +289,7 @@ private fun MyRequestsTab(ui: SponsorUiState, viewModel: SponsorViewModel) {
 @Composable
 private fun NewRequestTab(ui: SponsorUiState, viewModel: SponsorViewModel, onSent: () -> Unit) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -298,10 +303,10 @@ private fun NewRequestTab(ui: SponsorUiState, viewModel: SponsorViewModel, onSen
         if (uri != null) {
             scope.launch {
                 val media = runCatching { readLocalMedia(context, uri) }.getOrElse {
-                    viewModel.setMessage(it.message ?: "Fichier illisible."); return@launch
+                    viewModel.setMessage(it.message ?: strings.fileUnreadable); return@launch
                 }
                 val kind = media.mediaKind
-                if (kind == null) { viewModel.setMessage("Type de média non supporté."); return@launch }
+                if (kind == null) { viewModel.setMessage(strings.unsupportedMedia); return@launch }
                 val duration = if (kind == "video") {
                     videoDurationSeconds(context, uri) ?: 30
                 } else {
@@ -313,11 +318,11 @@ private fun NewRequestTab(ui: SponsorUiState, viewModel: SponsorViewModel, onSen
     }
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-        item { Text("1. Choisir l'événement", color = colors.mutedForeground) }
+        item { Text(strings.step1ChooseEvent, color = colors.mutedForeground) }
         if (ui.events.isEmpty()) item {
             DMEmptyState(
-                title = "Aucun événement disponible",
-                subtitle = "Reviens quand des événements seront programmés.",
+                title = strings.noEvents,
+                subtitle = strings.noEventsHint,
                 icon = Icons.Filled.Search,
             )
         }
@@ -325,20 +330,20 @@ private fun NewRequestTab(ui: SponsorUiState, viewModel: SponsorViewModel, onSen
             EventRow(ev, selected?.id == ev.id) { selected = ev }
         }
 
-        item { Text("2. Média de la pub", color = colors.mutedForeground) }
+        item { Text(strings.step2Media, color = colors.mutedForeground) }
         item {
             DMCard(modifier = Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
                     Text(
                         when {
-                            ui.uploadingMedia -> "Upload en cours…"
-                            ui.mediaUrl != null -> "✅ Média prêt (${ui.mediaType}, ${ui.mediaDurationSeconds}s)."
-                            else -> "Aucun média."
+                            ui.uploadingMedia -> strings.uploading
+                            ui.mediaUrl != null -> "${strings.mediaReady} (${ui.mediaType}, ${ui.mediaDurationSeconds}s)."
+                            else -> strings.noMedia
                         },
                         color = colors.mutedForeground,
                     )
                     DMButton(
-                        if (ui.mediaUrl != null) "Changer le média" else "Choisir un média",
+                        if (ui.mediaUrl != null) strings.changeMedia else strings.chooseMedia,
                         style = DMButtonStyle.SECONDARY,
                         onClick = {
                             picker.launch(
@@ -354,17 +359,17 @@ private fun NewRequestTab(ui: SponsorUiState, viewModel: SponsorViewModel, onSen
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
-                label = { Text("Description (optionnel)") },
+                label = { Text(strings.descriptionOptional) },
                 modifier = Modifier.fillMaxWidth(),
             )
         }
 
         item {
             DMButton(
-                if (ui.submitting) "Envoi…" else "Envoyer la demande",
+                if (ui.submitting) strings.sending else strings.submitRequest,
                 onClick = {
                     val ev = selected
-                    if (ev == null) viewModel.setMessage("Sélectionnez un événement.")
+                    if (ev == null) viewModel.setMessage(strings.selectEventError)
                     else viewModel.createRequest(ev, description, onSent)
                 },
             )
@@ -394,6 +399,7 @@ private fun EventRow(event: SponsorableEvent, selected: Boolean, onSelect: () ->
 @Composable
 private fun RequestRow(request: SponsorRequest, onPay: () -> Unit) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     DMCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -401,19 +407,19 @@ private fun RequestRow(request: SponsorRequest, onPay: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column {
-                Text(request.eventType ?: "Événement", color = colors.foreground, fontWeight = FontWeight.Bold)
-                Text(statusLabel(request.status), color = colors.mutedForeground)
+                Text(request.eventType ?: strings.event, color = colors.foreground, fontWeight = FontWeight.Bold)
+                Text(statusLabel(request.status, strings), color = colors.mutedForeground)
             }
             if (request.payable) {
-                DMButton("Payer ${request.priceCredits.toInt()}", onClick = onPay)
+                DMButton("${strings.pay} ${request.priceCredits.toInt()}", onClick = onPay)
             }
         }
     }
 }
 
-private fun statusLabel(status: String): String = when (status) {
-    "pending" -> "En attente de validation"
-    "approved" -> "Approuvé — à payer"
-    "rejected" -> "Rejeté"
+private fun statusLabel(status: String, strings: Strings): String = when (status) {
+    "pending" -> strings.sponsorStatusPending
+    "approved" -> strings.sponsorStatusApproved
+    "rejected" -> strings.statusRejected
     else -> status
 }
