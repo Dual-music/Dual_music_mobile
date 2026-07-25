@@ -27,6 +27,8 @@ data class Endpoint(
         fun post(path: String, body: String? = null, idempotencyKey: String? = null) =
             Endpoint(HttpMethod.POST, path, body = body, idempotencyKey = idempotencyKey)
 
+        fun put(path: String, body: String? = null) = Endpoint(HttpMethod.PUT, path, body = body)
+
         fun patch(path: String, body: String? = null) = Endpoint(HttpMethod.PATCH, path, body = body)
 
         fun delete(path: String, body: String? = null) = Endpoint(HttpMethod.DELETE, path, body = body)

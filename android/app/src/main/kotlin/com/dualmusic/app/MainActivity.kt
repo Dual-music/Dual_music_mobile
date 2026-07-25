@@ -101,6 +101,8 @@ import com.dualmusic.feature.live.LiveViewModel
 import com.dualmusic.feature.notifications.NotificationRepository
 import com.dualmusic.feature.notifications.NotificationsScreen
 import com.dualmusic.feature.notifications.NotificationsViewModel
+import com.dualmusic.feature.profile.AdminScreen
+import com.dualmusic.feature.profile.AdminViewModel
 import com.dualmusic.feature.profile.BecomeArtistScreen
 import com.dualmusic.feature.profile.BecomeManagerScreen
 import com.dualmusic.feature.profile.BecomeRoleViewModel
@@ -291,6 +293,9 @@ class AppContainer(context: Context) {
 
     /** Nouveau ViewModel de l'espace créateur. */
     fun makeCreatorViewModel(): CreatorViewModel = CreatorViewModel(api, mediaUploader)
+
+    /** Nouveau ViewModel de l'espace admin (réglages + assignation de rôle). */
+    fun makeAdminViewModel(): AdminViewModel = AdminViewModel(profileRepository)
 
     /** Nouveau ViewModel du catalogue de duels. */
     fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository)
@@ -644,6 +649,9 @@ private fun ProfileSection(
         18 -> SubScreen(title = "Suivis", onBack = { onSub(0) }) {
             ArtistsScreen(viewModel = viewModel { container.makeArtistsViewModel() })
         }
+        19 -> SubScreen(title = "Espace admin", onBack = { onSub(0) }) {
+            AdminScreen(viewModel = viewModel { container.makeAdminViewModel() })
+        }
         else -> {
             var showMenu by remember { mutableStateOf(false) }
             var managerEnabled by remember { mutableStateOf(false) }
@@ -653,6 +661,7 @@ private fun ProfileSection(
             val profileState by profileVm.uiState.collectAsStateWithLifecycle()
             val roles = profileState.me?.roles ?: emptyList()
             val canCreate = roles.any { it == UserRole.ARTIST || it == UserRole.MANAGER || it == UserRole.ADMIN }
+            val isAdmin = roles.any { it == UserRole.ADMIN }
 
             ProfileScreen(viewModel = profileVm, onOpenMenu = { showMenu = true })
             if (showMenu) {
@@ -660,6 +669,7 @@ private fun ProfileSection(
                     isPureFan = !canCreate,
                     canCreate = canCreate,
                     managerEnabled = managerEnabled,
+                    isAdmin = isAdmin,
                     onNavigate = { showMenu = false; onSub(it) },
                     onSignOut = { showMenu = false; onSignOut() },
                     onDismiss = { showMenu = false },

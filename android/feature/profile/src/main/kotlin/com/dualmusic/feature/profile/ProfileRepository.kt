@@ -2,6 +2,11 @@ package com.dualmusic.feature.profile
 
 import com.dualmusic.core.network.ApiClient
 import com.dualmusic.core.network.Endpoint
+import com.dualmusic.domain.admin.AdminEndpoints
+import com.dualmusic.domain.admin.AdminUser
+import com.dualmusic.domain.admin.AssignRoleRequest
+import com.dualmusic.domain.admin.SettingBody
+import com.dualmusic.domain.admin.SettingEnabled
 import com.dualmusic.domain.auth.AuthEndpoints
 import com.dualmusic.domain.auth.ChangePasswordRequest
 import com.dualmusic.domain.auth.MeResponse
@@ -84,4 +89,31 @@ class ProfileRepository(private val api: ApiClient) {
             api.request(Endpoint.get(RoleEndpoints.publicSetting(key)), PublicSetting.serializer())
                 .value?.enabled ?: true
         }.getOrDefault(true)
+
+    // --- Admin ---
+
+    /** Recherche d'utilisateurs (nom/email) — réservé admin. */
+    suspend fun adminSearchUsers(query: String): List<AdminUser> =
+        api.request(
+            Endpoint.get(AdminEndpoints.USERS_SEARCH, mapOf("q" to query)),
+            ListSerializer(AdminUser.serializer()),
+        )
+
+    /** Assigne un rôle (`fan`/`artist`/`manager`/`moderator`/`admin`) à un utilisateur. */
+    suspend fun adminAssignRole(userId: String, role: String) {
+        val body = json.encodeToString(AssignRoleRequest.serializer(), AssignRoleRequest(userId, role))
+        api.request<Unit>(Endpoint.post(AdminEndpoints.ROLES, body))
+    }
+
+    /** Révoque un rôle d'un utilisateur. */
+    suspend fun adminRevokeRole(userId: String, role: String) {
+        val body = json.encodeToString(AssignRoleRequest.serializer(), AssignRoleRequest(userId, role))
+        api.request<Unit>(Endpoint.delete(AdminEndpoints.ROLES, body))
+    }
+
+    /** Ouvre/ferme les candidatures d'un rôle (`manager_requests_enabled`, `artist_requests_enabled`). */
+    suspend fun adminSetRequestsEnabled(key: String, enabled: Boolean) {
+        val body = json.encodeToString(SettingBody.serializer(), SettingBody(SettingEnabled(enabled)))
+        api.request<Unit>(Endpoint.put(AdminEndpoints.setting(key), body))
+    }
 }

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonAdd
@@ -55,6 +56,7 @@ fun ProfileMenuSheet(
     isPureFan: Boolean,
     canCreate: Boolean,
     managerEnabled: Boolean,
+    isAdmin: Boolean = false,
     onNavigate: (Int) -> Unit,
     onSignOut: () -> Unit,
     onDismiss: () -> Unit,
@@ -89,6 +91,8 @@ fun ProfileMenuSheet(
                 MenuRow(Icons.Filled.PlayArrow, s.menuReplays) { onNavigate(4) }
                 MenuRow(Icons.Filled.Redeem, s.menuGiftShop) { onNavigate(5) }
             }
+            // Réservé admin : réglages plateforme + assignation de rôle.
+            if (isAdmin) MenuRow(Icons.Filled.Lock, "Espace admin") { onNavigate(19) }
             MenuRow(Icons.Filled.Edit, s.menuEditProfile) { onNavigate(13) }
             MenuRow(Icons.Filled.Tune, s.preferences) { onNavigate(17) }
             MenuRow(Icons.Filled.Notifications, s.notifications) { onNavigate(2) }
