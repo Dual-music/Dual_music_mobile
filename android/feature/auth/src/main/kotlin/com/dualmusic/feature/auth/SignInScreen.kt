@@ -64,6 +64,8 @@ fun SignInScreen(
     val colors = DualMusicTheme.colors
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // Capturé au niveau @Composable : réutilisable dans les lambdas (coroutines) ci-dessous.
+    val strings = com.dualmusic.core.ui.i18n.LocalStrings.current
 
     Column(
         modifier = Modifier
@@ -98,14 +100,14 @@ fun SignInScreen(
 
                 if (ui.mode == AuthMode.LOGIN) {
                     DMButton(
-                        title = com.dualmusic.core.ui.i18n.LocalStrings.current.continueWithGoogle,
+                        title = strings.continueWithGoogle,
                         style = DMButtonStyle.OUTLINE,
                         enabled = !ui.isSubmitting,
                         onClick = {
                             scope.launch {
                                 runCatching { requestGoogleIdToken(context) }
                                     .onSuccess { viewModel.signInWithGoogle(it) }
-                                    .onFailure { viewModel.onGoogleError(it.message ?: com.dualmusic.core.ui.i18n.LocalStrings.current.googleCancelled) }
+                                    .onFailure { viewModel.onGoogleError(it.message ?: strings.googleCancelled) }
                             }
                         },
                     )
