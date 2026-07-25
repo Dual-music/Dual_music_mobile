@@ -145,7 +145,7 @@ import kotlinx.coroutines.launch
 private const val API_BASE_URL = "http://10.0.2.2:4000"
 */
 
-private const val API_BASE_URL = "http://172.17.10.149:4000"
+private const val API_BASE_URL = "http://172.21.169.43:4000"
 
 
 
@@ -405,27 +405,32 @@ class MainActivity : ComponentActivity() {
  * ([profileSub]). La page Accueil donne 3 accès rapides (Lifestyle/Classement/Artistes)
  * via [homeOpen] — ces sections ne figurent donc plus dans le profil (comme sur le web).
  */
+/** Valeur spéciale de sous-navigation du profil : la **liste de menu** en pleine page. */
+private const val PROFILE_MENU = 100
+
 @Composable
 private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
     // 0=Accueil · 1=Lives · 2=Duels · 3=Concerts · 4=Compét.
     var tab by remember { mutableIntStateOf(0) }
     var showProfile by remember { mutableStateOf(false) }
-    // Sous-navigation du profil (0=profil ; voir le when ci-dessous).
+    // Sous-navigation du profil (0=profil ; PROFILE_MENU=liste ; sinon = contenu d'un item).
     var profileSub by remember { mutableIntStateOf(0) }
     // Accès rapides de l'accueil : 0=aucun · 1=lifestyle · 2=classement · 3=artistes.
     var homeOpen by remember { mutableIntStateOf(0) }
+    // Superposition « messages de notifications » (icône cloche de la barre du haut).
+    var notifOpen by remember { mutableStateOf(false) }
     var openDuel by remember { mutableStateOf<Duel?>(null) }
     var openCompetition by remember { mutableStateOf<Competition?>(null) }
 
-    // Quitte le profil et sélectionne un onglet bas.
-    fun goTab(t: Int) { tab = t; showProfile = false }
+    // Quitte le profil et sélectionne un onglet bas (réinitialise les superpositions).
+    fun goTab(t: Int) { tab = t; showProfile = false; homeOpen = 0; notifOpen = false }
 
     Scaffold(
         topBar = {
-            // Barre du haut masquée dans le profil (qui a déjà son propre en-tête).
-            if (!showProfile) {
+            // Barre du haut masquée dans le profil et sur l'écran de notifications (en-tête propre).
+            if (!showProfile && !notifOpen) {
                 TopBar(
-                    onOpenNotifications = { showProfile = true; profileSub = 2 },
+                    onOpenNotifications = { notifOpen = true },
                     onOpenProfile = { showProfile = true; profileSub = 0 },
                 )
             }
@@ -486,7 +491,12 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
         },
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
-            if (showProfile) {
+            if (notifOpen) {
+                // Messages de notifications (icône cloche de l'accueil) — retour vers l'écran courant.
+                SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.notifications, onBack = { notifOpen = false }) {
+                    NotificationsScreen(viewModel = viewModel { container.makeNotificationsViewModel() })
+                }
+            } else if (showProfile) {
                 ProfileSection(
                     container = container,
                     sub = profileSub,
@@ -560,8 +570,18 @@ private fun ProfileSection(
     onSub: (Int) -> Unit,
     onSignOut: () -> Unit,
 ) {
+    // Rôles + gating admin, partagés par le profil racine et la page de menu.
+    var managerEnabled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { managerEnabled = container.managerRequestsEnabled() }
+    val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
+    val profileState by profileVm.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { profileVm.load() }
+    val roles = profileState.me?.roles ?: emptyList()
+    val canCreate = roles.any { it == UserRole.ARTIST || it == UserRole.MANAGER || it == UserRole.ADMIN }
+    val isAdmin = roles.any { it == UserRole.ADMIN }
+
     when (sub) {
-        1 -> SubScreen(title = "Mon portefeuille", onBack = { onSub(0) }) {
+        1 -> SubScreen(title = "Mon portefeuille", onBack = { onSub(PROFILE_MENU) }) {
             val walletVm: WalletViewModel = viewModel { container.makeWalletViewModel() }
             WalletScreen(viewModel = walletVm, onOpenRecharge = { onSub(15) })
         }
@@ -569,15 +589,15 @@ private fun ProfileSection(
             val rechargeVm: RechargeViewModel = viewModel { container.makeRechargeViewModel() }
             RechargeScreen(viewModel = rechargeVm)
         }
-        2 -> SubScreen(title = "Notifications", onBack = { onSub(0) }) {
+        2 -> SubScreen(title = "Notifications", onBack = { onSub(PROFILE_MENU) }) {
             val notifVm: NotificationsViewModel = viewModel { container.makeNotificationsViewModel() }
             NotificationsScreen(viewModel = notifVm)
         }
-        3 -> SubScreen(title = "Retrait des crédits", onBack = { onSub(0) }) {
+        3 -> SubScreen(title = "Retrait des crédits", onBack = { onSub(PROFILE_MENU) }) {
             val wdVm: WithdrawalViewModel = viewModel { container.makeWithdrawalViewModel() }
             WithdrawalScreen(viewModel = wdVm)
         }
-        4 -> SubScreen(title = "Replays", onBack = { onSub(0) }) {
+        4 -> SubScreen(title = "Replays", onBack = { onSub(PROFILE_MENU) }) {
             // Sous-navigation replays : liste → lecteur.
             var openReplay by remember { mutableStateOf<ReplayVideo?>(null) }
             val r = openReplay
@@ -597,39 +617,39 @@ private fun ProfileSection(
                 }
             }
         }
-        5 -> SubScreen(title = "Boutique de cadeaux", onBack = { onSub(0) }) {
+        5 -> SubScreen(title = "Boutique de cadeaux", onBack = { onSub(PROFILE_MENU) }) {
             val shopVm: GiftShopViewModel = viewModel { container.makeGiftShopViewModel() }
             GiftShopScreen(viewModel = shopVm, onOpenRecharge = { onSub(15) })
         }
-        7 -> SubScreen(title = "Parrainage", onBack = { onSub(0) }) {
+        7 -> SubScreen(title = "Parrainage", onBack = { onSub(PROFILE_MENU) }) {
             val refVm: ReferralViewModel = viewModel { container.makeReferralViewModel() }
             ReferralScreen(viewModel = refVm)
         }
-        8 -> SubScreen(title = "Abonnements", onBack = { onSub(0) }) {
+        8 -> SubScreen(title = "Abonnements", onBack = { onSub(PROFILE_MENU) }) {
             val subVm: SubscriptionViewModel = viewModel { container.makeSubscriptionViewModel() }
             SubscriptionScreen(viewModel = subVm)
         }
-        11 -> SubScreen(title = "Sponsoring", onBack = { onSub(0) }) {
+        11 -> SubScreen(title = "Sponsoring", onBack = { onSub(PROFILE_MENU) }) {
             val sponsorVm: SponsorViewModel = viewModel { container.makeSponsorViewModel() }
             SponsorScreen(viewModel = sponsorVm)
         }
-        12 -> SubScreen(title = "Espace créateur", onBack = { onSub(0) }) {
+        12 -> SubScreen(title = "Espace créateur", onBack = { onSub(PROFILE_MENU) }) {
             val creatorVm: CreatorViewModel = viewModel { container.makeCreatorViewModel() }
             CreatorScreen(viewModel = creatorVm)
         }
-        13 -> SubScreen(title = "Modifier le profil", onBack = { onSub(0) }) {
+        13 -> SubScreen(title = "Modifier le profil", onBack = { onSub(PROFILE_MENU) }) {
             val editVm: EditProfileViewModel = viewModel { container.makeEditProfileViewModel() }
             EditProfileScreen(viewModel = editVm, onSaved = { onSub(0) })
         }
-        14 -> SubScreen(title = "Devenir artiste", onBack = { onSub(0) }) {
+        14 -> SubScreen(title = "Devenir artiste", onBack = { onSub(PROFILE_MENU) }) {
             val roleVm: BecomeRoleViewModel = viewModel { container.makeBecomeRoleViewModel() }
             BecomeArtistScreen(viewModel = roleVm)
         }
-        16 -> SubScreen(title = "Devenir manager", onBack = { onSub(0) }) {
+        16 -> SubScreen(title = "Devenir manager", onBack = { onSub(PROFILE_MENU) }) {
             val roleVm: BecomeRoleViewModel = viewModel { container.makeBecomeRoleViewModel() }
             BecomeManagerScreen(viewModel = roleVm)
         }
-        17 -> SubScreen(title = "Préférences", onBack = { onSub(0) }) {
+        17 -> SubScreen(title = "Préférences", onBack = { onSub(PROFILE_MENU) }) {
             val mode by container.themeController.mode.collectAsStateWithLifecycle()
             val lang by container.languageController.language.collectAsStateWithLifecycle()
             var deletionAt by remember { mutableStateOf<String?>(null) }
@@ -646,36 +666,28 @@ private fun ProfileSection(
                 onCancelDeletion = { prefScope.launch { runCatching { container.cancelAccountDeletion() }; refresh++ } },
             )
         }
-        18 -> SubScreen(title = "Suivis", onBack = { onSub(0) }) {
+        18 -> SubScreen(title = "Suivis", onBack = { onSub(PROFILE_MENU) }) {
             ArtistsScreen(viewModel = viewModel { container.makeArtistsViewModel() })
         }
-        19 -> SubScreen(title = "Espace admin", onBack = { onSub(0) }) {
+        19 -> SubScreen(title = "Espace admin", onBack = { onSub(PROFILE_MENU) }) {
             AdminScreen(viewModel = viewModel { container.makeAdminViewModel() })
         }
-        else -> {
-            var showMenu by remember { mutableStateOf(false) }
-            var managerEnabled by remember { mutableStateOf(false) }
-            LaunchedEffect(Unit) { managerEnabled = container.managerRequestsEnabled() }
-
-            val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
-            val profileState by profileVm.uiState.collectAsStateWithLifecycle()
-            val roles = profileState.me?.roles ?: emptyList()
-            val canCreate = roles.any { it == UserRole.ARTIST || it == UserRole.MANAGER || it == UserRole.ADMIN }
-            val isAdmin = roles.any { it == UserRole.ADMIN }
-
-            ProfileScreen(viewModel = profileVm, onOpenMenu = { showMenu = true })
-            if (showMenu) {
-                ProfileMenuSheet(
-                    isPureFan = !canCreate,
-                    canCreate = canCreate,
-                    managerEnabled = managerEnabled,
-                    isAdmin = isAdmin,
-                    onNavigate = { showMenu = false; onSub(it) },
-                    onSignOut = { showMenu = false; onSignOut() },
-                    onDismiss = { showMenu = false },
-                )
-            }
+        // Liste de menu en pleine page (retour → profil racine).
+        PROFILE_MENU -> SubScreen(
+            title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuMySpace,
+            onBack = { onSub(0) },
+        ) {
+            ProfileMenuPage(
+                isPureFan = !canCreate,
+                canCreate = canCreate,
+                managerEnabled = managerEnabled,
+                isAdmin = isAdmin,
+                onNavigate = { onSub(it) },
+                onSignOut = onSignOut,
+            )
         }
+        // Profil racine : identité + stats + icône d'ouverture du menu.
+        else -> ProfileScreen(viewModel = profileVm, onOpenMenu = { onSub(PROFILE_MENU) })
     }
 }
 
