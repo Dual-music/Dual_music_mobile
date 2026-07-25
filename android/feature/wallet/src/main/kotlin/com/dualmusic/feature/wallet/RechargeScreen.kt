@@ -229,7 +229,7 @@ private fun CountrySelector(ui: RechargeUiState, vm: RechargeViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(ui.selected?.countryName ?: ui.selected?.countryCode ?: LocalStrings.current.chooseDots, color = colors.foreground)
+                Text(ui.selected?.countryName ?: ui.selected?.countryCode ?: com.dualmusic.core.ui.i18n.LocalStrings.current.chooseDots, color = colors.foreground)
                 Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = colors.mutedForeground)
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -251,7 +251,7 @@ private fun OperatorSelector(ui: RechargeUiState, vm: RechargeViewModel) {
     var expanded by remember { mutableStateOf(false) }
     val operators = ui.selected?.operators ?: emptyList()
     val currentLabel = operators.firstOrNull { it.code == ui.operator }?.let { it.label ?: it.code }
-        ?: ui.operator ?: LocalStrings.current.chooseDots
+        ?: ui.operator ?: com.dualmusic.core.ui.i18n.LocalStrings.current.chooseDots
     Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
         Text(com.dualmusic.core.ui.i18n.LocalStrings.current.operator, color = colors.mutedForeground)
         Box {
