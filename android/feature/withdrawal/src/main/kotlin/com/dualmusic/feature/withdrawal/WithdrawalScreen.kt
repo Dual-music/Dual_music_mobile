@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMCard
+import com.dualmusic.core.ui.i18n.LocalStrings
+import com.dualmusic.core.ui.i18n.Strings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.model.WithdrawalRequest
 import com.dualmusic.domain.withdrawal.PayoutMethodData
@@ -46,6 +48,7 @@ import com.dualmusic.domain.withdrawal.PayoutMethodData
 fun WithdrawalScreen(viewModel: WithdrawalViewModel) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
 
     LaunchedEffect(Unit) { viewModel.load() }
 
@@ -60,7 +63,7 @@ fun WithdrawalScreen(viewModel: WithdrawalViewModel) {
 
         if (ui.isLoading) CircularProgressIndicator(color = colors.primary)
         ui.error?.let { Text(it, color = colors.destructive) }
-        if (ui.submitted) Text("✅ Demande de retrait envoyée.", color = colors.primary)
+        if (ui.submitted) Text(strings.withdrawSubmitted, color = colors.primary)
 
         when (ui.hasPin) {
             false -> CreatePinCard(onCreate = viewModel::createPin)
@@ -79,7 +82,7 @@ fun WithdrawalScreen(viewModel: WithdrawalViewModel) {
         }
 
         if (ui.requests.isNotEmpty()) {
-            Text("Historique", color = colors.foreground, fontWeight = FontWeight.Bold)
+            Text(strings.history, color = colors.foreground, fontWeight = FontWeight.Bold)
             ui.requests.forEach { RequestRow(it) }
         }
     }
@@ -89,12 +92,13 @@ fun WithdrawalScreen(viewModel: WithdrawalViewModel) {
 @Composable
 private fun CreatePinCard(onCreate: (String) -> Unit) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     var pin by remember { mutableStateOf("") }
     DMCard {
         Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-            Text("Crée ton code PIN de retrait (6 chiffres)", color = colors.foreground)
+            Text(strings.createWithdrawPin, color = colors.foreground)
             PinField(value = pin, onChange = { pin = it })
-            DMButton("Créer le code", enabled = pin.length == 6) { onCreate(pin) }
+            DMButton(strings.createPin, enabled = pin.length == 6) { onCreate(pin) }
         }
     }
 }
@@ -113,20 +117,18 @@ private fun WithdrawForm(
     onSubmit: (String) -> Unit,
 ) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     var pin by remember { mutableStateOf("") }
 
     if (methods.isEmpty()) {
         DMCard {
-            Text(
-                "Aucune méthode de retrait. Ajoute-en une depuis le site pour l'instant.",
-                color = colors.mutedForeground,
-            )
+            Text(strings.noWithdrawMethod, color = colors.mutedForeground)
         }
         return
     }
 
     // Méthodes.
-    Text("Méthode", color = colors.mutedForeground)
+    Text(strings.method, color = colors.mutedForeground)
     methods.forEach { m ->
         val selected = m.id == selectedMethodId
         DMCard(
@@ -151,7 +153,7 @@ private fun WithdrawForm(
     OutlinedTextField(
         value = amount,
         onValueChange = onAmountChange,
-        label = { Text("Montant (crédits)") },
+        label = { Text(strings.amountCredits) },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.fillMaxWidth(),
     )
@@ -163,17 +165,17 @@ private fun WithdrawForm(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("Frais : ${feePct.toInt()} %", color = colors.mutedForeground)
-                Text("Net : ${net.toInt()} crédits", color = colors.primary, fontWeight = FontWeight.Bold)
+                Text("${strings.fees} : ${feePct.toInt()} %", color = colors.mutedForeground)
+                Text("${strings.net} : ${net.toInt()} ${strings.credits}", color = colors.primary, fontWeight = FontWeight.Bold)
             }
         }
     }
 
     // PIN + confirmation.
-    Text("Code PIN de retrait", color = colors.mutedForeground)
+    Text(strings.withdrawPin, color = colors.mutedForeground)
     PinField(value = pin, onChange = { pin = it })
     DMButton(
-        if (submitting) "Envoi…" else "Demander le retrait",
+        if (submitting) strings.sending else strings.requestWithdraw,
         enabled = !submitting && pin.length == 6,
         isLoading = submitting,
     ) { onSubmit(pin) }
@@ -195,25 +197,26 @@ private fun PinField(value: String, onChange: (String) -> Unit) {
 @Composable
 private fun RequestRow(request: WithdrawalRequest) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     DMCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column {
-                Text("${request.amount.toInt()} crédits", color = colors.foreground)
+                Text("${request.amount.toInt()} ${strings.credits}", color = colors.foreground)
                 request.createdAt?.let { Text(it.take(10), color = colors.mutedForeground) }
             }
-            Text(statusLabel(request.status.name), color = statusColor(request.status.name))
+            Text(statusLabel(request.status.name, strings), color = statusColor(request.status.name))
         }
     }
 }
 
-private fun statusLabel(status: String): String = when (status.lowercase()) {
-    "pending" -> "En attente"
-    "approved" -> "Approuvé"
-    "completed" -> "Payé"
-    "rejected" -> "Rejeté"
+private fun statusLabel(status: String, strings: Strings): String = when (status.lowercase()) {
+    "pending" -> strings.statusPending
+    "approved" -> strings.statusApproved
+    "completed" -> strings.statusPaid
+    "rejected" -> strings.statusRejected
     else -> status
 }
 

@@ -24,6 +24,7 @@ import com.dualmusic.core.network.ApiClient
 import com.dualmusic.core.network.Endpoint
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMCard
+import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.payment.PaymentEndpoints
 import com.dualmusic.domain.payment.StripeCheckoutResponse
@@ -104,6 +105,7 @@ class SubscriptionViewModel(private val api: ApiClient) : ViewModel() {
 fun SubscriptionScreen(viewModel: SubscriptionViewModel) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     val context = LocalContext.current
 
     LaunchedEffect(Unit) { viewModel.load() }
@@ -129,7 +131,7 @@ fun SubscriptionScreen(viewModel: SubscriptionViewModel) {
         if (ui.current.isActive) {
             DMCard {
                 Text(
-                    "✅ Abonnement actif : ${ui.current.subscriptionType ?: ""}",
+                    "${strings.subscriptionActive} ${ui.current.subscriptionType ?: ""}",
                     color = colors.primary,
                     fontWeight = FontWeight.Bold,
                 )
@@ -141,10 +143,7 @@ fun SubscriptionScreen(viewModel: SubscriptionViewModel) {
             PlanCard(plan, enabled = !ui.loading) { viewModel.subscribe((plan.tier ?: plan.name ?: "pro").lowercase()) }
         }
 
-        Text(
-            "Paiement par carte (Stripe). Ton abonnement est activé automatiquement après le paiement.",
-            color = colors.mutedForeground,
-        )
+        Text(strings.stripeSubscriptionHint, color = colors.mutedForeground)
     }
 }
 
@@ -152,6 +151,7 @@ fun SubscriptionScreen(viewModel: SubscriptionViewModel) {
 @Composable
 private fun PlanCard(plan: SubscriptionPlan, enabled: Boolean, onSubscribe: () -> Unit) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     DMCard(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
             Row(
@@ -159,11 +159,11 @@ private fun PlanCard(plan: SubscriptionPlan, enabled: Boolean, onSubscribe: () -
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(plan.name ?: (plan.tier ?: "Offre"), color = colors.foreground, fontWeight = FontWeight.Bold)
+                Text(plan.name ?: (plan.tier ?: strings.offer), color = colors.foreground, fontWeight = FontWeight.Bold)
                 Text("${plan.price.toInt()} cr.", color = colors.accent, fontWeight = FontWeight.Bold)
             }
             plan.description?.let { Text(it, color = colors.mutedForeground) }
-            DMButton("S'abonner par carte", modifier = Modifier.fillMaxWidth(), enabled = enabled, onClick = onSubscribe)
+            DMButton(strings.subscribeByCard, modifier = Modifier.fillMaxWidth(), enabled = enabled, onClick = onSubscribe)
         }
     }
 }

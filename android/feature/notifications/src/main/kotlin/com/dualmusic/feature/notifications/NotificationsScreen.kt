@@ -32,6 +32,7 @@ import com.dualmusic.core.ui.components.DMCard
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import com.dualmusic.core.ui.components.DMEmptyState
+import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.notification.AppNotification
 import com.dualmusic.domain.realtime.Realtime
@@ -106,6 +107,7 @@ class NotificationsViewModel(
 fun NotificationsScreen(viewModel: NotificationsViewModel) {
     val items by viewModel.items.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
 
     DisposableEffect(Unit) {
         viewModel.start()
@@ -124,14 +126,14 @@ fun NotificationsScreen(viewModel: NotificationsViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                DMButton("Tout lu", style = DMButtonStyle.OUTLINE, onClick = viewModel::markAllRead)
+                DMButton(strings.markAllRead, style = DMButtonStyle.OUTLINE, onClick = viewModel::markAllRead)
             }
         }
 
         if (items.isEmpty()) {
             DMEmptyState(
-                title = "Aucune notification",
-                subtitle = "Tes alertes apparaîtront ici.",
+                title = strings.noNotifications,
+                subtitle = strings.noNotificationsHint,
                 icon = Icons.Filled.Notifications,
                 modifier = Modifier.weight(1f),
             )

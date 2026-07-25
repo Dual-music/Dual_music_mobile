@@ -28,6 +28,7 @@ import com.dualmusic.core.network.Endpoint
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
+import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.referral.MyReferrals
 import com.dualmusic.domain.referral.ReferralEndpoints
@@ -73,6 +74,7 @@ class ReferralViewModel(private val api: ApiClient) : ViewModel() {
 fun ReferralScreen(viewModel: ReferralViewModel) {
     val data by viewModel.data.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     val context = LocalContext.current
 
     LaunchedEffect(Unit) { viewModel.load() }
@@ -88,10 +90,10 @@ fun ReferralScreen(viewModel: ReferralViewModel) {
         // Code + copie.
         DMCard {
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                Text("Ton code de parrainage", color = colors.mutedForeground)
+                Text(strings.yourReferralCode, color = colors.mutedForeground)
                 Text(data.referralCode ?: "—", color = colors.primaryGlow, fontWeight = FontWeight.Bold)
                 data.referralCode?.let { code ->
-                    DMButton("Copier le code", style = DMButtonStyle.OUTLINE) { copyToClipboard(context, code) }
+                    DMButton(strings.copyCode, style = DMButtonStyle.OUTLINE) { copyToClipboard(context, code) }
                 }
             }
         }
@@ -100,14 +102,14 @@ fun ReferralScreen(viewModel: ReferralViewModel) {
         if (data.stats.pendingRewardCredits > 0) {
             DMCard {
                 Text(
-                    "🎁 ${data.stats.pendingRewardCredits.toInt()} crédits de récompense en attente",
+                    "🎁 ${data.stats.pendingRewardCredits.toInt()} ${strings.pendingRewards}",
                     color = colors.accent,
                     fontWeight = FontWeight.Bold,
                 )
             }
         }
 
-        Text("Tes filleuls (${data.referrals.size})", color = colors.foreground)
+        Text("${strings.yourReferrals} (${data.referrals.size})", color = colors.foreground)
         LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
             items(data.referrals) { ref ->
                 ReferralRow(ref, rewardCredits = data.stats.rewardCredits) { viewModel.claim(ref.id) }
@@ -120,17 +122,18 @@ fun ReferralScreen(viewModel: ReferralViewModel) {
 @Composable
 private fun ReferralRow(ref: ReferralItem, rewardCredits: Double, onClaim: () -> Unit) {
     val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
     DMCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(ref.referred?.displayName ?: "Filleul", color = colors.foreground)
+            Text(ref.referred?.displayName ?: strings.referee, color = colors.foreground)
             if (!ref.rewardClaimed) {
-                DMButton("Réclamer ${rewardCredits.toInt()}", onClick = onClaim)
+                DMButton("${strings.claim} ${rewardCredits.toInt()}", onClick = onClaim)
             } else {
-                Text("✅ Réclamé", color = colors.mutedForeground)
+                Text(strings.claimed, color = colors.mutedForeground)
             }
         }
     }
