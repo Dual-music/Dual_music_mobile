@@ -16,13 +16,13 @@ import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.CardMembership
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Redeem
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
@@ -55,6 +55,7 @@ fun ProfileMenuPage(
     canCreate: Boolean,
     managerEnabled: Boolean,
     isAdmin: Boolean = false,
+    showPublicProfile: Boolean = false,
     onNavigate: (Int) -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -67,7 +68,7 @@ fun ProfileMenuPage(
             .verticalScroll(rememberScrollState())
             .padding(vertical = DualMusicTheme.spacing.md),
     ) {
-        MenuRow(Icons.Filled.Dashboard, s.menuDashboard) { onNavigate(0) }
+        MenuRow(Icons.Filled.Dashboard, s.menuDashboard) { onNavigate(20) }
         MenuRow(Icons.Filled.Favorite, s.menuFollowing) { onNavigate(18) }
         MenuRow(Icons.Filled.CardMembership, s.menuSubscription) { onNavigate(8) }
         MenuRow(Icons.Filled.CreditCard, s.menuTransactions) { onNavigate(1) }
@@ -78,6 +79,8 @@ fun ProfileMenuPage(
             MenuRow(Icons.Filled.PersonAdd, s.menuBecomeArtist) { onNavigate(14) }
             if (managerEnabled) MenuRow(Icons.Filled.Business, s.menuBecomeManager) { onNavigate(16) }
         }
+        // Réservé artiste/manager : édition du profil public (nom de scène, bio, liens sociaux).
+        if (showPublicProfile) MenuRow(Icons.Filled.Public, s.publicProfile) { onNavigate(21) }
         // Réservé artiste/manager/admin : outils créateur + revenus.
         if (canCreate) {
             MenuRow(Icons.Filled.Star, s.menuCreatorSpace) { onNavigate(12) }
@@ -87,7 +90,6 @@ fun ProfileMenuPage(
         }
         // Réservé admin : réglages plateforme + assignation de rôle.
         if (isAdmin) MenuRow(Icons.Filled.Lock, "Espace admin") { onNavigate(19) }
-        MenuRow(Icons.Filled.Edit, s.menuEditProfile) { onNavigate(13) }
         MenuRow(Icons.Filled.Tune, s.preferences) { onNavigate(17) }
         MenuRow(Icons.Filled.Notifications, s.notifications) { onNavigate(2) }
         HorizontalDivider(modifier = Modifier.padding(vertical = DualMusicTheme.spacing.xs))

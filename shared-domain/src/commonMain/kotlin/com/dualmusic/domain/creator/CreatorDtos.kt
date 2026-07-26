@@ -61,4 +61,11 @@ object CreatorEndpoints {
     fun duelRespond(id: String) = "/duels/requests/$id/respond"
     /** Concerts de l'artiste caller. */
     const val MY_CONCERTS = "/artist-concerts/me"
+
+    /** Mise à jour du profil public artiste du caller (`PATCH`). Voir [ArtistProfile]. */
+    const val ARTIST_ME = "/artists/me"
+    /** Profil public manager du caller (`GET` lecture, `PATCH` mise à jour). Voir [ManagerProfile]. */
+    const val MANAGER_ME = "/managers/me"
+    /** Lecture d'un profil public (compte + profil artiste) — sert à relire le sien. */
+    fun publicProfile(id: String) = "/users/$id"
 }

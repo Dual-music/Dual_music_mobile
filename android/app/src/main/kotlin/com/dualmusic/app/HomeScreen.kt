@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Mic
@@ -125,12 +126,33 @@ fun HomeScreen(
         ) {
             Spacer(Modifier.weight(1f))
 
-            // Même image que l'accueil web (icône « duel » micros croisés).
-            Image(
-                painter = painterResource(id = R.drawable.duel_icon),
-                contentDescription = "Dual Music",
-                modifier = Modifier.size(104.dp),
+            // Même image que l'accueil web (icône « duel »), mise en valeur dans un cadre
+            // moderne : bord en dégradé de marque, halo coloré et légère pulsation.
+            val heroPulse = rememberInfiniteTransition(label = "hero")
+            val heroScale by heroPulse.animateFloat(
+                initialValue = 1f,
+                targetValue = 1.05f,
+                animationSpec = infiniteRepeatable(tween(1900), RepeatMode.Reverse),
+                label = "heroScale",
             )
+            Box(
+                modifier = Modifier
+                    .size(172.dp)
+                    .scale(heroScale)
+                    .shadow(28.dp, RoundedCornerShape(38.dp), spotColor = Color(0xFFB07CFF), ambientColor = Color(0xFFFF4FA3))
+                    .clip(RoundedCornerShape(38.dp))
+                    .background(BrandGradient)
+                    .padding(3.dp)
+                    .clip(RoundedCornerShape(35.dp))
+                    .background(Brush.verticalGradient(listOf(Color(0xFF1C1033), Color(0xFF120A24)))),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.duel_icon),
+                    contentDescription = "Dual Music",
+                    modifier = Modifier.size(112.dp),
+                )
+            }
             Text(
                 s.homeTitle,
                 style = TextStyle(brush = BrandGradient),

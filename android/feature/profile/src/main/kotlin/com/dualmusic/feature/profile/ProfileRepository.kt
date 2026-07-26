@@ -10,6 +10,12 @@ import com.dualmusic.domain.admin.SettingEnabled
 import com.dualmusic.domain.auth.AuthEndpoints
 import com.dualmusic.domain.auth.ChangePasswordRequest
 import com.dualmusic.domain.auth.MeResponse
+import com.dualmusic.domain.creator.ArtistProfile
+import com.dualmusic.domain.creator.CreatorEndpoints
+import com.dualmusic.domain.creator.ManagerProfile
+import com.dualmusic.domain.creator.PublicProfileResponse
+import com.dualmusic.domain.creator.UpdateArtistProfileRequest
+import com.dualmusic.domain.creator.UpdateManagerProfileRequest
 import com.dualmusic.domain.role.ApplyArtistRequest
 import com.dualmusic.domain.role.ApplyManagerRequest
 import com.dualmusic.domain.role.PublicSetting
@@ -49,6 +55,31 @@ class ProfileRepository(private val api: ApiClient) {
     /** Annule une suppression de compte programmée. */
     suspend fun cancelAccountDeletion() {
         api.request<Unit>(Endpoint.delete(UserEndpoints.ME_DELETION))
+    }
+
+    // --- Profils publics créateurs (artiste / manager) ---
+
+    /**
+     * Profil public artiste du caller. Lu via `GET /users/:id` (pas de `GET /artists/me`
+     * côté backend) — renvoie `null` si l'utilisateur n'a pas encore de profil artiste.
+     */
+    suspend fun myArtistProfile(userId: String): ArtistProfile? =
+        api.request(Endpoint.get(CreatorEndpoints.publicProfile(userId)), PublicProfileResponse.serializer()).artistProfile
+
+    /** Met à jour le profil public artiste (`PATCH /artists/me`). */
+    suspend fun updateArtistProfile(request: UpdateArtistProfileRequest) {
+        val body = json.encodeToString(UpdateArtistProfileRequest.serializer(), request)
+        api.request<Unit>(Endpoint.patch(CreatorEndpoints.ARTIST_ME, body))
+    }
+
+    /** Profil public manager du caller (`GET /managers/me`). */
+    suspend fun myManagerProfile(): ManagerProfile =
+        api.request(Endpoint.get(CreatorEndpoints.MANAGER_ME), ManagerProfile.serializer())
+
+    /** Met à jour le profil public manager (`PATCH /managers/me`). */
+    suspend fun updateManagerProfile(request: UpdateManagerProfileRequest) {
+        val body = json.encodeToString(UpdateManagerProfileRequest.serializer(), request)
+        api.request<Unit>(Endpoint.patch(CreatorEndpoints.MANAGER_ME, body))
     }
 
     /** Change le mot de passe (utilisateur connecté). */

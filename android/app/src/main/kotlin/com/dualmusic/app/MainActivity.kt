@@ -106,11 +106,13 @@ import com.dualmusic.feature.profile.AdminViewModel
 import com.dualmusic.feature.profile.BecomeArtistScreen
 import com.dualmusic.feature.profile.BecomeManagerScreen
 import com.dualmusic.feature.profile.BecomeRoleViewModel
-import com.dualmusic.feature.profile.EditProfileScreen
+import com.dualmusic.feature.profile.DashboardScreen
+import com.dualmusic.feature.profile.DashboardViewModel
 import com.dualmusic.feature.profile.EditProfileViewModel
 import com.dualmusic.feature.profile.ProfileRepository
 import com.dualmusic.feature.profile.ProfileScreen
-import com.dualmusic.feature.profile.ProfileViewModel
+import com.dualmusic.feature.profile.PublicProfileEditScreen
+import com.dualmusic.feature.profile.PublicProfileViewModel
 import com.dualmusic.feature.replay.ReplayPlayerScreen
 import com.dualmusic.feature.replay.ReplayPlayerViewModel
 import com.dualmusic.feature.replay.ReplayRepository
@@ -232,8 +234,11 @@ class AppContainer(context: Context) {
     /** Nouveau ViewModel de recharge de crédits (Mobile Money). */
     fun makeRechargeViewModel(): RechargeViewModel = RechargeViewModel(api)
 
-    /** Nouveau ViewModel de profil (identité + statistiques). */
-    fun makeProfileViewModel(): ProfileViewModel = ProfileViewModel(profileRepository)
+    /** ViewModel du tableau de bord (identité + statistiques par rôle). */
+    fun makeDashboardViewModel(): DashboardViewModel = DashboardViewModel(profileRepository)
+
+    /** ViewModel du profil public créateur (artiste/manager + liens sociaux). */
+    fun makePublicProfileViewModel(): PublicProfileViewModel = PublicProfileViewModel(profileRepository, mediaUploader)
 
     /** Vrai si l'admin a ouvert les candidatures manager (gating de l'entrée de menu). */
     suspend fun managerRequestsEnabled(): Boolean =
@@ -570,14 +575,17 @@ private fun ProfileSection(
     onSub: (Int) -> Unit,
     onSignOut: () -> Unit,
 ) {
-    // Rôles + gating admin, partagés par le profil racine et la page de menu.
+    // Rôles + gating admin, partagés par le profil racine, le dashboard et la page de menu.
     var managerEnabled by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { managerEnabled = container.managerRequestsEnabled() }
-    val profileVm: ProfileViewModel = viewModel { container.makeProfileViewModel() }
-    val profileState by profileVm.uiState.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { profileVm.load() }
-    val roles = profileState.me?.roles ?: emptyList()
-    val canCreate = roles.any { it == UserRole.ARTIST || it == UserRole.MANAGER || it == UserRole.ADMIN }
+    val dashboardVm: DashboardViewModel = viewModel { container.makeDashboardViewModel() }
+    val dashState by dashboardVm.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { dashboardVm.load() }
+    val editProfileVm: EditProfileViewModel = viewModel { container.makeEditProfileViewModel() }
+    val roles = dashState.me?.roles ?: emptyList()
+    val isArtist = roles.any { it == UserRole.ARTIST }
+    val isManager = roles.any { it == UserRole.MANAGER }
+    val canCreate = isArtist || isManager || roles.any { it == UserRole.ADMIN }
     val isAdmin = roles.any { it == UserRole.ADMIN }
 
     when (sub) {
@@ -637,9 +645,12 @@ private fun ProfileSection(
             val creatorVm: CreatorViewModel = viewModel { container.makeCreatorViewModel() }
             CreatorScreen(viewModel = creatorVm)
         }
-        13 -> SubScreen(title = "Modifier le profil", onBack = { onSub(PROFILE_MENU) }) {
-            val editVm: EditProfileViewModel = viewModel { container.makeEditProfileViewModel() }
-            EditProfileScreen(viewModel = editVm, onSaved = { onSub(0) })
+        20 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuDashboard, onBack = { onSub(PROFILE_MENU) }) {
+            DashboardScreen(viewModel = dashboardVm, onNavigate = { onSub(it) })
+        }
+        21 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.publicProfile, onBack = { onSub(PROFILE_MENU) }) {
+            val publicVm: PublicProfileViewModel = viewModel { container.makePublicProfileViewModel() }
+            PublicProfileEditScreen(viewModel = publicVm, isArtist = isArtist, onSaved = { onSub(PROFILE_MENU) })
         }
         14 -> SubScreen(title = "Devenir artiste", onBack = { onSub(PROFILE_MENU) }) {
             val roleVm: BecomeRoleViewModel = viewModel { container.makeBecomeRoleViewModel() }
@@ -682,12 +693,13 @@ private fun ProfileSection(
                 canCreate = canCreate,
                 managerEnabled = managerEnabled,
                 isAdmin = isAdmin,
+                showPublicProfile = isArtist || isManager,
                 onNavigate = { onSub(it) },
                 onSignOut = onSignOut,
             )
         }
-        // Profil racine : identité + stats + icône d'ouverture du menu.
-        else -> ProfileScreen(viewModel = profileVm, onOpenMenu = { onSub(PROFILE_MENU) })
+        // Profil racine : fiche éditable (infos grisées + crayon + mot de passe replié).
+        else -> ProfileScreen(viewModel = editProfileVm, onOpenMenu = { onSub(PROFILE_MENU) })
     }
 }
 

@@ -27,6 +27,8 @@ data class DisplayProfile(
     @SerialName("country_code") val countryCode: String? = null,
     val phone: String? = null,
     @SerialName("phone_country_code") val phoneCountryCode: String? = null,
+    /** Biographie du compte (présente sur `/auth/me`, absente des profils d'affichage courts). */
+    val bio: String? = null,
 ) {
     /** Nom à afficher : nom de scène si présent, sinon nom complet, sinon un repli court. */
     val displayName: String
