@@ -906,7 +906,7 @@ fun stringsFor(language: Language): Strings = when (language) {
  * Chaînes localisées courantes, fournies au sommet de l'app via `CompositionLocalProvider`.
  * Par défaut : français.
  */
-val LocalStrings = staticCompositionLocalOf { FrStrings }
+val LocalStrings = staticCompositionLocalOf<Strings> { FrStrings }
 
 /**
  * Chaînes courantes accessibles **hors contexte @Composable** (ex. ViewModels, pour les
