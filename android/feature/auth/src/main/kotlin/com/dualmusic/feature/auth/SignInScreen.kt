@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -67,6 +68,13 @@ fun SignInScreen(
     // Capturé au niveau @Composable : réutilisable dans les lambdas (coroutines) ci-dessous.
     val strings = com.dualmusic.core.ui.i18n.LocalStrings.current
 
+    // Superposition plein écran d'un document légal (ouvert depuis la case d'inscription).
+    var legalDoc by remember { mutableStateOf<LegalKind?>(null) }
+    legalDoc?.let { kind ->
+        LegalDocScreen(kind, onBack = { legalDoc = null })
+        return
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -83,7 +91,7 @@ fun SignInScreen(
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md)) {
                 when (ui.mode) {
                     AuthMode.LOGIN -> LoginFields(ui, viewModel)
-                    AuthMode.REGISTER -> RegisterFields(ui, viewModel)
+                    AuthMode.REGISTER -> RegisterFields(ui, viewModel, onOpenLegal = { legalDoc = it })
                     AuthMode.FORGOT -> ForgotFields(ui, viewModel)
                     AuthMode.RESET -> ResetFields(ui, viewModel)
                 }
@@ -132,7 +140,7 @@ private fun LoginFields(ui: SignInUiState, vm: AuthViewModel) {
  * pays, numéro) sont saisies à l'étape suivante (voir [ProfileCompletionScreen]).
  */
 @Composable
-private fun RegisterFields(ui: SignInUiState, vm: AuthViewModel) {
+private fun RegisterFields(ui: SignInUiState, vm: AuthViewModel, onOpenLegal: (LegalKind) -> Unit) {
     EmailField(ui.email, vm::onEmailChange)
     PasswordField(ui.password, vm::onPasswordChange, label = com.dualmusic.core.ui.i18n.LocalStrings.current.passwordStar, supporting = com.dualmusic.core.ui.i18n.LocalStrings.current.atLeast8)
     PasswordField(
@@ -145,6 +153,36 @@ private fun RegisterFields(ui: SignInUiState, vm: AuthViewModel) {
             null
         },
     )
+    TermsAcceptance(ui.acceptTerms, vm::onAcceptTermsChange, onOpenLegal)
+}
+
+/**
+ * Case d'acceptation **obligatoire** des documents légaux : la case coche l'acceptation, et
+ * les noms des documents sont **cliquables** pour les lire avant d'accepter (comme sur le web).
+ */
+@Composable
+private fun TermsAcceptance(accepted: Boolean, onToggle: (Boolean) -> Unit, onOpenLegal: (LegalKind) -> Unit) {
+    val colors = DualMusicTheme.colors
+    val s = com.dualmusic.core.ui.i18n.LocalStrings.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(checked = accepted, onCheckedChange = onToggle)
+        Column(modifier = Modifier.padding(start = DualMusicTheme.spacing.xs)) {
+            Text("${s.iAcceptThe} :", color = colors.mutedForeground)
+            Row {
+                Text(
+                    s.termsOfUse,
+                    color = colors.primaryGlow,
+                    modifier = Modifier.clickable { onOpenLegal(LegalKind.TERMS) },
+                )
+                Text("  ·  ", color = colors.mutedForeground)
+                Text(
+                    s.privacyPolicy,
+                    color = colors.primaryGlow,
+                    modifier = Modifier.clickable { onOpenLegal(LegalKind.PRIVACY) },
+                )
+            }
+        }
+    }
 }
 
 /** Champ email de la demande de réinitialisation. */

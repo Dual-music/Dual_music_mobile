@@ -53,10 +53,11 @@ data class SignInUiState(
     val canSubmit: Boolean
         get() = !isSubmitting && when (mode) {
             AuthMode.LOGIN -> email.contains("@") && password.length >= 8
-            // Étape 1 : email + mot de passe + confirmation uniquement. Les autres infos
-            // (nom, pays, numéro) sont demandées APRÈS validation du code email.
+            // Étape 1 : email + mot de passe + confirmation + acceptation obligatoire des
+            // documents légaux. Les autres infos (nom, pays, numéro) sont demandées APRÈS
+            // validation du code email.
             AuthMode.REGISTER ->
-                email.contains("@") && password.length >= 8 && password == confirmPassword
+                email.contains("@") && password.length >= 8 && password == confirmPassword && acceptTerms
             AuthMode.FORGOT -> email.contains("@")
             AuthMode.RESET -> email.contains("@") && resetCode.length in 4..8 && newPassword.length >= 8
         }
