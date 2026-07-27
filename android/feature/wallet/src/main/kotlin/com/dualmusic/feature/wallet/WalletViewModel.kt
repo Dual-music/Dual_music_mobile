@@ -27,6 +27,7 @@ data class WalletUiState(
     val purchases: List<CreditPurchase> = emptyList(),
     val spending: List<SpendItem> = emptyList(),
     val revenues: List<RevenueEvent> = emptyList(),
+    val withdrawals: List<com.dualmusic.domain.model.WithdrawalRequest> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
 )
@@ -56,8 +57,16 @@ class WalletViewModel(private val repository: WalletRepository) : ViewModel() {
                 val purchases = runCatching { repository.purchases() }.getOrDefault(emptyList())
                 val spending = runCatching { repository.spending() }.getOrDefault(emptyList())
                 val revenues = runCatching { repository.revenues() }.getOrDefault(emptyList())
+                val withdrawals = runCatching { repository.withdrawals() }.getOrDefault(emptyList())
                 _uiState.update {
-                    it.copy(balance = balance, purchases = purchases, spending = spending, revenues = revenues, isLoading = false)
+                    it.copy(
+                        balance = balance,
+                        purchases = purchases,
+                        spending = spending,
+                        revenues = revenues,
+                        withdrawals = withdrawals,
+                        isLoading = false,
+                    )
                 }
             } catch (t: Throwable) {
                 _uiState.update { it.copy(isLoading = false, error = friendlyMessage(t)) }

@@ -342,6 +342,9 @@ interface Strings {
     val followedTitle: String
     val notFollowingAny: String
     val followedEmptyHint: String
+    // Transactions (onglet Retraits).
+    val walletWithdrawals: String
+    val noWithdrawals: String
 }
 
 /** Chaînes françaises (langue par défaut). */
@@ -653,6 +656,8 @@ object FrStrings : Strings {
     override val followedTitle = "Artistes suivis"
     override val notFollowingAny = "Vous ne suivez aucun artiste"
     override val followedEmptyHint = "Découvrez des artistes depuis l'accueil pour les suivre."
+    override val walletWithdrawals = "Retraits"
+    override val noWithdrawals = "Aucun retrait pour le moment."
 }
 
 /** Chaînes anglaises. */
@@ -964,6 +969,8 @@ object EnStrings : Strings {
     override val followedTitle = "Followed artists"
     override val notFollowingAny = "You don't follow any artist"
     override val followedEmptyHint = "Discover artists from home to follow them."
+    override val walletWithdrawals = "Withdrawals"
+    override val noWithdrawals = "No withdrawal yet."
 }
 
 /** Renvoie la table de chaînes d'une langue. */

@@ -55,6 +55,13 @@ class WalletRepository(private val api: ApiClient) {
     suspend fun purchases(): List<CreditPurchase> =
         api.request(Endpoint.get(PaymentEndpoints.HISTORY), ListSerializer(CreditPurchase.serializer()))
 
+    /** Historique des demandes de retrait du caller — `GET /withdrawals/me`. */
+    suspend fun withdrawals(): List<com.dualmusic.domain.model.WithdrawalRequest> =
+        api.request(
+            Endpoint.get(com.dualmusic.domain.withdrawal.WithdrawalEndpoints.MINE),
+            ListSerializer(com.dualmusic.domain.model.WithdrawalRequest.serializer()),
+        )
+
     /**
      * Vote payant pour un artiste dans un duel (débit atomique côté serveur).
      * @param idempotencyKey clé unique de l'action (générée par défaut).

@@ -30,6 +30,7 @@ import com.dualmusic.core.ui.components.DMCard
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.wallet.RevenueEvent
 import com.dualmusic.domain.payment.CreditPurchase
+import com.dualmusic.domain.model.WithdrawalRequest
 import com.dualmusic.domain.wallet.SpendItem
 
 /**
@@ -84,6 +85,7 @@ fun WalletScreen(viewModel: WalletViewModel, onOpenRecharge: () -> Unit = {}, ca
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(s.walletExpenses) })
             if (canEarn) {
                 Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text(s.walletIncome) })
+                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text(s.walletWithdrawals) })
             }
         }
 
@@ -97,7 +99,11 @@ fun WalletScreen(viewModel: WalletViewModel, onOpenRecharge: () -> Unit = {}, ca
                     items(ui.purchases) { PurchaseRow(it) }
                 }
                 1 -> items(ui.spending) { SpendRow(it) }
-                else -> items(ui.revenues) { RevenueRow(it) }
+                2 -> items(ui.revenues) { RevenueRow(it) }
+                else -> {
+                    if (ui.withdrawals.isEmpty()) item { Text(s.noWithdrawals, color = colors.mutedForeground) }
+                    items(ui.withdrawals) { WithdrawalRow(it) }
+                }
             }
         }
     }
@@ -155,6 +161,25 @@ private fun RevenueRow(item: RevenueEvent) {
                 Text("${item.txCount} transaction(s)", color = colors.mutedForeground)
             }
             Text("+${item.totalReceived}", color = colors.primary, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+/** Ligne d'historique d'un retrait : montant, méthode, date, statut. */
+@Composable
+private fun WithdrawalRow(item: WithdrawalRequest) {
+    val colors = DualMusicTheme.colors
+    DMCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column {
+                Text(item.paymentMethod ?: "Mobile Money", color = colors.foreground)
+                val date = item.createdAt?.take(10)
+                Text(listOfNotNull(date, item.status.name.lowercase()).joinToString(" · "), color = colors.mutedForeground)
+            }
+            Text("-${item.amount.toInt()}", color = colors.destructive, fontWeight = FontWeight.Bold)
         }
     }
 }
