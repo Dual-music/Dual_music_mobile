@@ -697,7 +697,9 @@ private fun ProfileSection(
             )
         }
         18 -> SubScreen(title = "Suivis", onBack = { onSub(PROFILE_MENU) }) {
-            ArtistsScreen(viewModel = viewModel { container.makeArtistsViewModel() })
+            com.dualmusic.feature.artists.FollowedArtistsScreen(
+                viewModel = viewModel { container.makeArtistsViewModel() },
+            )
         }
         19 -> SubScreen(title = "Espace admin", onBack = { onSub(PROFILE_MENU) }) {
             AdminScreen(viewModel = viewModel { container.makeAdminViewModel() })

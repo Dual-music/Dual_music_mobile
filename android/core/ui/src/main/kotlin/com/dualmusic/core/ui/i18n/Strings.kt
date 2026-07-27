@@ -338,6 +338,10 @@ interface Strings {
     val challenge: String
     val receivedInvitations: String
     val duelRequestSent: String
+    // Suivis (artistes suivis uniquement).
+    val followedTitle: String
+    val notFollowingAny: String
+    val followedEmptyHint: String
 }
 
 /** Chaînes françaises (langue par défaut). */
@@ -646,6 +650,9 @@ object FrStrings : Strings {
     override val challenge = "Défier"
     override val receivedInvitations = "Invitations reçues"
     override val duelRequestSent = "✅ Invitation envoyée."
+    override val followedTitle = "Artistes suivis"
+    override val notFollowingAny = "Vous ne suivez aucun artiste"
+    override val followedEmptyHint = "Découvrez des artistes depuis l'accueil pour les suivre."
 }
 
 /** Chaînes anglaises. */
@@ -954,6 +961,9 @@ object EnStrings : Strings {
     override val challenge = "Challenge"
     override val receivedInvitations = "Received invitations"
     override val duelRequestSent = "✅ Invitation sent."
+    override val followedTitle = "Followed artists"
+    override val notFollowingAny = "You don't follow any artist"
+    override val followedEmptyHint = "Discover artists from home to follow them."
 }
 
 /** Renvoie la table de chaînes d'une langue. */
