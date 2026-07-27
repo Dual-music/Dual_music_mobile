@@ -75,8 +75,6 @@ class LiveRoomClient(
                         is RoomEvent.TrackSubscribed,
                         is RoomEvent.TrackUnsubscribed,
                         is RoomEvent.ParticipantDisconnected -> refreshPrimaryTrack()
-                        is RoomEvent.LocalTrackPublished,
-                        is RoomEvent.LocalTrackUnpublished -> refreshLocalTrack()
                         is RoomEvent.Reconnecting -> _connectionState.value = LiveConnectionState.Reconnecting
                         is RoomEvent.Reconnected -> _connectionState.value = LiveConnectionState.Connected
                         is RoomEvent.Disconnected -> _connectionState.value = LiveConnectionState.Idle
@@ -93,7 +91,15 @@ class LiveRoomClient(
                 room.localParticipant.setCameraEnabled(true)
                 room.localParticipant.setMicrophoneEnabled(true)
                 _micEnabled.value = true
-                refreshLocalTrack()
+                // La piste caméra locale peut être publiée de façon asynchrone : on retente
+                // brièvement jusqu'à ce qu'elle apparaisse (aperçu hôte).
+                var tries = 0
+                while (_localVideoTrack.value == null && tries < 12) {
+                    refreshLocalTrack()
+                    if (_localVideoTrack.value != null) break
+                    kotlinx.coroutines.delay(150)
+                    tries++
+                }
             }
             refreshPrimaryTrack()
         } catch (e: Throwable) {
