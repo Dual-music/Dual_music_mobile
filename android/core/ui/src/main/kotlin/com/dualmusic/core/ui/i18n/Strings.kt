@@ -330,6 +330,14 @@ interface Strings {
     val candScore: String
     val noCandidacies: String
     val noCandidaciesHint: String
+    // Duels (demander un duel / invitations reçues).
+    val requestDuel: String
+    val requestDuelHint: String
+    val searchArtist: String
+    val noArtistAvailable: String
+    val challenge: String
+    val receivedInvitations: String
+    val duelRequestSent: String
 }
 
 /** Chaînes françaises (langue par défaut). */
@@ -631,6 +639,13 @@ object FrStrings : Strings {
     override val candScore = "Score"
     override val noCandidacies = "Aucune candidature"
     override val noCandidaciesHint = "Tu n'as encore participé à aucune compétition."
+    override val requestDuel = "Demander un Duel"
+    override val requestDuelHint = "Défiez un autre artiste pour un duel musical"
+    override val searchArtist = "Rechercher un artiste…"
+    override val noArtistAvailable = "Aucun artiste disponible"
+    override val challenge = "Défier"
+    override val receivedInvitations = "Invitations reçues"
+    override val duelRequestSent = "✅ Invitation envoyée."
 }
 
 /** Chaînes anglaises. */
@@ -932,6 +947,13 @@ object EnStrings : Strings {
     override val candScore = "Score"
     override val noCandidacies = "No candidacies"
     override val noCandidaciesHint = "You haven't entered any competition yet."
+    override val requestDuel = "Request a Duel"
+    override val requestDuelHint = "Challenge another artist to a music duel"
+    override val searchArtist = "Search an artist…"
+    override val noArtistAvailable = "No artist available"
+    override val challenge = "Challenge"
+    override val receivedInvitations = "Received invitations"
+    override val duelRequestSent = "✅ Invitation sent."
 }
 
 /** Renvoie la table de chaînes d'une langue. */

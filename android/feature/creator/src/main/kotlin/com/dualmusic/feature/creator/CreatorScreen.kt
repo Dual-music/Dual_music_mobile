@@ -51,6 +51,7 @@ import com.dualmusic.core.upload.readLocalMedia
 import com.dualmusic.domain.auth.MeResponse
 import com.dualmusic.domain.concert.ConcertEndpoints
 import com.dualmusic.domain.creator.CreateArtistConcert
+import com.dualmusic.domain.creator.CreateDuelRequest
 import com.dualmusic.domain.creator.CreatorEndpoints
 import com.dualmusic.domain.creator.DuelRequestItem
 import com.dualmusic.domain.creator.RespondDuelRequest
@@ -68,6 +69,8 @@ import kotlinx.serialization.json.Json
 data class CreatorUiState(
     val myUserId: String? = null,
     val duelRequests: List<DuelRequestItem> = emptyList(),
+    /** Annuaire des artistes (pour rechercher un adversaire à défier). */
+    val artists: List<com.dualmusic.domain.artist.ArtistSummary> = emptyList(),
     val concerts: List<Concert> = emptyList(),
     /** URL publique de la pochette uploadée (prête à être persistée). */
     val coverUrl: String? = null,
@@ -102,7 +105,29 @@ class CreatorViewModel(
             val concerts = runCatching {
                 api.request(Endpoint.get(CreatorEndpoints.MY_CONCERTS), ListSerializer(Concert.serializer()))
             }.getOrDefault(emptyList())
-            _uiState.update { it.copy(myUserId = me?.user?.id, duelRequests = requests, concerts = concerts) }
+            val artists = runCatching {
+                api.request(
+                    Endpoint.get(com.dualmusic.domain.artist.ArtistEndpoints.LIST),
+                    ListSerializer(com.dualmusic.domain.artist.ArtistSummary.serializer()),
+                )
+            }.getOrDefault(emptyList())
+            _uiState.update {
+                it.copy(myUserId = me?.user?.id, duelRequests = requests, concerts = concerts, artists = artists)
+            }
+        }
+    }
+
+    /** Envoie une invitation de duel à un artiste, puis recharge les défis. */
+    fun createDuel(opponentId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(submitting = true, message = null) }
+            val body = json.encodeToString(CreateDuelRequest.serializer(), CreateDuelRequest(opponentId = opponentId))
+            runCatching { api.request<Unit>(Endpoint.post(CreatorEndpoints.DUEL_REQUEST_CREATE, body)) }
+                .onSuccess {
+                    _uiState.update { it.copy(submitting = false, message = com.dualmusic.core.ui.i18n.appStrings.duelRequestSent) }
+                    load()
+                }
+                .onFailure { e -> _uiState.update { it.copy(submitting = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.errCreateFailed) } }
         }
     }
 
@@ -206,6 +231,43 @@ fun CreatorScreen(viewModel: CreatorViewModel, initialTab: Int = 0) {
 
         when (tab) {
             0 -> {
+                var duelQuery by remember { mutableStateOf("") }
+                // « Demander un Duel » : rechercher un artiste et lui envoyer une invitation.
+                DMCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(strings.requestDuel, color = colors.foreground, fontWeight = FontWeight.Bold)
+                    Text(strings.requestDuelHint, color = colors.mutedForeground)
+                    OutlinedTextField(
+                        value = duelQuery,
+                        onValueChange = { duelQuery = it },
+                        label = { Text(strings.searchArtist) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(top = DualMusicTheme.spacing.sm),
+                    )
+                    val candidates = ui.artists.filter {
+                        it.id != ui.myUserId &&
+                            (duelQuery.isBlank() || it.displayName.contains(duelQuery, ignoreCase = true))
+                    }.take(8)
+                    if (candidates.isEmpty()) {
+                        Text(
+                            strings.noArtistAvailable,
+                            color = colors.mutedForeground,
+                            modifier = Modifier.padding(top = DualMusicTheme.spacing.sm),
+                        )
+                    } else {
+                        candidates.forEach { a ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = DualMusicTheme.spacing.sm),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("🎤  ${a.displayName}", color = colors.foreground)
+                                DMButton(strings.challenge, onClick = { viewModel.createDuel(a.id) })
+                            }
+                        }
+                    }
+                }
+                // Invitations reçues (accepter/refuser).
+                Text(strings.receivedInvitations, color = colors.foreground, fontWeight = FontWeight.Bold)
                 if (ui.duelRequests.isEmpty()) {
                     DMEmptyState(
                         title = strings.noChallenges,
