@@ -45,6 +45,14 @@ class LiveRoomClient(
     private val _primaryVideoTrack = MutableStateFlow<VideoTrack?>(null)
     val primaryVideoTrack: StateFlow<VideoTrack?> = _primaryVideoTrack.asStateFlow()
 
+    /** Piste vidéo LOCALE (aperçu de l'hôte quand il diffuse). `null` en mode viewer. */
+    private val _localVideoTrack = MutableStateFlow<VideoTrack?>(null)
+    val localVideoTrack: StateFlow<VideoTrack?> = _localVideoTrack.asStateFlow()
+
+    /** Micro activé (mode hôte). */
+    private val _micEnabled = MutableStateFlow(true)
+    val micEnabled: StateFlow<Boolean> = _micEnabled.asStateFlow()
+
     /**
      * Rejoint une room : récupère un jeton (ou utilise un jeton pré-chauffé) puis se
      * connecte au SFU.
@@ -67,6 +75,8 @@ class LiveRoomClient(
                         is RoomEvent.TrackSubscribed,
                         is RoomEvent.TrackUnsubscribed,
                         is RoomEvent.ParticipantDisconnected -> refreshPrimaryTrack()
+                        is RoomEvent.LocalTrackPublished,
+                        is RoomEvent.LocalTrackUnpublished -> refreshLocalTrack()
                         is RoomEvent.Reconnecting -> _connectionState.value = LiveConnectionState.Reconnecting
                         is RoomEvent.Reconnected -> _connectionState.value = LiveConnectionState.Connected
                         is RoomEvent.Disconnected -> _connectionState.value = LiveConnectionState.Idle
@@ -78,6 +88,13 @@ class LiveRoomClient(
             val creds = prewarmedToken ?: tokenService.token(roomName = roomName, isHost = isHost)
             room.connect(creds.url, creds.token)
             _connectionState.value = LiveConnectionState.Connected
+            // Mode hôte : publier caméra + micro (diffusion). Le viewer ne publie rien.
+            if (isHost) {
+                room.localParticipant.setCameraEnabled(true)
+                room.localParticipant.setMicrophoneEnabled(true)
+                _micEnabled.value = true
+                refreshLocalTrack()
+            }
             refreshPrimaryTrack()
         } catch (e: Throwable) {
             _connectionState.value = LiveConnectionState.Failed(e.message ?: "Connexion impossible")
@@ -88,13 +105,27 @@ class LiveRoomClient(
     fun leave() {
         room.disconnect()
         _primaryVideoTrack.value = null
+        _localVideoTrack.value = null
         _connectionState.value = LiveConnectionState.Idle
+    }
+
+    /** Active/désactive le micro (mode hôte). */
+    suspend fun setMicEnabled(enabled: Boolean) {
+        room.localParticipant.setMicrophoneEnabled(enabled)
+        _micEnabled.value = enabled
     }
 
     /** Piste vidéo primaire = première piste vidéo distante souscrite (le host). */
     private fun refreshPrimaryTrack() {
         _primaryVideoTrack.value = room.remoteParticipants.values
             .flatMap { it.videoTrackPublications }
+            .mapNotNull { it.second as? VideoTrack }
+            .firstOrNull()
+    }
+
+    /** Piste vidéo locale = caméra publiée par l'hôte (aperçu). */
+    private fun refreshLocalTrack() {
+        _localVideoTrack.value = room.localParticipant.videoTrackPublications
             .mapNotNull { it.second as? VideoTrack }
             .firstOrNull()
     }

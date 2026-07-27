@@ -1,6 +1,7 @@
 package com.dualmusic.feature.live
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -65,6 +66,10 @@ class MyLivesViewModel(private val api: ApiClient) : ViewModel() {
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
+    /** Live tout juste créé, à ouvrir en diffusion (consommé par l'écran). */
+    private val _pendingBroadcast = MutableStateFlow<Live?>(null)
+    val pendingBroadcast: StateFlow<Live?> = _pendingBroadcast.asStateFlow()
+
     /** Charge l'id du caller + ses lives. */
     fun load() {
         viewModelScope.launch {
@@ -89,10 +94,15 @@ class MyLivesViewModel(private val api: ApiClient) : ViewModel() {
             _message.value = null
             val safe = title.ifBlank { "Live" }
             val body = "{\"title\":" + json.encodeToString(String.serializer(), safe) + "}"
-            runCatching { api.request<Unit>(Endpoint.post("/lives", body)) }
-                .onSuccess { load() }
+            runCatching { api.request(Endpoint.post("/lives", body), Live.serializer()) }
+                .onSuccess { created -> _pendingBroadcast.value = created; load() }
                 .onFailure { e -> _message.value = e.message }
         }
+    }
+
+    /** Réinitialise le live en attente une fois la diffusion ouverte. */
+    fun consumePending() {
+        _pendingBroadcast.value = null
     }
 
     /** Termine le live actif, puis recharge. */
@@ -110,15 +120,31 @@ class MyLivesViewModel(private val api: ApiClient) : ViewModel() {
  * @param viewModel source d'état.
  */
 @Composable
-fun MyLivesScreen(viewModel: MyLivesViewModel) {
+fun MyLivesScreen(
+    viewModel: MyLivesViewModel,
+    makeBroadcast: (Live) -> LiveBroadcastViewModel,
+) {
     val lives by viewModel.lives.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val pending by viewModel.pendingBroadcast.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     var title by remember { mutableStateOf("") }
+    var broadcasting by remember { mutableStateOf<Live?>(null) }
 
     LaunchedEffect(Unit) { viewModel.load() }
+    // Ouvre la diffusion dès qu'un live vient d'être créé.
+    LaunchedEffect(pending) {
+        pending?.let { broadcasting = it; viewModel.consumePending() }
+    }
+
+    // Overlay plein écran de diffusion (hôte).
+    broadcasting?.let { live ->
+        val controller = remember(live.id) { makeBroadcast(live) }
+        LiveBroadcastScreen(controller = controller, onExit = { broadcasting = null; viewModel.load() })
+        return
+    }
 
     val active = lives.firstOrNull { it.status == EventStatus.LIVE }
     val past = lives.filter { it.status == EventStatus.ENDED }
@@ -161,7 +187,7 @@ fun MyLivesScreen(viewModel: MyLivesViewModel) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column {
+                    Column(modifier = Modifier.clickable { broadcasting = live }) {
                         Text("🔴 ${live.title ?: s.liveActive}", color = colors.primary, fontWeight = FontWeight.Bold)
                         Text("${live.viewerCount} 👁", color = colors.mutedForeground)
                     }

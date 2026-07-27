@@ -371,6 +371,20 @@ class AppContainer(context: Context) {
             repository = liveRepository,
         )
     }
+
+    /**
+     * Fabrique un contrôleur de DIFFUSION live (hôte) : LiveKit en mode publication
+     * (caméra/micro). Room dédiée par diffusion.
+     */
+    fun makeLiveBroadcastViewModel(live: Live): com.dualmusic.feature.live.LiveBroadcastViewModel {
+        val media = LiveRoomClient(appContext, tokenService, appScope)
+        return com.dualmusic.feature.live.LiveBroadcastViewModel(
+            liveId = live.id,
+            roomName = live.liveKitRoom,
+            media = media,
+            api = api,
+        )
+    }
 }
 
 /**
@@ -681,6 +695,7 @@ private fun ProfileSection(
         24 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.navLives, onBack = { onSub(PROFILE_MENU) }) {
             com.dualmusic.feature.live.MyLivesScreen(
                 viewModel = viewModel { container.makeMyLivesViewModel() },
+                makeBroadcast = container::makeLiveBroadcastViewModel,
             )
         }
         25 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuMyCompetitions, onBack = { onSub(PROFILE_MENU) }) {

@@ -357,6 +357,11 @@ interface Strings {
     val endLive: String
     val noLives: String
     val noLivesHint: String
+    val cameraPermissionNeeded: String
+    val liveStarting: String
+    val micOn: String
+    val micOff: String
+    val liveRetry: String
     // Contenu (publier lifestyle + mes vidéos/replays).
     val publishLifestyle: String
     val chooseVideo: String
@@ -699,6 +704,11 @@ object FrStrings : Strings {
     override val endLive = "Terminer"
     override val noLives = "Aucun live en cours"
     override val noLivesHint = "Lancez un live pour connecter avec vos fans en temps réel"
+    override val cameraPermissionNeeded = "Autorisez la caméra et le micro pour diffuser."
+    override val liveStarting = "Démarrage du live…"
+    override val micOn = "🎙 Micro activé"
+    override val micOff = "🔇 Micro coupé"
+    override val liveRetry = "Autoriser"
     override val publishLifestyle = "Publier du contenu Lifestyle"
     override val chooseVideo = "Choisir la vidéo"
     override val publishVideo = "Publier la vidéo"
@@ -1039,6 +1049,11 @@ object EnStrings : Strings {
     override val endLive = "End"
     override val noLives = "No live in progress"
     override val noLivesHint = "Start a live to connect with your fans in real time"
+    override val cameraPermissionNeeded = "Allow camera and microphone to broadcast."
+    override val liveStarting = "Starting live…"
+    override val micOn = "🎙 Mic on"
+    override val micOff = "🔇 Mic muted"
+    override val liveRetry = "Allow"
     override val publishLifestyle = "Publish Lifestyle content"
     override val chooseVideo = "Choose video"
     override val publishVideo = "Publish video"
