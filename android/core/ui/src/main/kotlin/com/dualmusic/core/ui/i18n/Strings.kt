@@ -345,6 +345,9 @@ interface Strings {
     // Transactions (onglet Retraits).
     val walletWithdrawals: String
     val noWithdrawals: String
+    // Préférences : devise d'affichage.
+    val displayCurrency: String
+    val displayCurrencyHint: String
 }
 
 /** Chaînes françaises (langue par défaut). */
@@ -658,6 +661,8 @@ object FrStrings : Strings {
     override val followedEmptyHint = "Découvrez des artistes depuis l'accueil pour les suivre."
     override val walletWithdrawals = "Retraits"
     override val noWithdrawals = "Aucun retrait pour le moment."
+    override val displayCurrency = "Devise d'affichage"
+    override val displayCurrencyHint = "La valeur de tes crédits s'affiche dans cette devise."
 }
 
 /** Chaînes anglaises. */
@@ -971,6 +976,8 @@ object EnStrings : Strings {
     override val followedEmptyHint = "Discover artists from home to follow them."
     override val walletWithdrawals = "Withdrawals"
     override val noWithdrawals = "No withdrawal yet."
+    override val displayCurrency = "Display currency"
+    override val displayCurrencyHint = "Your credits value is shown in this currency."
 }
 
 /** Renvoie la table de chaînes d'une langue. */

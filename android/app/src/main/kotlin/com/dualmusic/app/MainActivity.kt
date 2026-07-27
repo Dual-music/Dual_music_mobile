@@ -169,6 +169,7 @@ class AppContainer(context: Context) {
     /** Thème (clair/sombre/système), persistant. */
     val themeController = ThemeController(appContext)
     val languageController = LanguageController(appContext)
+    val currencyController = CurrencyController(appContext)
 
     /** Repository d'authentification prêt à l'emploi. */
     val authRepository = AuthRepository(api, tokenStore, API_BASE_URL)
@@ -254,6 +255,15 @@ class AppContainer(context: Context) {
 
     /** Annule la suppression programmée. */
     suspend fun cancelAccountDeletion() = profileRepository.cancelAccountDeletion()
+
+    /** Table publique des taux de change (pivot USD) — pour le sélecteur de devise. */
+    suspend fun exchangeRates(): List<com.dualmusic.domain.settings.ExchangeRate> =
+        runCatching {
+            api.request(
+                Endpoint.get(com.dualmusic.domain.settings.SettingsEndpoints.EXCHANGE_RATES),
+                kotlinx.serialization.builtins.ListSerializer(com.dualmusic.domain.settings.ExchangeRate.serializer()),
+            )
+        }.getOrDefault(emptyList())
 
     /** Nouveau ViewModel d'édition du profil (avec upload d'avatar). */
     fun makeEditProfileViewModel(): EditProfileViewModel = EditProfileViewModel(profileRepository, mediaUploader)
@@ -371,8 +381,10 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
             }
             val language by container.languageController.language.collectAsStateWithLifecycle()
+            val currency by container.currencyController.currency.collectAsStateWithLifecycle()
             androidx.compose.runtime.CompositionLocalProvider(
                 com.dualmusic.core.ui.i18n.LocalStrings provides com.dualmusic.core.ui.i18n.stringsFor(language),
+                com.dualmusic.core.ui.currency.LocalCurrency provides currency,
             ) {
             DualMusicTheme(darkTheme = darkTheme) {
                 val vm: AuthViewModel = viewModel { AuthViewModel(container.authRepository) }
@@ -682,15 +694,21 @@ private fun ProfileSection(
         17 -> SubScreen(title = "Préférences", onBack = { onSub(PROFILE_MENU) }) {
             val mode by container.themeController.mode.collectAsStateWithLifecycle()
             val lang by container.languageController.language.collectAsStateWithLifecycle()
+            val currency by container.currencyController.currency.collectAsStateWithLifecycle()
+            var rates by remember { mutableStateOf<List<com.dualmusic.domain.settings.ExchangeRate>>(emptyList()) }
             var deletionAt by remember { mutableStateOf<String?>(null) }
             var refresh by remember { mutableIntStateOf(0) }
             val prefScope = rememberCoroutineScope()
+            LaunchedEffect(Unit) { rates = container.exchangeRates() }
             LaunchedEffect(refresh) { deletionAt = container.accountDeletionScheduledAt() }
             PreferencesScreen(
                 currentMode = mode,
                 onSelectMode = { container.themeController.set(it) },
                 currentLanguage = lang,
                 onSelectLanguage = { container.languageController.set(it) },
+                currentCurrency = currency,
+                currencyOptions = rates,
+                onSelectCurrency = { container.currencyController.set(it) },
                 deletionScheduledAt = deletionAt,
                 onRequestDeletion = { prefScope.launch { runCatching { container.requestAccountDeletion() }; refresh++ } },
                 onCancelDeletion = { prefScope.launch { runCatching { container.cancelAccountDeletion() }; refresh++ } },

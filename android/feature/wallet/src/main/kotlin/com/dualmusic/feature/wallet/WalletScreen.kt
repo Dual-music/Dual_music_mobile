@@ -68,7 +68,7 @@ fun WalletScreen(viewModel: WalletViewModel, onOpenRecharge: () -> Unit = {}, ca
             ) {
                 CreditPill(credits = ui.balance.balance)
                 Text(
-                    "≈ %.2f €".format(ui.balance.eurValue),
+                    "≈ ${com.dualmusic.core.ui.currency.LocalCurrency.current.format(ui.balance.eurValue)}",
                     color = colors.mutedForeground,
                 )
             }

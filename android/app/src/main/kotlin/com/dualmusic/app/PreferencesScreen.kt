@@ -38,6 +38,9 @@ fun PreferencesScreen(
     onSelectMode: (ThemeMode) -> Unit,
     currentLanguage: Language = Language.FR,
     onSelectLanguage: (Language) -> Unit = {},
+    currentCurrency: com.dualmusic.core.ui.currency.DisplayCurrency = com.dualmusic.core.ui.currency.DisplayCurrency(),
+    currencyOptions: List<com.dualmusic.domain.settings.ExchangeRate> = emptyList(),
+    onSelectCurrency: (com.dualmusic.core.ui.currency.DisplayCurrency) -> Unit = {},
     deletionScheduledAt: String? = null,
     onRequestDeletion: () -> Unit = {},
     onCancelDeletion: () -> Unit = {},
@@ -67,6 +70,42 @@ fun PreferencesScreen(
             Column {
                 LanguageRow(s.french, Language.FR, currentLanguage, onSelectLanguage)
                 LanguageRow(s.english, Language.EN, currentLanguage, onSelectLanguage)
+            }
+        }
+
+        // --- Devise d'affichage (persistée ; convertit la valeur des crédits) ---
+        Text(s.displayCurrency, color = colors.foreground, fontWeight = FontWeight.Bold)
+        DMCard(modifier = Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                var expanded by remember { mutableStateOf(false) }
+                val eurRate = currencyOptions.firstOrNull { it.currencyCode == "EUR" }?.ratePerUsd ?: 1.0
+                androidx.compose.foundation.layout.Box {
+                    DMButton(
+                        "${currentCurrency.code} (${currentCurrency.symbol})",
+                        style = DMButtonStyle.OUTLINE,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { if (currencyOptions.isNotEmpty()) expanded = true },
+                    )
+                    androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        currencyOptions.forEach { rate ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("${rate.currencyCode} — ${rate.name ?: rate.currencyCode}") },
+                                onClick = {
+                                    expanded = false
+                                    val factor = if (eurRate != 0.0) rate.ratePerUsd / eurRate else 1.0
+                                    onSelectCurrency(
+                                        com.dualmusic.core.ui.currency.DisplayCurrency(
+                                            code = rate.currencyCode,
+                                            symbol = rate.symbol ?: rate.currencyCode,
+                                            eurToTarget = factor,
+                                        ),
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
+                Text(s.displayCurrencyHint, color = colors.mutedForeground)
             }
         }
 
