@@ -357,6 +357,16 @@ interface Strings {
     val endLive: String
     val noLives: String
     val noLivesHint: String
+    // Contenu (publier lifestyle + mes vidéos/replays).
+    val publishLifestyle: String
+    val chooseVideo: String
+    val publishVideo: String
+    val videoReady: String
+    val myVideos: String
+    val myReplays: String
+    val noMyVideos: String
+    val noMyReplays: String
+    val videoPublished: String
 }
 
 /** Chaînes françaises (langue par défaut). */
@@ -680,6 +690,15 @@ object FrStrings : Strings {
     override val endLive = "Terminer"
     override val noLives = "Aucun live en cours"
     override val noLivesHint = "Lancez un live pour connecter avec vos fans en temps réel"
+    override val publishLifestyle = "Publier du contenu Lifestyle"
+    override val chooseVideo = "Choisir la vidéo"
+    override val publishVideo = "Publier la vidéo"
+    override val videoReady = "Vidéo prête à publier ✓"
+    override val myVideos = "Mes vidéos"
+    override val myReplays = "Mes replays"
+    override val noMyVideos = "Aucune vidéo publiée"
+    override val noMyReplays = "Aucun replay"
+    override val videoPublished = "✅ Vidéo publiée."
 }
 
 /** Chaînes anglaises. */
@@ -1003,6 +1022,15 @@ object EnStrings : Strings {
     override val endLive = "End"
     override val noLives = "No live in progress"
     override val noLivesHint = "Start a live to connect with your fans in real time"
+    override val publishLifestyle = "Publish Lifestyle content"
+    override val chooseVideo = "Choose video"
+    override val publishVideo = "Publish video"
+    override val videoReady = "Video ready to publish ✓"
+    override val myVideos = "My videos"
+    override val myReplays = "My replays"
+    override val noMyVideos = "No published video"
+    override val noMyReplays = "No replay"
+    override val videoPublished = "✅ Video published."
 }
 
 /** Renvoie la table de chaînes d'une langue. */

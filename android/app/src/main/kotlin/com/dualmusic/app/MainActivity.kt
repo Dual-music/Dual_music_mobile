@@ -329,6 +329,10 @@ class AppContainer(context: Context) {
     fun makeMyLivesViewModel(): com.dualmusic.feature.live.MyLivesViewModel =
         com.dualmusic.feature.live.MyLivesViewModel(api)
 
+    /** Nouveau ViewModel « Contenu » (publier lifestyle + mes vidéos/replays). */
+    fun makeMyContentViewModel(): com.dualmusic.feature.content.MyContentViewModel =
+        com.dualmusic.feature.content.MyContentViewModel(api, mediaUploader)
+
     /** Nouveau ViewModel de room de compétition (classement + votes). */
     fun makeCompetitionRoomViewModel(competitionId: String): CompetitionRoomViewModel =
         CompetitionRoomViewModel(competitionId, competitionRepository, realtimeClient)
@@ -680,7 +684,9 @@ private fun ProfileSection(
             )
         }
         26 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuContent, onBack = { onSub(PROFILE_MENU) }) {
-            SectionComingSoon()
+            com.dualmusic.feature.content.MyContentScreen(
+                viewModel = viewModel { container.makeMyContentViewModel() },
+            )
         }
         20 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuDashboard, onBack = { onSub(PROFILE_MENU) }) {
             DashboardScreen(viewModel = dashboardVm, onNavigate = { onSub(it) })

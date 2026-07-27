@@ -18,6 +18,20 @@ data class LifestyleVideo(
     @SerialName("views_count") val viewsCount: Int = 0,
 )
 
+/**
+ * Corps de `POST /lifestyle` — publication d'une vidéo lifestyle (camelCase, Joi strict).
+ * `duration` est une chaîne libre (ex. `1:23`), requise côté backend.
+ */
+@Serializable
+data class CreateLifestyleRequest(
+    val artistName: String,
+    val title: String,
+    val videoUrl: String,
+    val thumbnailUrl: String? = null,
+    val description: String? = null,
+    val duration: String,
+)
+
 /** Article de blog (`blogs`). */
 @Serializable
 data class BlogPost(
