@@ -311,6 +311,10 @@ class AppContainer(context: Context) {
     /** Nouveau ViewModel du catalogue de compétitions. */
     fun makeCompetitionsViewModel(): CompetitionsViewModel = CompetitionsViewModel(competitionRepository)
 
+    /** Nouveau ViewModel « Mes compétitions » (candidatures de l'artiste). */
+    fun makeMyCompetitionsViewModel(): com.dualmusic.feature.competition.MyCompetitionsViewModel =
+        com.dualmusic.feature.competition.MyCompetitionsViewModel(competitionRepository)
+
     /** Nouveau ViewModel de room de compétition (classement + votes). */
     fun makeCompetitionRoomViewModel(competitionId: String): CompetitionRoomViewModel =
         CompetitionRoomViewModel(competitionId, competitionRepository, realtimeClient)
@@ -653,7 +657,9 @@ private fun ProfileSection(
             SectionComingSoon()
         }
         25 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuMyCompetitions, onBack = { onSub(PROFILE_MENU) }) {
-            SectionComingSoon()
+            com.dualmusic.feature.competition.MyCompetitionsScreen(
+                viewModel = viewModel { container.makeMyCompetitionsViewModel() },
+            )
         }
         26 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuContent, onBack = { onSub(PROFILE_MENU) }) {
             SectionComingSoon()

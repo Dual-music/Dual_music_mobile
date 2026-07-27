@@ -29,6 +29,13 @@ class CompetitionRepository(private val api: ApiClient) {
             ListSerializer(Competition.serializer()),
         )
 
+    /** Candidatures du caller (artiste), enrichies de leur compétition. */
+    suspend fun myCandidacies(): List<com.dualmusic.domain.competition.MyCandidacy> =
+        api.request(
+            Endpoint.get(CompetitionEndpoints.CANDIDACIES_MINE),
+            ListSerializer(com.dualmusic.domain.competition.MyCandidacy.serializer()),
+        )
+
     /** Détail d'une compétition. */
     suspend fun competition(id: String): Competition =
         api.request(Endpoint.get(CompetitionEndpoints.detail(id)), Competition.serializer())

@@ -323,6 +323,13 @@ interface Strings {
     val menuEarnings: String
     val comingSoon: String
     val comingSoonHint: String
+    // Mes compétitions (candidatures artiste).
+    val candStatusPending: String
+    val candStatusApproved: String
+    val candStatusRejected: String
+    val candScore: String
+    val noCandidacies: String
+    val noCandidaciesHint: String
 }
 
 /** Chaînes françaises (langue par défaut). */
@@ -618,6 +625,12 @@ object FrStrings : Strings {
     override val menuEarnings = "Revenus"
     override val comingSoon = "Section en construction"
     override val comingSoonHint = "Cette section arrive très bientôt sur mobile."
+    override val candStatusPending = "En attente"
+    override val candStatusApproved = "Approuvée"
+    override val candStatusRejected = "Rejetée"
+    override val candScore = "Score"
+    override val noCandidacies = "Aucune candidature"
+    override val noCandidaciesHint = "Tu n'as encore participé à aucune compétition."
 }
 
 /** Chaînes anglaises. */
@@ -913,6 +926,12 @@ object EnStrings : Strings {
     override val menuEarnings = "Earnings"
     override val comingSoon = "Coming soon"
     override val comingSoonHint = "This section is coming soon on mobile."
+    override val candStatusPending = "Pending"
+    override val candStatusApproved = "Approved"
+    override val candStatusRejected = "Rejected"
+    override val candScore = "Score"
+    override val noCandidacies = "No candidacies"
+    override val noCandidaciesHint = "You haven't entered any competition yet."
 }
 
 /** Renvoie la table de chaînes d'une langue. */

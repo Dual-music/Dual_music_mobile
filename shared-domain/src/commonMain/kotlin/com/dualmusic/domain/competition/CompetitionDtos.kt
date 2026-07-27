@@ -26,6 +26,34 @@ data class CompetitionCandidate(
     val score: Double get() = totalVotes + totalGiftsCredits
 }
 
+/** Compétition allégée jointe à une candidature (`GET /competitions/candidacies/mine`). */
+@Serializable
+data class CompetitionLite(
+    val id: String,
+    val title: String? = null,
+    @SerialName("start_at") val startAt: String? = null,
+    val status: String? = null,
+    @SerialName("cover_url") val coverUrl: String? = null,
+)
+
+/**
+ * Candidature du caller (artiste) enrichie de sa compétition
+ * (`GET /competitions/candidacies/mine`) — alimente l'onglet « Mes compétitions ».
+ */
+@Serializable
+data class MyCandidacy(
+    val id: String,
+    @SerialName("competition_id") val competitionId: String,
+    /** `pending` | `approved` | `rejected`. */
+    val status: String = "pending",
+    @SerialName("total_votes") val totalVotes: Double = 0.0,
+    @SerialName("total_gifts_credits") val totalGiftsCredits: Double = 0.0,
+    val competition: CompetitionLite? = null,
+) {
+    /** Score d'engagement (votes + cadeaux). */
+    val score: Double get() = totalVotes + totalGiftsCredits
+}
+
 /** Corps de `POST /competitions/:id/vote` — vote payant pour un candidat. */
 @Serializable
 data class CompetitionVoteRequest(
