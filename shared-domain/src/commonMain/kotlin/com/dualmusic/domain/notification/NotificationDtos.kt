@@ -31,6 +31,23 @@ data class UnreadCount(val count: Int = 0)
 @Serializable
 data class DeviceTokenRequest(val token: String)
 
+/**
+ * Préférences d'emails de notification (`email_notification_preferences`) —
+ * `GET /notifications/preferences` (lecture) et `PUT /notifications/preferences/email`
+ * (mise à jour). Toutes booléennes, défaut `true`. `emailSystem` est requis (non désactivable).
+ */
+@Serializable
+data class NotificationPreferences(
+    @SerialName("email_concerts") val emailConcerts: Boolean = true,
+    @SerialName("email_duels") val emailDuels: Boolean = true,
+    @SerialName("email_lives") val emailLives: Boolean = true,
+    @SerialName("email_gifts") val emailGifts: Boolean = true,
+    @SerialName("email_votes") val emailVotes: Boolean = true,
+    @SerialName("email_requests") val emailRequests: Boolean = true,
+    @SerialName("email_assignments") val emailAssignments: Boolean = true,
+    @SerialName("email_system") val emailSystem: Boolean = true,
+)
+
 /** Chemins REST des notifications (source unique, partagée). */
 object NotificationEndpoints {
     const val LIST = "/notifications"
@@ -38,6 +55,10 @@ object NotificationEndpoints {
     const val READ_ALL = "/notifications/read-all"
     /** Enregistrement/suppression d'un jeton FCM (mobile). */
     const val DEVICES = "/notifications/devices"
+    /** Préférences email (lecture). */
+    const val PREFERENCES = "/notifications/preferences"
+    /** Mise à jour des préférences email (`PUT`). */
+    const val PREFERENCES_EMAIL = "/notifications/preferences/email"
     fun read(id: String) = "/notifications/$id/read"
     fun remove(id: String) = "/notifications/$id"
 }

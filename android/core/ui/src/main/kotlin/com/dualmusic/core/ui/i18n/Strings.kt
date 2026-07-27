@@ -367,6 +367,15 @@ interface Strings {
     val noMyVideos: String
     val noMyReplays: String
     val videoPublished: String
+    // Notifications par email (préférences par catégorie).
+    val emailNotifs: String
+    val emailNotifsHint: String
+    val notifGifts: String
+    val notifVotes: String
+    val notifRequests: String
+    val notifAssignments: String
+    val notifSystem: String
+    val notifRequired: String
 }
 
 /** Chaînes françaises (langue par défaut). */
@@ -699,6 +708,14 @@ object FrStrings : Strings {
     override val noMyVideos = "Aucune vidéo publiée"
     override val noMyReplays = "Aucun replay"
     override val videoPublished = "✅ Vidéo publiée."
+    override val emailNotifs = "Notifications par email"
+    override val emailNotifsHint = "Choisissez quels emails vous souhaitez recevoir. Les notifications restent visibles dans l'application."
+    override val notifGifts = "Cadeaux"
+    override val notifVotes = "Votes"
+    override val notifRequests = "Demandes & validations"
+    override val notifAssignments = "Assignations"
+    override val notifSystem = "Emails système"
+    override val notifRequired = "Requis"
 }
 
 /** Chaînes anglaises. */
@@ -1031,6 +1048,14 @@ object EnStrings : Strings {
     override val noMyVideos = "No published video"
     override val noMyReplays = "No replay"
     override val videoPublished = "✅ Video published."
+    override val emailNotifs = "Email notifications"
+    override val emailNotifsHint = "Choose which emails you want to receive. In-app notifications stay visible."
+    override val notifGifts = "Gifts"
+    override val notifVotes = "Votes"
+    override val notifRequests = "Requests & approvals"
+    override val notifAssignments = "Assignments"
+    override val notifSystem = "System emails"
+    override val notifRequired = "Required"
 }
 
 /** Renvoie la table de chaînes d'une langue. */

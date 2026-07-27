@@ -272,6 +272,10 @@ class AppContainer(context: Context) {
     fun makeBecomeRoleViewModel(): BecomeRoleViewModel = BecomeRoleViewModel(profileRepository)
 
     /** Nouveau ViewModel du centre de notifications (in-app + temps réel). */
+    /** Nouveau ViewModel des préférences email (menu Notifs). */
+    fun makeNotificationPrefsViewModel(): com.dualmusic.feature.notifications.NotificationPrefsViewModel =
+        com.dualmusic.feature.notifications.NotificationPrefsViewModel(notificationRepository)
+
     fun makeNotificationsViewModel(): NotificationsViewModel =
         NotificationsViewModel(notificationRepository, realtimeClient)
 
@@ -621,9 +625,10 @@ private fun ProfileSection(
             val rechargeVm: RechargeViewModel = viewModel { container.makeRechargeViewModel() }
             RechargeScreen(viewModel = rechargeVm)
         }
-        2 -> SubScreen(title = "Notifications", onBack = { onSub(PROFILE_MENU) }) {
-            val notifVm: NotificationsViewModel = viewModel { container.makeNotificationsViewModel() }
-            NotificationsScreen(viewModel = notifVm)
+        2 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.notifications, onBack = { onSub(PROFILE_MENU) }) {
+            com.dualmusic.feature.notifications.NotificationPrefsScreen(
+                viewModel = viewModel { container.makeNotificationPrefsViewModel() },
+            )
         }
         3 -> SubScreen(title = "Retrait des crédits", onBack = { onSub(PROFILE_MENU) }) {
             val wdVm: WithdrawalViewModel = viewModel { container.makeWithdrawalViewModel() }

@@ -4,8 +4,10 @@ import com.dualmusic.core.network.ApiClient
 import com.dualmusic.core.network.Endpoint
 import com.dualmusic.domain.notification.AppNotification
 import com.dualmusic.domain.notification.NotificationEndpoints
+import com.dualmusic.domain.notification.NotificationPreferences
 import com.dualmusic.domain.notification.UnreadCount
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 
 /**
  * Accès REST au centre de notifications in-app.
@@ -14,6 +16,18 @@ import kotlinx.serialization.builtins.ListSerializer
  * repository couvre l'historique + les actions (marquer lu, tout lu).
  */
 class NotificationRepository(private val api: ApiClient) {
+
+    private val json = Json { explicitNulls = false }
+
+    /** Préférences email de notification du caller. */
+    suspend fun emailPreferences(): NotificationPreferences =
+        api.request(Endpoint.get(NotificationEndpoints.PREFERENCES), NotificationPreferences.serializer())
+
+    /** Met à jour les préférences email (PUT), renvoie l'état à jour. */
+    suspend fun updateEmailPreferences(prefs: NotificationPreferences): NotificationPreferences {
+        val body = json.encodeToString(NotificationPreferences.serializer(), prefs)
+        return api.request(Endpoint.put(NotificationEndpoints.PREFERENCES_EMAIL, body), NotificationPreferences.serializer())
+    }
 
     /** Dernière page de notifications, les plus récentes d'abord. */
     suspend fun list(limit: Int = 50): List<AppNotification> =
