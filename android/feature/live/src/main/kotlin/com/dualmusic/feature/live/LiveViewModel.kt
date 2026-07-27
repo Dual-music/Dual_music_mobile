@@ -37,6 +37,8 @@ class LiveViewModel(
     val media: LiveRoomClient,
     private val realtime: RealtimeClient,
     private val repository: LiveRepository,
+    /** Vrai pour l'artiste qui DIFFUSE (publie caméra/micro) ; faux pour un spectateur. */
+    val isHost: Boolean = false,
 ) : ViewModel() {
 
     private val _messages = MutableStateFlow<List<LiveChatMessage>>(emptyList())
@@ -57,11 +59,25 @@ class LiveViewModel(
      * @param prewarmedToken jeton LiveKit pré-obtenu par le feed (réduit la latence).
      */
     fun start(prewarmedToken: com.dualmusic.domain.media.LiveKitToken? = null) {
-        viewModelScope.launch { media.join(roomName = roomName, isHost = false, prewarmedToken = prewarmedToken) }
+        viewModelScope.launch { media.join(roomName = roomName, isHost = isHost, prewarmedToken = prewarmedToken) }
         viewModelScope.launch {
             runCatching { repository.chatHistory(liveId) }.getOrNull()?.let { _messages.value = it }
         }
         connectRealtime()
+    }
+
+    /** Coupe/rétablit le micro (mode hôte). */
+    fun toggleMic() {
+        viewModelScope.launch { runCatching { media.setMicEnabled(!media.micEnabled.value) } }
+    }
+
+    /** Termine le live côté backend puis notifie l'appelant (mode hôte). */
+    fun endLive(onDone: () -> Unit) {
+        viewModelScope.launch {
+            runCatching { repository.endLive(liveId) }
+            stop()
+            onDone()
+        }
     }
 
     /** Arrête tout (sortie d'écran). */

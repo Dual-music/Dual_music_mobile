@@ -37,6 +37,11 @@ class LiveRepository(private val api: ApiClient) {
         api.request<Unit>(Endpoint.post("/lives/$liveId/messages", """{"content":${content.jsonQuoted()}}"""))
     }
 
+    /** Termine le live (hôte). */
+    suspend fun endLive(liveId: String) {
+        api.request<Unit>(Endpoint.post("/lives/$liveId/end"))
+    }
+
     /**
      * Envoie un cadeau au host dans le contexte du live. Débit atomique côté backend ;
      * `Idempotency-Key` anti double-débit.

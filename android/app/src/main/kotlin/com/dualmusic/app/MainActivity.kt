@@ -373,16 +373,18 @@ class AppContainer(context: Context) {
     }
 
     /**
-     * Fabrique un contrôleur de DIFFUSION live (hôte) : LiveKit en mode publication
-     * (caméra/micro). Room dédiée par diffusion.
+     * Fabrique un ViewModel de live en mode **hôte** (diffusion) : même overlay riche que
+     * le viewer (chat/cadeaux/présence) + publication caméra/micro. Room dédiée.
      */
-    fun makeLiveBroadcastViewModel(live: Live): com.dualmusic.feature.live.LiveBroadcastViewModel {
+    fun makeLiveHostViewModel(live: Live): LiveViewModel {
         val media = LiveRoomClient(appContext, tokenService, appScope)
-        return com.dualmusic.feature.live.LiveBroadcastViewModel(
+        return LiveViewModel(
             liveId = live.id,
             roomName = live.liveKitRoom,
             media = media,
-            api = api,
+            realtime = realtimeClient,
+            repository = liveRepository,
+            isHost = true,
         )
     }
 }
@@ -468,9 +470,24 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
     var notifOpen by remember { mutableStateOf(false) }
     var openDuel by remember { mutableStateOf<Duel?>(null) }
     var openCompetition by remember { mutableStateOf<Competition?>(null) }
+    // Diffusion live (hôte) en plein écran, au-dessus du Scaffold → SANS la barre du bas.
+    var broadcastLive by remember { mutableStateOf<Live?>(null) }
 
     // Quitte le profil et sélectionne un onglet bas (réinitialise les superpositions).
     fun goTab(t: Int) { tab = t; showProfile = false; homeOpen = 0; notifOpen = false }
+
+    // Écran de diffusion plein écran (prioritaire sur tout le reste, pas de nav basse).
+    broadcastLive?.let { live ->
+        val hostVm: LiveViewModel = viewModel(key = "host-${live.id}") { container.makeLiveHostViewModel(live) }
+        com.dualmusic.feature.live.LiveRoomScreen(
+            viewModel = hostVm,
+            hostUserId = live.artistId,
+            quickGiftId = "",
+            isHost = true,
+            onEndLive = { broadcastLive = null },
+        )
+        return
+    }
 
     Scaffold(
         topBar = {
@@ -549,6 +566,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                     sub = profileSub,
                     onSub = { profileSub = it },
                     onSignOut = onSignOut,
+                    onStartBroadcast = { broadcastLive = it },
                 )
             } else when (tab) {
                 0 -> when (homeOpen) {
@@ -616,6 +634,7 @@ private fun ProfileSection(
     sub: Int,
     onSub: (Int) -> Unit,
     onSignOut: () -> Unit,
+    onStartBroadcast: (Live) -> Unit,
 ) {
     // Rôles + gating admin, partagés par le profil racine, le dashboard et la page de menu.
     var managerEnabled by remember { mutableStateOf(false) }
@@ -695,7 +714,7 @@ private fun ProfileSection(
         24 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.navLives, onBack = { onSub(PROFILE_MENU) }) {
             com.dualmusic.feature.live.MyLivesScreen(
                 viewModel = viewModel { container.makeMyLivesViewModel() },
-                makeBroadcast = container::makeLiveBroadcastViewModel,
+                onStartBroadcast = onStartBroadcast,
             )
         }
         25 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuMyCompetitions, onBack = { onSub(PROFILE_MENU) }) {

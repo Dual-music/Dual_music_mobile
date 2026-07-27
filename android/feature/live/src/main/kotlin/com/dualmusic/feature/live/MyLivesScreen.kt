@@ -122,7 +122,7 @@ class MyLivesViewModel(private val api: ApiClient) : ViewModel() {
 @Composable
 fun MyLivesScreen(
     viewModel: MyLivesViewModel,
-    makeBroadcast: (Live) -> LiveBroadcastViewModel,
+    onStartBroadcast: (Live) -> Unit,
 ) {
     val lives by viewModel.lives.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
@@ -131,19 +131,11 @@ fun MyLivesScreen(
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     var title by remember { mutableStateOf("") }
-    var broadcasting by remember { mutableStateOf<Live?>(null) }
 
     LaunchedEffect(Unit) { viewModel.load() }
-    // Ouvre la diffusion dès qu'un live vient d'être créé.
+    // Ouvre la diffusion plein écran dès qu'un live vient d'être créé.
     LaunchedEffect(pending) {
-        pending?.let { broadcasting = it; viewModel.consumePending() }
-    }
-
-    // Overlay plein écran de diffusion (hôte).
-    broadcasting?.let { live ->
-        val controller = remember(live.id) { makeBroadcast(live) }
-        LiveBroadcastScreen(controller = controller, onExit = { broadcasting = null; viewModel.load() })
-        return
+        pending?.let { onStartBroadcast(it); viewModel.consumePending() }
     }
 
     val active = lives.firstOrNull { it.status == EventStatus.LIVE }
@@ -187,7 +179,7 @@ fun MyLivesScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(modifier = Modifier.clickable { broadcasting = live }) {
+                    Column(modifier = Modifier.clickable { onStartBroadcast(live) }) {
                         Text("🔴 ${live.title ?: s.liveActive}", color = colors.primary, fontWeight = FontWeight.Bold)
                         Text("${live.viewerCount} 👁", color = colors.mutedForeground)
                     }

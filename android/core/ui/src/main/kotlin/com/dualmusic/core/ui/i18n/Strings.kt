@@ -362,6 +362,8 @@ interface Strings {
     val micOn: String
     val micOff: String
     val liveRetry: String
+    val saySomething: String
+    val sendGift: String
     // Contenu (publier lifestyle + mes vidéos/replays).
     val publishLifestyle: String
     val chooseVideo: String
@@ -709,6 +711,8 @@ object FrStrings : Strings {
     override val micOn = "🎙 Micro activé"
     override val micOff = "🔇 Micro coupé"
     override val liveRetry = "Autoriser"
+    override val saySomething = "Dis quelque chose…"
+    override val sendGift = "Envoyer un cadeau"
     override val publishLifestyle = "Publier du contenu Lifestyle"
     override val chooseVideo = "Choisir la vidéo"
     override val publishVideo = "Publier la vidéo"
@@ -1054,6 +1058,8 @@ object EnStrings : Strings {
     override val micOn = "🎙 Mic on"
     override val micOff = "🔇 Mic muted"
     override val liveRetry = "Allow"
+    override val saySomething = "Say something…"
+    override val sendGift = "Send a gift"
     override val publishLifestyle = "Publish Lifestyle content"
     override val chooseVideo = "Choose video"
     override val publishVideo = "Publish video"
