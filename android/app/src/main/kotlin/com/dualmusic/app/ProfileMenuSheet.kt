@@ -16,16 +16,18 @@ import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.CardMembership
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Redeem
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.SportsMartialArts
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -38,24 +40,30 @@ import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 
 /**
- * Menu du profil affiché en **pleine page** (comme le menu du web réduit en mobile).
+ * Menu du profil affiché en **pleine page**, aligné sur la sidebar profil du **web**
+ * (`useProfileTabs`) : l'ordre et les libellés des entrées dépendent du rôle
+ * (fan / artiste / manager), afin d'avoir exactement les mêmes sections que sur le web.
  *
  * Chaque item ouvre sa page (via [onNavigate] avec le n° de sous-écran) ; le retour depuis
  * un contenu revient à cette liste, et le retour depuis cette liste revient au profil (géré
- * par l'écran parent). « Devenir Manager » n'apparaît que si l'admin a **ouvert** les
- * candidatures manager ([managerEnabled]) — sinon l'admin désigne directement les managers.
+ * par l'écran parent). « Devenir Manager » (fan) n'apparaît que si l'admin a **ouvert** les
+ * candidatures manager ([managerEnabled]).
  *
- * @param managerEnabled affiche l'entrée « Devenir Manager » si vrai.
+ * @param isArtist rôle artiste (menu artiste).
+ * @param isManager rôle manager (menu manager).
+ * @param isPureFan aucun rôle créateur (menu fan).
+ * @param managerEnabled affiche « Devenir Manager » (fan) si vrai.
+ * @param isAdmin ajoute l'entrée « Espace admin ».
  * @param onNavigate ouvre le sous-écran ciblé.
  * @param onSignOut déconnexion.
  */
 @Composable
 fun ProfileMenuPage(
+    isArtist: Boolean,
+    isManager: Boolean,
     isPureFan: Boolean,
-    canCreate: Boolean,
     managerEnabled: Boolean,
     isAdmin: Boolean = false,
-    showPublicProfile: Boolean = false,
     onNavigate: (Int) -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -68,30 +76,51 @@ fun ProfileMenuPage(
             .verticalScroll(rememberScrollState())
             .padding(vertical = DualMusicTheme.spacing.md),
     ) {
-        MenuRow(Icons.Filled.Dashboard, s.menuDashboard) { onNavigate(20) }
-        MenuRow(Icons.Filled.Favorite, s.menuFollowing) { onNavigate(18) }
-        MenuRow(Icons.Filled.CardMembership, s.menuSubscription) { onNavigate(8) }
-        MenuRow(Icons.Filled.CreditCard, s.menuTransactions) { onNavigate(1) }
-        MenuRow(Icons.Filled.CardGiftcard, s.menuReferral) { onNavigate(7) }
-        MenuRow(Icons.Filled.Campaign, s.menuSponsor) { onNavigate(11) }
-        // Réservé aux fans : candidatures de rôle (manager selon gating admin).
-        if (isPureFan) {
-            MenuRow(Icons.Filled.PersonAdd, s.menuBecomeArtist) { onNavigate(14) }
-            if (managerEnabled) MenuRow(Icons.Filled.Business, s.menuBecomeManager) { onNavigate(16) }
+        when {
+            // ----- Menu ARTISTE (même ordre que la sidebar web) -----
+            isArtist -> {
+                MenuRow(Icons.Filled.Dashboard, s.menuDashboard) { onNavigate(20) }
+                MenuRow(Icons.Filled.Mic, s.menuArtistProfile) { onNavigate(21) }
+                MenuRow(Icons.Filled.SportsMartialArts, s.navDuels) { onNavigate(12) }
+                MenuRow(Icons.Filled.MusicNote, s.navConcerts) { onNavigate(23) }
+                MenuRow(Icons.Filled.Videocam, s.navLives) { onNavigate(24) }
+                MenuRow(Icons.Filled.EmojiEvents, s.menuMyCompetitions) { onNavigate(25) }
+                MenuRow(Icons.Filled.Movie, s.menuContent) { onNavigate(26) }
+                MenuRow(Icons.Filled.AccountBalanceWallet, s.menuEarnings) { onNavigate(3) }
+                MenuRow(Icons.Filled.Favorite, s.menuFollowing) { onNavigate(18) }
+                MenuRow(Icons.Filled.CreditCard, s.menuTransactions) { onNavigate(1) }
+                MenuRow(Icons.Filled.CardGiftcard, s.menuReferral) { onNavigate(7) }
+            }
+            // ----- Menu MANAGER -----
+            isManager -> {
+                MenuRow(Icons.Filled.Dashboard, s.menuDashboard) { onNavigate(20) }
+                MenuRow(Icons.Filled.SportsMartialArts, s.navDuels) { onNavigate(12) }
+                MenuRow(Icons.Filled.EmojiEvents, s.menuMyCompetitions) { onNavigate(25) }
+                MenuRow(Icons.Filled.Mic, s.menuArtistProfile) { onNavigate(21) }
+                MenuRow(Icons.Filled.AccountBalanceWallet, s.menuEarnings) { onNavigate(3) }
+                MenuRow(Icons.Filled.Favorite, s.menuFollowing) { onNavigate(18) }
+                MenuRow(Icons.Filled.CreditCard, s.menuTransactions) { onNavigate(1) }
+                MenuRow(Icons.Filled.CardGiftcard, s.menuReferral) { onNavigate(7) }
+            }
+            // ----- Menu FAN -----
+            else -> {
+                MenuRow(Icons.Filled.Dashboard, s.menuDashboard) { onNavigate(20) }
+                MenuRow(Icons.Filled.Favorite, s.menuFollowing) { onNavigate(18) }
+                MenuRow(Icons.Filled.CardMembership, s.menuSubscription) { onNavigate(8) }
+                MenuRow(Icons.Filled.CreditCard, s.menuTransactions) { onNavigate(1) }
+                MenuRow(Icons.Filled.CardGiftcard, s.menuReferral) { onNavigate(7) }
+                MenuRow(Icons.Filled.Campaign, s.menuSponsor) { onNavigate(11) }
+                if (isPureFan) {
+                    MenuRow(Icons.Filled.PersonAdd, s.menuBecomeArtist) { onNavigate(14) }
+                    if (managerEnabled) MenuRow(Icons.Filled.Business, s.menuBecomeManager) { onNavigate(16) }
+                }
+            }
         }
-        // Réservé artiste/manager : édition du profil public (nom de scène, bio, liens sociaux).
-        if (showPublicProfile) MenuRow(Icons.Filled.Public, s.publicProfile) { onNavigate(21) }
-        // Réservé artiste/manager/admin : outils créateur + revenus.
-        if (canCreate) {
-            MenuRow(Icons.Filled.Star, s.menuCreatorSpace) { onNavigate(12) }
-            MenuRow(Icons.Filled.AccountBalanceWallet, s.menuWithdraw) { onNavigate(3) }
-            MenuRow(Icons.Filled.PlayArrow, s.menuReplays) { onNavigate(4) }
-            MenuRow(Icons.Filled.Redeem, s.menuGiftShop) { onNavigate(5) }
-        }
-        // Réservé admin : réglages plateforme + assignation de rôle.
-        if (isAdmin) MenuRow(Icons.Filled.Lock, "Espace admin") { onNavigate(19) }
+
+        // ----- Commun à tous les rôles (fin de liste, comme le web) -----
         MenuRow(Icons.Filled.Tune, s.preferences) { onNavigate(17) }
         MenuRow(Icons.Filled.Notifications, s.notifications) { onNavigate(2) }
+        if (isAdmin) MenuRow(Icons.Filled.Lock, "Espace admin") { onNavigate(19) }
         HorizontalDivider(modifier = Modifier.padding(vertical = DualMusicTheme.spacing.xs))
         MenuRow(Icons.Filled.Logout, s.menuSignOut, tint = colors.destructive, onClick = onSignOut)
     }

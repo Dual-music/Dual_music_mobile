@@ -182,11 +182,11 @@ class CreatorViewModel(
  * @param viewModel source d'état.
  */
 @Composable
-fun CreatorScreen(viewModel: CreatorViewModel) {
+fun CreatorScreen(viewModel: CreatorViewModel, initialTab: Int = 0) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
-    var tab by remember { mutableIntStateOf(0) }
+    var tab by remember { mutableIntStateOf(initialTab) }
 
     LaunchedEffect(Unit) { viewModel.load() }
 

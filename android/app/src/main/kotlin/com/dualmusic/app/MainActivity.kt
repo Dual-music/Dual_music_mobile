@@ -641,9 +641,22 @@ private fun ProfileSection(
             val sponsorVm: SponsorViewModel = viewModel { container.makeSponsorViewModel() }
             SponsorScreen(viewModel = sponsorVm)
         }
-        12 -> SubScreen(title = "Espace créateur", onBack = { onSub(PROFILE_MENU) }) {
+        12 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.navDuels, onBack = { onSub(PROFILE_MENU) }) {
             val creatorVm: CreatorViewModel = viewModel { container.makeCreatorViewModel() }
-            CreatorScreen(viewModel = creatorVm)
+            CreatorScreen(viewModel = creatorVm, initialTab = 0)
+        }
+        23 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.navConcerts, onBack = { onSub(PROFILE_MENU) }) {
+            val creatorVm: CreatorViewModel = viewModel { container.makeCreatorViewModel() }
+            CreatorScreen(viewModel = creatorVm, initialTab = 1)
+        }
+        24 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.navLives, onBack = { onSub(PROFILE_MENU) }) {
+            SectionComingSoon()
+        }
+        25 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuMyCompetitions, onBack = { onSub(PROFILE_MENU) }) {
+            SectionComingSoon()
+        }
+        26 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuContent, onBack = { onSub(PROFILE_MENU) }) {
+            SectionComingSoon()
         }
         20 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuDashboard, onBack = { onSub(PROFILE_MENU) }) {
             DashboardScreen(viewModel = dashboardVm, onNavigate = { onSub(it) })
@@ -689,11 +702,11 @@ private fun ProfileSection(
             onBack = { onSub(0) },
         ) {
             ProfileMenuPage(
+                isArtist = isArtist,
+                isManager = isManager,
                 isPureFan = !canCreate,
-                canCreate = canCreate,
                 managerEnabled = managerEnabled,
                 isAdmin = isAdmin,
-                showPublicProfile = isArtist || isManager,
                 onNavigate = { onSub(it) },
                 onSignOut = onSignOut,
             )
@@ -716,4 +729,18 @@ private fun SubScreen(title: String, onBack: () -> Unit, content: @Composable ()
         DMPageHeader(title = title, onBack = onBack)
         content()
     }
+}
+
+/**
+ * Écran générique « section en construction » — utilisé pour les entrées de menu artiste
+ * dont l'écran mobile dédié (Lives, Mes compétitions, Contenu) arrive dans un prochain lot.
+ */
+@Composable
+private fun SectionComingSoon() {
+    val s = com.dualmusic.core.ui.i18n.LocalStrings.current
+    com.dualmusic.core.ui.components.DMEmptyState(
+        title = s.comingSoon,
+        subtitle = s.comingSoonHint,
+        modifier = Modifier.fillMaxSize(),
+    )
 }

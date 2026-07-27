@@ -316,6 +316,13 @@ interface Strings {
     val profileUpdated: String
     val passwordChanged: String
     val fan: String
+    // Menu profil (entrées artiste/manager).
+    val menuArtistProfile: String
+    val menuMyCompetitions: String
+    val menuContent: String
+    val menuEarnings: String
+    val comingSoon: String
+    val comingSoonHint: String
 }
 
 /** Chaînes françaises (langue par défaut). */
@@ -605,6 +612,12 @@ object FrStrings : Strings {
     override val profileUpdated = "✅ Profil mis à jour."
     override val passwordChanged = "✅ Mot de passe changé."
     override val fan = "Fan"
+    override val menuArtistProfile = "Profil"
+    override val menuMyCompetitions = "Mes compétitions"
+    override val menuContent = "Contenu"
+    override val menuEarnings = "Revenus"
+    override val comingSoon = "Section en construction"
+    override val comingSoonHint = "Cette section arrive très bientôt sur mobile."
 }
 
 /** Chaînes anglaises. */
@@ -894,6 +907,12 @@ object EnStrings : Strings {
     override val profileUpdated = "✅ Profile updated."
     override val passwordChanged = "✅ Password changed."
     override val fan = "Fan"
+    override val menuArtistProfile = "Profile"
+    override val menuMyCompetitions = "My competitions"
+    override val menuContent = "Content"
+    override val menuEarnings = "Earnings"
+    override val comingSoon = "Coming soon"
+    override val comingSoonHint = "This section is coming soon on mobile."
 }
 
 /** Renvoie la table de chaînes d'une langue. */
