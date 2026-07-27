@@ -348,6 +348,15 @@ interface Strings {
     // Préférences : devise d'affichage.
     val displayCurrency: String
     val displayCurrencyHint: String
+    // Mes Lives (gestion + lancement).
+    val myLives: String
+    val myLivesHint: String
+    val liveTitle: String
+    val startLive: String
+    val liveActive: String
+    val endLive: String
+    val noLives: String
+    val noLivesHint: String
 }
 
 /** Chaînes françaises (langue par défaut). */
@@ -663,6 +672,14 @@ object FrStrings : Strings {
     override val noWithdrawals = "Aucun retrait pour le moment."
     override val displayCurrency = "Devise d'affichage"
     override val displayCurrencyHint = "La valeur de tes crédits s'affiche dans cette devise."
+    override val myLives = "Mes Lives"
+    override val myLivesHint = "Gérez vos lives passés et lancez-en un nouveau"
+    override val liveTitle = "Titre du live"
+    override val startLive = "Lancer un Live"
+    override val liveActive = "Live en cours"
+    override val endLive = "Terminer"
+    override val noLives = "Aucun live en cours"
+    override val noLivesHint = "Lancez un live pour connecter avec vos fans en temps réel"
 }
 
 /** Chaînes anglaises. */
@@ -978,6 +995,14 @@ object EnStrings : Strings {
     override val noWithdrawals = "No withdrawal yet."
     override val displayCurrency = "Display currency"
     override val displayCurrencyHint = "Your credits value is shown in this currency."
+    override val myLives = "My Lives"
+    override val myLivesHint = "Manage your past lives and start a new one"
+    override val liveTitle = "Live title"
+    override val startLive = "Start a Live"
+    override val liveActive = "Live in progress"
+    override val endLive = "End"
+    override val noLives = "No live in progress"
+    override val noLivesHint = "Start a live to connect with your fans in real time"
 }
 
 /** Renvoie la table de chaînes d'une langue. */
