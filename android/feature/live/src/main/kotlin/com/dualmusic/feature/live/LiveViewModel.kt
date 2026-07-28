@@ -125,6 +125,13 @@ class LiveViewModel(
         viewModelScope.launch { runCatching { repository.reportLive(liveId, reason) } }
     }
 
+    /** Envoie une dédicace (message dédié) dans le live. */
+    fun dedicate(message: String) {
+        val m = message.trim()
+        if (m.isEmpty()) return
+        viewModelScope.launch { runCatching { repository.sendDedication(liveId, m) } }
+    }
+
     /** Envoie une réaction emoji : effet local + relais aux autres membres du canal. */
     fun sendReaction(emoji: String) {
         pushEmoji(emoji)

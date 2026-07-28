@@ -68,6 +68,11 @@ class LiveRepository(private val api: ApiClient) {
         api.request<Unit>(Endpoint.post("/moderation/reports/live", """{"liveId":"$liveId","reason":${reason.jsonQuoted()}}"""))
     }
 
+    /** Envoie une dédicace (message dédié) dans le contexte du live. */
+    suspend fun sendDedication(liveId: String, message: String) {
+        api.request<Unit>(Endpoint.post("/concerts/dedications", """{"concertId":"$liveId","concertType":"artist_live","message":${message.jsonQuoted()}}"""))
+    }
+
     /**
      * Envoie un cadeau au host dans le contexte du live. Débit atomique côté backend ;
      * `Idempotency-Key` anti double-débit.

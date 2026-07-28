@@ -373,6 +373,8 @@ interface Strings {
     val reportHarassment: String
     val reportSpam: String
     val reportViolence: String
+    val dedication: String
+    val dedicationHint: String
     // Contenu (publier lifestyle + mes vidéos/replays).
     val publishLifestyle: String
     val chooseVideo: String
@@ -731,6 +733,8 @@ object FrStrings : Strings {
     override val reportHarassment = "Harcèlement"
     override val reportSpam = "Spam"
     override val reportViolence = "Violence"
+    override val dedication = "Dédicace"
+    override val dedicationHint = "Envoyez un message dédié à l'artiste"
     override val publishLifestyle = "Publier du contenu Lifestyle"
     override val chooseVideo = "Choisir la vidéo"
     override val publishVideo = "Publier la vidéo"
@@ -1087,6 +1091,8 @@ object EnStrings : Strings {
     override val reportHarassment = "Harassment"
     override val reportSpam = "Spam"
     override val reportViolence = "Violence"
+    override val dedication = "Dedication"
+    override val dedicationHint = "Send a dedicated message to the artist"
     override val publishLifestyle = "Publish Lifestyle content"
     override val chooseVideo = "Choose video"
     override val publishVideo = "Publish video"

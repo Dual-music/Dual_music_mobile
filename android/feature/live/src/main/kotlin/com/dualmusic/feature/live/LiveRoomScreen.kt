@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEmotions
@@ -123,6 +124,7 @@ fun LiveRoomScreen(
     var showComment by remember { mutableStateOf(false) }
     var showGiftPanel by remember { mutableStateOf(false) }
     var showReport by remember { mutableStateOf(false) }
+    var showDedication by remember { mutableStateOf(false) }
     var broadcasting by remember { mutableStateOf(false) }
 
     val track = if (isHost) localTrack else remoteTrack
@@ -233,6 +235,7 @@ fun LiveRoomScreen(
                 RailButton(if (micOn) Icons.Filled.Mic else Icons.Filled.MicOff, tint = Color.White, bg = if (micOn) colors.primary else colors.destructive) { viewModel.toggleMic() }
                 RailButton(Icons.Filled.Close, tint = Color.White, bg = colors.destructive) { viewModel.endLive(onEndLive) }
             } else {
+                RailButton(Icons.Filled.Campaign, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showDedication = true }
                 RailButton(Icons.Filled.Flag, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showReport = true }
             }
         }
@@ -365,6 +368,34 @@ fun LiveRoomScreen(
                             .clickable { viewModel.report(reason); showReport = false }
                             .padding(DualMusicTheme.spacing.md),
                     ) { Text(reason, color = colors.foreground) }
+                }
+            }
+        }
+
+        // Feuille de dédicace (message dédié).
+        if (showDedication) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showDedication = false })
+            var dedic by remember { mutableStateOf("") }
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .background(colors.background)
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(DualMusicTheme.spacing.md),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text(s.dedication, color = colors.foreground, fontWeight = FontWeight.Bold)
+                Text(s.dedicationHint, color = colors.mutedForeground)
+                OutlinedTextField(
+                    value = dedic,
+                    onValueChange = { dedic = it },
+                    placeholder = { Text(s.saySomething) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Pill(color = colors.primary, onClick = { viewModel.dedicate(dedic); showDedication = false }) {
+                    Text(s.send, color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
         }
