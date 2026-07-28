@@ -86,24 +86,29 @@ class LiveRoomClient(
             val creds = prewarmedToken ?: tokenService.token(roomName = roomName, isHost = isHost)
             room.connect(creds.url, creds.token)
             _connectionState.value = LiveConnectionState.Connected
-            // Mode hôte : publier caméra + micro (diffusion). Le viewer ne publie rien.
-            if (isHost) {
-                room.localParticipant.setCameraEnabled(true)
-                room.localParticipant.setMicrophoneEnabled(true)
-                _micEnabled.value = true
-                // La piste caméra locale peut être publiée de façon asynchrone : on retente
-                // brièvement jusqu'à ce qu'elle apparaisse (aperçu hôte).
-                var tries = 0
-                while (_localVideoTrack.value == null && tries < 12) {
-                    refreshLocalTrack()
-                    if (_localVideoTrack.value != null) break
-                    kotlinx.coroutines.delay(150)
-                    tries++
-                }
-            }
+            // La publication caméra/micro (hôte) est déclenchée par l'UI via [startBroadcast]
+            // (bouton « Démarrer le Live ») — pas automatiquement à la connexion.
             refreshPrimaryTrack()
         } catch (e: Throwable) {
             _connectionState.value = LiveConnectionState.Failed(e.message ?: "Connexion impossible")
+        }
+    }
+
+    /**
+     * Démarre la DIFFUSION (hôte) : publie caméra + micro puis expose l'aperçu local.
+     * La piste locale pouvant apparaître de façon asynchrone, on la rafraîchit en boucle
+     * courte jusqu'à sa disponibilité.
+     */
+    suspend fun startBroadcast() {
+        room.localParticipant.setCameraEnabled(true)
+        room.localParticipant.setMicrophoneEnabled(true)
+        _micEnabled.value = true
+        var tries = 0
+        while (_localVideoTrack.value == null && tries < 12) {
+            refreshLocalTrack()
+            if (_localVideoTrack.value != null) break
+            kotlinx.coroutines.delay(150)
+            tries++
         }
     }
 

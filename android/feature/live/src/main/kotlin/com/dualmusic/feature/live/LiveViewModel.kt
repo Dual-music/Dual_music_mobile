@@ -133,6 +133,11 @@ class LiveViewModel(
         _emojiFeed.update { (it + FloatingEmoji(emojiCounter++, emoji)).takeLast(12) }
     }
 
+    /** Démarre la diffusion caméra/micro (hôte) — déclenché par « Démarrer le Live ». */
+    fun startBroadcast() {
+        viewModelScope.launch { runCatching { media.startBroadcast() } }
+    }
+
     /** Coupe/rétablit le micro (mode hôte). */
     fun toggleMic() {
         viewModelScope.launch { runCatching { media.setMicEnabled(!media.micEnabled.value) } }

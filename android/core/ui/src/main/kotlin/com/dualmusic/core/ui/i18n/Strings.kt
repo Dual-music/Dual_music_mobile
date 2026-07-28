@@ -364,6 +364,9 @@ interface Strings {
     val liveRetry: String
     val saySomething: String
     val sendGift: String
+    val readyToStart: String
+    val clickToStart: String
+    val followAction: String
     // Contenu (publier lifestyle + mes vidéos/replays).
     val publishLifestyle: String
     val chooseVideo: String
@@ -713,6 +716,9 @@ object FrStrings : Strings {
     override val liveRetry = "Autoriser"
     override val saySomething = "Dis quelque chose…"
     override val sendGift = "Envoyer un cadeau"
+    override val readyToStart = "Prêt à démarrer"
+    override val clickToStart = "Appuyez pour commencer le direct"
+    override val followAction = "Suivre"
     override val publishLifestyle = "Publier du contenu Lifestyle"
     override val chooseVideo = "Choisir la vidéo"
     override val publishVideo = "Publier la vidéo"
@@ -1060,6 +1066,9 @@ object EnStrings : Strings {
     override val liveRetry = "Allow"
     override val saySomething = "Say something…"
     override val sendGift = "Send a gift"
+    override val readyToStart = "Ready to start"
+    override val clickToStart = "Tap to go live"
+    override val followAction = "Follow"
     override val publishLifestyle = "Publish Lifestyle content"
     override val chooseVideo = "Choose video"
     override val publishVideo = "Publish video"
