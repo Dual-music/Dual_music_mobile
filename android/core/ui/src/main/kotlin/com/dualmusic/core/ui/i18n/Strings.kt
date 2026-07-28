@@ -377,6 +377,7 @@ interface Strings {
     val dedicationHint: String
     val guests: String
     val noGuestRequests: String
+    val goOnStage: String
     // Contenu (publier lifestyle + mes vidéos/replays).
     val publishLifestyle: String
     val chooseVideo: String
@@ -739,6 +740,7 @@ object FrStrings : Strings {
     override val dedicationHint = "Envoyez un message dédié à l'artiste"
     override val guests = "Invités"
     override val noGuestRequests = "Aucune demande pour le moment"
+    override val goOnStage = "Monter sur scène"
     override val publishLifestyle = "Publier du contenu Lifestyle"
     override val chooseVideo = "Choisir la vidéo"
     override val publishVideo = "Publier la vidéo"
@@ -1099,6 +1101,7 @@ object EnStrings : Strings {
     override val dedicationHint = "Send a dedicated message to the artist"
     override val guests = "Guests"
     override val noGuestRequests = "No request yet"
+    override val goOnStage = "Go on stage"
     override val publishLifestyle = "Publish Lifestyle content"
     override val chooseVideo = "Choose video"
     override val publishVideo = "Publish video"

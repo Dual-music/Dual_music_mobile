@@ -22,10 +22,12 @@ class LiveKitTokenService(private val api: ApiClient) {
      * @param roomName nom de room fourni par l'API.
      * @param isHost vrai pour l'artiste/host (droits de publication).
      */
-    suspend fun token(roomName: String, isHost: Boolean = false): LiveKitToken {
+    suspend fun token(roomName: String, isHost: Boolean = false, canPublish: Boolean = false): LiveKitToken {
         val body = json.encodeToString(
             LiveKitTokenRequest.serializer(),
-            LiveKitTokenRequest(roomName = roomName, isHost = isHost),
+            // canPublish omis (défaut false, encodeDefaults=false) → le backend applique isHost ;
+            // envoyé à true pour un invité accepté (publication sans droits d'admin).
+            LiveKitTokenRequest(roomName = roomName, isHost = isHost, canPublish = canPublish),
         )
         return api.request(Endpoint.post(MediaEndpoints.LIVEKIT_TOKEN, body))
     }

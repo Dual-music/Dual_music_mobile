@@ -97,6 +97,15 @@ class LiveRepository(private val api: ApiClient) {
         api.request<Unit>(Endpoint.post("/lives/join-requests/$requestId/respond", """{"status":"$status"}"""))
     }
 
+    /** Id du caller (pour détecter l'acceptation de sa propre demande d'invité). */
+    suspend fun myUserId(): String? =
+        runCatching {
+            api.request(
+                Endpoint.get(com.dualmusic.domain.user.UserEndpoints.ME),
+                com.dualmusic.domain.auth.MeResponse.serializer(),
+            ).user?.id
+        }.getOrNull()
+
     /**
      * Envoie un cadeau au host dans le contexte du live. Débit atomique côté backend ;
      * `Idempotency-Key` anti double-débit.

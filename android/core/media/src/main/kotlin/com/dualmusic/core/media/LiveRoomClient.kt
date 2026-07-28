@@ -45,6 +45,10 @@ class LiveRoomClient(
     private val _primaryVideoTrack = MutableStateFlow<VideoTrack?>(null)
     val primaryVideoTrack: StateFlow<VideoTrack?> = _primaryVideoTrack.asStateFlow()
 
+    /** TOUTES les pistes vidéo distantes souscrites (hôte + invités sur scène). */
+    private val _remoteVideos = MutableStateFlow<List<VideoTrack>>(emptyList())
+    val remoteVideos: StateFlow<List<VideoTrack>> = _remoteVideos.asStateFlow()
+
     /** Piste vidéo LOCALE (aperçu de l'hôte quand il diffuse). `null` en mode viewer. */
     private val _localVideoTrack = MutableStateFlow<VideoTrack?>(null)
     val localVideoTrack: StateFlow<VideoTrack?> = _localVideoTrack.asStateFlow()
@@ -65,6 +69,7 @@ class LiveRoomClient(
         roomName: String,
         isHost: Boolean = false,
         prewarmedToken: com.dualmusic.domain.media.LiveKitToken? = null,
+        canPublish: Boolean = false,
     ) {
         _connectionState.value = LiveConnectionState.Connecting
         try {
@@ -83,7 +88,7 @@ class LiveRoomClient(
                 }
             }
 
-            val creds = prewarmedToken ?: tokenService.token(roomName = roomName, isHost = isHost)
+            val creds = prewarmedToken ?: tokenService.token(roomName = roomName, isHost = isHost, canPublish = canPublish)
             room.connect(creds.url, creds.token)
             _connectionState.value = LiveConnectionState.Connected
             // La publication caméra/micro (hôte) est déclenchée par l'UI via [startBroadcast]
@@ -116,6 +121,7 @@ class LiveRoomClient(
     fun leave() {
         room.disconnect()
         _primaryVideoTrack.value = null
+        _remoteVideos.value = emptyList()
         _localVideoTrack.value = null
         _connectionState.value = LiveConnectionState.Idle
     }
@@ -126,12 +132,13 @@ class LiveRoomClient(
         _micEnabled.value = enabled
     }
 
-    /** Piste vidéo primaire = première piste vidéo distante souscrite (le host). */
+    /** Rafraîchit la liste des pistes distantes + la piste primaire (première = hôte). */
     private fun refreshPrimaryTrack() {
-        _primaryVideoTrack.value = room.remoteParticipants.values
+        val videos = room.remoteParticipants.values
             .flatMap { it.videoTrackPublications }
             .mapNotNull { it.second as? VideoTrack }
-            .firstOrNull()
+        _remoteVideos.value = videos
+        _primaryVideoTrack.value = videos.firstOrNull()
     }
 
     /** Piste vidéo locale = caméra publiée par l'hôte (aperçu). */

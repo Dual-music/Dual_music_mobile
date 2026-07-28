@@ -102,6 +102,8 @@ fun LiveRoomScreen(
     val giftCatalog by viewModel.giftCatalog.collectAsStateWithLifecycle()
     val myJoinRequestId by viewModel.myJoinRequestId.collectAsStateWithLifecycle()
     val joinRequests by viewModel.joinRequests.collectAsStateWithLifecycle()
+    val remoteVideos by viewModel.media.remoteVideos.collectAsStateWithLifecycle()
+    val isGuestAccepted by viewModel.isGuestAccepted.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     val context = LocalContext.current
@@ -132,6 +134,14 @@ fun LiveRoomScreen(
     var showDedication by remember { mutableStateOf(false) }
     var showGuests by remember { mutableStateOf(false) }
     var broadcasting by remember { mutableStateOf(false) }
+    var pendingStage by remember { mutableStateOf(false) }
+
+    // Invité accepté : monte sur scène une fois la permission caméra/micro accordée.
+    LaunchedEffect(granted, pendingStage) {
+        if (pendingStage && granted) {
+            viewModel.goOnStage(); broadcasting = true; pendingStage = false
+        }
+    }
 
     val track = if (isHost) localTrack else remoteTrack
 
@@ -231,6 +241,31 @@ fun LiveRoomScreen(
             }
         }
 
+        // Vignettes multi-caméra (autres participants sur scène) — sous la barre du haut.
+        val thumbs = if (isHost) remoteVideos else (remoteVideos.drop(1) + listOfNotNull(if (broadcasting) localTrack else null))
+        if (thumbs.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPaddingCompat()
+                    .padding(top = 56.dp, end = DualMusicTheme.spacing.md)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                thumbs.forEach { t ->
+                    androidx.compose.runtime.key(t) {
+                        Box(modifier = Modifier.size(84.dp, 112.dp).background(Color.Black, RoundedCornerShape(12.dp))) {
+                            AndroidView(
+                                modifier = Modifier.fillMaxSize(),
+                                factory = { ctx -> SurfaceViewRenderer(ctx).apply { viewModel.media.room.initVideoRenderer(this) } },
+                                update = { r -> t.addRenderer(r) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Rail vertical gauche.
         Column(
             modifier = Modifier.align(Alignment.CenterStart).statusBarsPaddingCompat().padding(start = DualMusicTheme.spacing.md),
@@ -267,6 +302,17 @@ fun LiveRoomScreen(
             modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().navigationBarsPadding().imePadding().padding(DualMusicTheme.spacing.md),
             verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
         ) {
+            // Invité accepté : monter sur scène (publier sa caméra).
+            if (!isHost && isGuestAccepted && !broadcasting) {
+                Pill(color = colors.primary, onClick = {
+                    if (hasPerms()) { viewModel.goOnStage(); broadcasting = true }
+                    else { pendingStage = true; launcher.launch(perms) }
+                }) {
+                    Icon(Icons.Filled.Podcasts, contentDescription = null, tint = Color.White)
+                    Text("  ${s.goOnStage}", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+
             // Chat (largeur ~60%).
             Column(modifier = Modifier.fillMaxWidth(0.62f)) {
                 messages.takeLast(6).forEach { msg ->

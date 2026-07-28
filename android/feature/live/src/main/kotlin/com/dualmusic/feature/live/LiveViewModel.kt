@@ -102,6 +102,13 @@ class LiveViewModel(
     private val _joinRequests = MutableStateFlow<List<LiveJoinRequest>>(emptyList())
     val joinRequests: StateFlow<List<LiveJoinRequest>> = _joinRequests.asStateFlow()
 
+    /** Spectateur : sa demande a été acceptée → il peut monter sur scène (publier). */
+    private val _isGuestAccepted = MutableStateFlow(false)
+    val isGuestAccepted: StateFlow<Boolean> = _isGuestAccepted.asStateFlow()
+
+    /** Id du caller (résolu au démarrage) pour détecter l'acceptation de SA demande. */
+    private var myUserId: String? = null
+
     private var giftCounter = 0L
     private var liveSession: NamespaceSession? = null
     private var chatSession: NamespaceSession? = null
@@ -122,6 +129,7 @@ class LiveViewModel(
             runCatching { repository.giftCatalog() }.getOrNull()?.let { _giftCatalog.value = it }
         }
         if (isHost) loadJoinRequests()
+        if (!isHost) viewModelScope.launch { myUserId = repository.myUserId() }
         connectRealtime()
     }
 
@@ -172,6 +180,19 @@ class LiveViewModel(
         viewModelScope.launch {
             runCatching { repository.respondJoin(requestId, accept) }
             loadJoinRequests()
+        }
+    }
+
+    /**
+     * Invité accepté : monte sur scène — rejoint la room en **publisher** (canPublish) puis
+     * publie sa caméra. La caméra locale apparaît alors à tous (multi-participant).
+     * La permission caméra/micro est demandée par l'écran avant l'appel.
+     */
+    fun goOnStage() {
+        viewModelScope.launch {
+            media.leave()
+            media.join(roomName = roomName, canPublish = true)
+            media.startBroadcast()
         }
     }
 
@@ -267,7 +288,16 @@ class LiveViewModel(
             }
             // Demandes d'invités (hôte) : rafraîchir la liste à chaque nouvelle demande / MAJ.
             live.on("join:new", JoinEventPayload.serializer()) { if (isHost) loadJoinRequests() }
-            live.on("join:update", JoinEventPayload.serializer()) { if (isHost) loadJoinRequests() }
+            live.on("join:update", JoinEventPayload.serializer()) { p ->
+                if (isHost) loadJoinRequests()
+                // Spectateur : sa propre demande a changé d'état.
+                if (!isHost && p.userId != null && p.userId == myUserId) {
+                    when (p.status) {
+                        "accepted" -> _isGuestAccepted.value = true
+                        "rejected", "ended" -> _isGuestAccepted.value = false
+                    }
+                }
+            }
 
             live.connect()
             chat.connect()
