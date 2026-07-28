@@ -22,6 +22,21 @@ data class LikesPayload(
     val likes: Int = 0,
 )
 
+/** Enveloppe du relais de broadcast éphémère (`{channel,event,payload}`). */
+@kotlinx.serialization.Serializable
+data class BroadcastEnvelope(
+    val channel: String? = null,
+    val event: String? = null,
+    val payload: EmojiPayload? = null,
+)
+
+/** Charge utile d'une réaction emoji. */
+@kotlinx.serialization.Serializable
+data class EmojiPayload(val emoji: String? = null)
+
+/** Emoji flottant à animer (réaction). */
+data class FloatingEmoji(val id: Long, val emoji: String)
+
 /** Cadeau reçu à animer dans le live. */
 data class LiveGift(
     val id: Long,
@@ -64,6 +79,10 @@ class LiveViewModel(
     private val _heartTick = MutableStateFlow(0L)
     val heartTick: StateFlow<Long> = _heartTick.asStateFlow()
 
+    private val _emojiFeed = MutableStateFlow<List<FloatingEmoji>>(emptyList())
+    val emojiFeed: StateFlow<List<FloatingEmoji>> = _emojiFeed.asStateFlow()
+    private var emojiCounter = 0L
+
     private var giftCounter = 0L
     private var liveSession: NamespaceSession? = null
     private var chatSession: NamespaceSession? = null
@@ -93,6 +112,25 @@ class LiveViewModel(
     /** Suit l'artiste hôte. */
     fun follow(artistId: String) {
         viewModelScope.launch { runCatching { repository.followArtist(artistId) } }
+    }
+
+    /** Envoie une réaction emoji : effet local + relais aux autres membres du canal. */
+    fun sendReaction(emoji: String) {
+        pushEmoji(emoji)
+        liveSession?.emit(
+            "broadcast",
+            org.json.JSONObject(
+                mapOf(
+                    "channel" to "live-emojis-$liveId",
+                    "event" to "emoji_reaction",
+                    "payload" to org.json.JSONObject(mapOf("emoji" to emoji)),
+                ),
+            ),
+        )
+    }
+
+    private fun pushEmoji(emoji: String) {
+        _emojiFeed.update { (it + FloatingEmoji(emojiCounter++, emoji)).takeLast(12) }
     }
 
     /** Coupe/rétablit le micro (mode hôte). */
@@ -135,7 +173,10 @@ class LiveViewModel(
         val chat = realtime.session(Realtime.Namespace.CHAT).also { chatSession = it }
 
         viewModelScope.launch {
-            live.onConnect { live.join(Realtime.RoomType.LIVE, liveId) }
+            live.onConnect {
+                live.join(Realtime.RoomType.LIVE, liveId)
+                live.emit("broadcast:join", "live-emojis-$liveId")
+            }
             chat.onConnect { chat.join(Realtime.RoomType.LIVE, liveId) }
 
             // Nouveaux messages
@@ -153,6 +194,10 @@ class LiveViewModel(
             // Likes (total diffusé par le backend)
             live.on("likes", LikesPayload.serializer()) { p ->
                 if (p.likes > _likes.value) _likes.value = p.likes
+            }
+            // Réactions emojis relayées (canal live-emojis-<id>) — l'émetteur est exclu.
+            live.on("broadcast", BroadcastEnvelope.serializer()) { env ->
+                if (env.event == "emoji_reaction") env.payload?.emoji?.let { pushEmoji(it) }
             }
 
             live.connect()

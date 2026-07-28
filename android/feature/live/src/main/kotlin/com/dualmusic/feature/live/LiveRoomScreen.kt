@@ -6,6 +6,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,6 +80,7 @@ fun LiveRoomScreen(
     val giftFeed by viewModel.giftFeed.collectAsStateWithLifecycle()
     val likes by viewModel.likes.collectAsStateWithLifecycle()
     val heartTick by viewModel.heartTick.collectAsStateWithLifecycle()
+    val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     val context = LocalContext.current
@@ -150,6 +153,13 @@ fun LiveRoomScreen(
             }
         }
 
+        // Emojis flottants (réactions relayées + locales).
+        emojiFeed.lastOrNull()?.let { fe ->
+            androidx.compose.runtime.key(fe.id) {
+                GiftBurst(symbol = fe.emoji, modifier = Modifier.align(Alignment.CenterEnd).padding(DualMusicTheme.spacing.xl))
+            }
+        }
+
         // Overlays.
         Column(
             modifier = Modifier.fillMaxSize().padding(DualMusicTheme.spacing.md),
@@ -214,6 +224,21 @@ fun LiveRoomScreen(
                     }
                 }
 
+                // Barre d'emojis réactions (tout le monde).
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+                ) {
+                    ReactionEmojis.forEach { e ->
+                        Box(
+                            modifier = Modifier
+                                .background(Color.Black.copy(alpha = 0.35f), CircleShape)
+                                .clickable { viewModel.sendReaction(e) }
+                                .padding(DualMusicTheme.spacing.sm),
+                        ) { Text(e) }
+                    }
+                }
+
                 // Barre d'action : message (+ cadeau pour les spectateurs).
                 var draft by remember { mutableStateOf("") }
                 Row(
@@ -254,6 +279,9 @@ fun LiveRoomScreen(
         }
     }
 }
+
+/** Emojis de réaction disponibles (identiques au web). */
+private val ReactionEmojis = listOf("❤️", "🔥", "😍", "👏", "🎵", "💎", "🎶", "⚡", "🌟", "😂")
 
 /** Petite pastille cliquable colorée (contrôles overlay). */
 @Composable

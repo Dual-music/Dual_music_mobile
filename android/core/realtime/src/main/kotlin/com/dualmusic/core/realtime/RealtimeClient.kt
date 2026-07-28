@@ -84,6 +84,16 @@ class NamespaceSession internal constructor(
         socket?.emit(Realtime.EVENT_LEAVE, JSONObject(mapOf("type" to type.wire, "id" to id)))
     }
 
+    /**
+     * Émet un événement arbitraire (client → serveur). Utilisé pour le relais de broadcast
+     * éphémère (`broadcast:join`, `broadcast`) : réactions emojis, animations… Le serveur
+     * relaie aux autres membres du canal (l'émetteur applique son effet localement).
+     * @param payload argument JSON (String de canal, ou [JSONObject]). `null` = sans argument.
+     */
+    fun emit(event: String, payload: Any? = null) {
+        if (payload == null) socket?.emit(event) else socket?.emit(event, payload)
+    }
+
     /** Callback de connexion établie (pour (re)join les rooms). */
     fun onConnect(handler: () -> Unit) {
         socket?.on(Socket.EVENT_CONNECT) { handler() }
