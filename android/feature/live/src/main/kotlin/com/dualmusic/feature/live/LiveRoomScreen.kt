@@ -19,8 +19,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
@@ -74,6 +76,8 @@ fun LiveRoomScreen(
     val localTrack by viewModel.media.localVideoTrack.collectAsStateWithLifecycle()
     val micOn by viewModel.media.micEnabled.collectAsStateWithLifecycle()
     val giftFeed by viewModel.giftFeed.collectAsStateWithLifecycle()
+    val likes by viewModel.likes.collectAsStateWithLifecycle()
+    val heartTick by viewModel.heartTick.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     val context = LocalContext.current
@@ -139,25 +143,49 @@ fun LiveRoomScreen(
             }
         }
 
+        // Cœurs animés (like) : impulsion à chaque tap.
+        if (heartTick > 0L) {
+            androidx.compose.runtime.key(heartTick) {
+                GiftBurst(symbol = "❤️", modifier = Modifier.align(Alignment.BottomEnd).padding(DualMusicTheme.spacing.xl))
+            }
+        }
+
         // Overlays.
         Column(
             modifier = Modifier.fillMaxSize().padding(DualMusicTheme.spacing.md),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            // Haut : badge LIVE (gauche) + compteur de spectateurs (droite).
+            // Haut : badge LIVE + Suivre (gauche) · likes + spectateurs (droite).
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.background(colors.destructive, RoundedCornerShape(6.dp)).padding(horizontal = DualMusicTheme.spacing.sm, vertical = DualMusicTheme.spacing.xs),
-                ) {
-                    Text("🔴 LIVE", color = Color.White, fontWeight = FontWeight.Black)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.background(colors.destructive, RoundedCornerShape(6.dp)).padding(horizontal = DualMusicTheme.spacing.sm, vertical = DualMusicTheme.spacing.xs),
+                    ) {
+                        Text("🔴 LIVE", color = Color.White, fontWeight = FontWeight.Black)
+                    }
+                    if (!isHost) {
+                        Pill(color = colors.primary, onClick = { viewModel.follow(hostUserId) }) {
+                            Icon(Icons.Filled.PersonAdd, contentDescription = null, tint = Color.White)
+                            Text(" ${s.follow}", color = Color.White)
+                        }
+                    }
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape).padding(horizontal = DualMusicTheme.spacing.md, vertical = DualMusicTheme.spacing.xs),
-                ) {
-                    Icon(Icons.Filled.Visibility, contentDescription = null, tint = Color.White)
-                    Text(" $viewerCount", color = Color.White)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape).padding(horizontal = DualMusicTheme.spacing.md, vertical = DualMusicTheme.spacing.xs),
+                    ) {
+                        Icon(Icons.Filled.Favorite, contentDescription = null, tint = colors.destructive)
+                        Text(" $likes", color = Color.White)
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape).padding(horizontal = DualMusicTheme.spacing.md, vertical = DualMusicTheme.spacing.xs),
+                    ) {
+                        Icon(Icons.Filled.Visibility, contentDescription = null, tint = Color.White)
+                        Text(" $viewerCount", color = Color.White)
+                    }
                 }
             }
 
@@ -201,6 +229,16 @@ fun LiveRoomScreen(
                         modifier = Modifier.weight(1f),
                     )
                     if (!isHost) {
+                        // Like.
+                        Box(
+                            modifier = Modifier
+                                .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                                .padding(DualMusicTheme.spacing.md)
+                                .clickable { viewModel.sendLike() },
+                        ) {
+                            Icon(Icons.Filled.Favorite, contentDescription = s.likeAction, tint = colors.destructive)
+                        }
+                        // Cadeau.
                         Box(
                             modifier = Modifier
                                 .dmGlow()

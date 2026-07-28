@@ -42,6 +42,20 @@ class LiveRepository(private val api: ApiClient) {
         api.request<Unit>(Endpoint.post("/lives/$liveId/end"))
     }
 
+    /** Ajoute un like au live (le backend diffuse le nouveau total via `likes`). */
+    suspend fun likeLive(liveId: String) {
+        api.request<Unit>(Endpoint.post("/lives/$liveId/likes"))
+    }
+
+    /** Nombre de likes courant (amorçage). */
+    suspend fun likesCount(liveId: String): Int =
+        api.request(Endpoint.get("/lives/$liveId/likes"), LikesResponse.serializer()).likes
+
+    /** Suit l'artiste hôte du live. */
+    suspend fun followArtist(artistId: String) {
+        api.request<Unit>(Endpoint.post("/users/$artistId/follow"))
+    }
+
     /**
      * Envoie un cadeau au host dans le contexte du live. Débit atomique côté backend ;
      * `Idempotency-Key` anti double-débit.
@@ -52,6 +66,10 @@ class LiveRepository(private val api: ApiClient) {
         api.request<Unit>(Endpoint.post("/wallet/gifts/send", body, idempotencyKey = idem))
     }
 }
+
+/** Réponse de `GET /lives/:id/likes`. */
+@Serializable
+data class LikesResponse(val likes: Int = 0)
 
 /** Échappe une chaîne pour un littéral JSON minimal. */
 private fun String.jsonQuoted(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""

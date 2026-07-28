@@ -15,6 +15,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** Payload de l'événement temps réel `likes` (`/live` room event) : total courant. */
+@kotlinx.serialization.Serializable
+data class LikesPayload(
+    @kotlinx.serialization.SerialName("live_id") val liveId: String? = null,
+    val likes: Int = 0,
+)
+
 /** Cadeau reçu à animer dans le live. */
 data class LiveGift(
     val id: Long,
@@ -50,6 +57,13 @@ class LiveViewModel(
     private val _viewerCount = MutableStateFlow(0)
     val viewerCount: StateFlow<Int> = _viewerCount.asStateFlow()
 
+    private val _likes = MutableStateFlow(0)
+    val likes: StateFlow<Int> = _likes.asStateFlow()
+
+    /** Compteur d'impulsions pour déclencher l'animation de cœur (incrémenté à chaque like). */
+    private val _heartTick = MutableStateFlow(0L)
+    val heartTick: StateFlow<Long> = _heartTick.asStateFlow()
+
     private var giftCounter = 0L
     private var liveSession: NamespaceSession? = null
     private var chatSession: NamespaceSession? = null
@@ -63,7 +77,22 @@ class LiveViewModel(
         viewModelScope.launch {
             runCatching { repository.chatHistory(liveId) }.getOrNull()?.let { _messages.value = it }
         }
+        viewModelScope.launch {
+            runCatching { repository.likesCount(liveId) }.getOrNull()?.let { _likes.value = it }
+        }
         connectRealtime()
+    }
+
+    /** Envoie un like : incrément optimiste + animation de cœur + persistance. */
+    fun sendLike() {
+        _likes.value += 1
+        _heartTick.value += 1
+        viewModelScope.launch { runCatching { repository.likeLive(liveId) } }
+    }
+
+    /** Suit l'artiste hôte. */
+    fun follow(artistId: String) {
+        viewModelScope.launch { runCatching { repository.followArtist(artistId) } }
     }
 
     /** Coupe/rétablit le micro (mode hôte). */
@@ -120,6 +149,10 @@ class LiveViewModel(
             // Présence (viewers)
             live.on(Realtime.RealtimeEvent.PRESENCE, PresencePayload.serializer()) { p ->
                 _viewerCount.value = p.count
+            }
+            // Likes (total diffusé par le backend)
+            live.on("likes", LikesPayload.serializer()) { p ->
+                if (p.likes > _likes.value) _likes.value = p.likes
             }
 
             live.connect()
