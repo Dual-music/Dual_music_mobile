@@ -63,6 +63,11 @@ class LiveRepository(private val api: ApiClient) {
         api.request<Unit>(Endpoint.post("/users/$artistId/follow"))
     }
 
+    /** Signale le live (modération) avec un motif. */
+    suspend fun reportLive(liveId: String, reason: String) {
+        api.request<Unit>(Endpoint.post("/moderation/reports/live", """{"liveId":"$liveId","reason":${reason.jsonQuoted()}}"""))
+    }
+
     /**
      * Envoie un cadeau au host dans le contexte du live. Débit atomique côté backend ;
      * `Idempotency-Key` anti double-débit.

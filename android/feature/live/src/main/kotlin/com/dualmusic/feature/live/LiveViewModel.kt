@@ -120,6 +120,11 @@ class LiveViewModel(
         viewModelScope.launch { runCatching { repository.followArtist(artistId) } }
     }
 
+    /** Signale le live avec un motif (modération). */
+    fun report(reason: String) {
+        viewModelScope.launch { runCatching { repository.reportLive(liveId, reason) } }
+    }
+
     /** Envoie une réaction emoji : effet local + relais aux autres membres du canal. */
     fun sendReaction(emoji: String) {
         pushEmoji(emoji)

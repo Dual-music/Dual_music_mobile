@@ -368,6 +368,11 @@ interface Strings {
     val clickToStart: String
     val followAction: String
     val send: String
+    val reportAction: String
+    val reportInappropriate: String
+    val reportHarassment: String
+    val reportSpam: String
+    val reportViolence: String
     // Contenu (publier lifestyle + mes vidéos/replays).
     val publishLifestyle: String
     val chooseVideo: String
@@ -721,6 +726,11 @@ object FrStrings : Strings {
     override val clickToStart = "Appuyez pour commencer le direct"
     override val followAction = "Suivre"
     override val send = "Envoyer"
+    override val reportAction = "Signaler"
+    override val reportInappropriate = "Contenu inapproprié"
+    override val reportHarassment = "Harcèlement"
+    override val reportSpam = "Spam"
+    override val reportViolence = "Violence"
     override val publishLifestyle = "Publier du contenu Lifestyle"
     override val chooseVideo = "Choisir la vidéo"
     override val publishVideo = "Publier la vidéo"
@@ -1072,6 +1082,11 @@ object EnStrings : Strings {
     override val clickToStart = "Tap to go live"
     override val followAction = "Follow"
     override val send = "Send"
+    override val reportAction = "Report"
+    override val reportInappropriate = "Inappropriate content"
+    override val reportHarassment = "Harassment"
+    override val reportSpam = "Spam"
+    override val reportViolence = "Violence"
     override val publishLifestyle = "Publish Lifestyle content"
     override val chooseVideo = "Choose video"
     override val publishVideo = "Publish video"

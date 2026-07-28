@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.PersonAddAlt1
@@ -121,6 +122,7 @@ fun LiveRoomScreen(
     var showReactionBar by remember { mutableStateOf(false) }
     var showComment by remember { mutableStateOf(false) }
     var showGiftPanel by remember { mutableStateOf(false) }
+    var showReport by remember { mutableStateOf(false) }
     var broadcasting by remember { mutableStateOf(false) }
 
     val track = if (isHost) localTrack else remoteTrack
@@ -230,6 +232,8 @@ fun LiveRoomScreen(
             if (isHost) {
                 RailButton(if (micOn) Icons.Filled.Mic else Icons.Filled.MicOff, tint = Color.White, bg = if (micOn) colors.primary else colors.destructive) { viewModel.toggleMic() }
                 RailButton(Icons.Filled.Close, tint = Color.White, bg = colors.destructive) { viewModel.endLive(onEndLive) }
+            } else {
+                RailButton(Icons.Filled.Flag, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showReport = true }
             }
         }
 
@@ -336,6 +340,31 @@ fun LiveRoomScreen(
                             Text("${gift.price.toInt()} ${s.credits}", color = colors.accent, fontWeight = FontWeight.Bold)
                         }
                     }
+                }
+            }
+        }
+
+        // Feuille de signalement (motifs préréglés).
+        if (showReport) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showReport = false })
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .background(colors.background)
+                    .navigationBarsPadding()
+                    .padding(DualMusicTheme.spacing.md),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text(s.reportAction, color = colors.foreground, fontWeight = FontWeight.Bold)
+                listOf(s.reportInappropriate, s.reportHarassment, s.reportSpam, s.reportViolence).forEach { reason ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                            .clickable { viewModel.report(reason); showReport = false }
+                            .padding(DualMusicTheme.spacing.md),
+                    ) { Text(reason, color = colors.foreground) }
                 }
             }
         }
