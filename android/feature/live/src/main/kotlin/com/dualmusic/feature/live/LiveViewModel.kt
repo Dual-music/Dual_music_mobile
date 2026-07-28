@@ -34,6 +34,14 @@ data class BroadcastEnvelope(
 @kotlinx.serialization.Serializable
 data class EmojiPayload(val emoji: String? = null)
 
+/** Événement de demande d'invité (`join:new` / `join:update`). */
+@kotlinx.serialization.Serializable
+data class JoinEventPayload(
+    @kotlinx.serialization.SerialName("live_id") val liveId: String? = null,
+    @kotlinx.serialization.SerialName("user_id") val userId: String? = null,
+    val status: String? = null,
+)
+
 /** Emoji flottant à animer (réaction). */
 data class FloatingEmoji(val id: Long, val emoji: String)
 
@@ -86,6 +94,14 @@ class LiveViewModel(
     private val _giftCatalog = MutableStateFlow<List<com.dualmusic.domain.model.VirtualGift>>(emptyList())
     val giftCatalog: StateFlow<List<com.dualmusic.domain.model.VirtualGift>> = _giftCatalog.asStateFlow()
 
+    /** Spectateur : id de sa demande d'invité en attente (non-null = en attente). */
+    private val _myJoinRequestId = MutableStateFlow<String?>(null)
+    val myJoinRequestId: StateFlow<String?> = _myJoinRequestId.asStateFlow()
+
+    /** Hôte : demandes d'invités en attente. */
+    private val _joinRequests = MutableStateFlow<List<LiveJoinRequest>>(emptyList())
+    val joinRequests: StateFlow<List<LiveJoinRequest>> = _joinRequests.asStateFlow()
+
     private var giftCounter = 0L
     private var liveSession: NamespaceSession? = null
     private var chatSession: NamespaceSession? = null
@@ -105,6 +121,7 @@ class LiveViewModel(
         viewModelScope.launch {
             runCatching { repository.giftCatalog() }.getOrNull()?.let { _giftCatalog.value = it }
         }
+        if (isHost) loadJoinRequests()
         connectRealtime()
     }
 
@@ -130,6 +147,32 @@ class LiveViewModel(
         val m = message.trim()
         if (m.isEmpty()) return
         viewModelScope.launch { runCatching { repository.sendDedication(liveId, m) } }
+    }
+
+    /** Spectateur : demande à rejoindre en invité. */
+    fun requestJoin() {
+        viewModelScope.launch { _myJoinRequestId.value = repository.requestJoin(liveId) }
+    }
+
+    /** Spectateur : annule sa demande. */
+    fun cancelJoin() {
+        val rid = _myJoinRequestId.value ?: return
+        viewModelScope.launch { runCatching { repository.cancelJoin(rid) }; _myJoinRequestId.value = null }
+    }
+
+    /** Hôte : (re)charge les demandes en attente. */
+    fun loadJoinRequests() {
+        viewModelScope.launch {
+            _joinRequests.value = runCatching { repository.joinRequests(liveId) }.getOrDefault(emptyList())
+        }
+    }
+
+    /** Hôte : accepte/refuse une demande, puis recharge. */
+    fun respondJoin(requestId: String, accept: Boolean) {
+        viewModelScope.launch {
+            runCatching { repository.respondJoin(requestId, accept) }
+            loadJoinRequests()
+        }
     }
 
     /** Envoie une réaction emoji : effet local + relais aux autres membres du canal. */
@@ -222,6 +265,9 @@ class LiveViewModel(
             live.on("broadcast", BroadcastEnvelope.serializer()) { env ->
                 if (env.event == "emoji_reaction") env.payload?.emoji?.let { pushEmoji(it) }
             }
+            // Demandes d'invités (hôte) : rafraîchir la liste à chaque nouvelle demande / MAJ.
+            live.on("join:new", JoinEventPayload.serializer()) { if (isHost) loadJoinRequests() }
+            live.on("join:update", JoinEventPayload.serializer()) { if (isHost) loadJoinRequests() }
 
             live.connect()
             chat.connect()

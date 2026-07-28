@@ -27,14 +27,17 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.PersonAddAlt1
 import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -97,6 +100,8 @@ fun LiveRoomScreen(
     val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
     val giftFeed by viewModel.giftFeed.collectAsStateWithLifecycle()
     val giftCatalog by viewModel.giftCatalog.collectAsStateWithLifecycle()
+    val myJoinRequestId by viewModel.myJoinRequestId.collectAsStateWithLifecycle()
+    val joinRequests by viewModel.joinRequests.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     val context = LocalContext.current
@@ -125,6 +130,7 @@ fun LiveRoomScreen(
     var showGiftPanel by remember { mutableStateOf(false) }
     var showReport by remember { mutableStateOf(false) }
     var showDedication by remember { mutableStateOf(false) }
+    var showGuests by remember { mutableStateOf(false) }
     var broadcasting by remember { mutableStateOf(false) }
 
     val track = if (isHost) localTrack else remoteTrack
@@ -233,8 +239,24 @@ fun LiveRoomScreen(
             RailButton(Icons.Filled.VisibilityOff, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { hideOverlay = true }
             if (isHost) {
                 RailButton(if (micOn) Icons.Filled.Mic else Icons.Filled.MicOff, tint = Color.White, bg = if (micOn) colors.primary else colors.destructive) { viewModel.toggleMic() }
+                // Invités (demandes lever-la-main) + badge de compteur.
+                Box {
+                    RailButton(Icons.Filled.PersonAddAlt1, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showGuests = true; viewModel.loadJoinRequests() }
+                    if (joinRequests.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier.align(Alignment.TopEnd).size(18.dp).background(colors.destructive, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) { Text("${joinRequests.size}", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                    }
+                }
                 RailButton(Icons.Filled.Close, tint = Color.White, bg = colors.destructive) { viewModel.endLive(onEndLive) }
             } else {
+                // Lever la main (demander à rejoindre / annuler).
+                RailButton(
+                    if (myJoinRequestId != null) Icons.Filled.Schedule else Icons.Filled.PanTool,
+                    tint = Color.White,
+                    bg = if (myJoinRequestId != null) colors.accent else Color.Black.copy(alpha = 0.4f),
+                ) { if (myJoinRequestId == null) viewModel.requestJoin() else viewModel.cancelJoin() }
                 RailButton(Icons.Filled.Campaign, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showDedication = true }
                 RailButton(Icons.Filled.Flag, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showReport = true }
             }
@@ -396,6 +418,47 @@ fun LiveRoomScreen(
                 )
                 Pill(color = colors.primary, onClick = { viewModel.dedicate(dedic); showDedication = false }) {
                     Text(s.send, color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        // Feuille des invités (hôte) : demandes lever-la-main + accepter/refuser.
+        if (showGuests) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showGuests = false })
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.5f)
+                    .background(colors.background)
+                    .navigationBarsPadding()
+                    .padding(DualMusicTheme.spacing.md),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text(s.guests, color = colors.foreground, fontWeight = FontWeight.Bold)
+                if (joinRequests.isEmpty()) {
+                    Text(s.noGuestRequests, color = colors.mutedForeground)
+                }
+                Column(
+                    modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+                ) {
+                    joinRequests.forEach { req ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                .padding(DualMusicTheme.spacing.md),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("✋ ${req.displayName}", color = colors.foreground, modifier = Modifier.weight(1f))
+                            Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                                RailButton(Icons.Filled.Check, tint = Color.White, bg = colors.primary) { viewModel.respondJoin(req.id, true) }
+                                RailButton(Icons.Filled.Close, tint = Color.White, bg = colors.destructive) { viewModel.respondJoin(req.id, false) }
+                            }
+                        }
+                    }
                 }
             }
         }

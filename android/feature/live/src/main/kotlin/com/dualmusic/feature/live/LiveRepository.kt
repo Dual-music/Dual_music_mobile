@@ -73,6 +73,30 @@ class LiveRepository(private val api: ApiClient) {
         api.request<Unit>(Endpoint.post("/concerts/dedications", """{"concertId":"$liveId","concertType":"artist_live","message":${message.jsonQuoted()}}"""))
     }
 
+    /** Spectateur : demande à rejoindre le live (renvoie l'id de la demande). */
+    suspend fun requestJoin(liveId: String): String? =
+        runCatching {
+            api.request(Endpoint.post("/lives/$liveId/join", "{}"), LiveJoinRequest.serializer()).id
+        }.getOrNull()
+
+    /** Spectateur : annule sa demande. */
+    suspend fun cancelJoin(requestId: String) {
+        api.request<Unit>(Endpoint.delete("/lives/join-requests/$requestId"))
+    }
+
+    /** Hôte : liste des demandes (par défaut en attente). */
+    suspend fun joinRequests(liveId: String, status: String = "pending"): List<LiveJoinRequest> =
+        api.request(
+            Endpoint.get("/lives/$liveId/join-requests", query = mapOf("status" to status)),
+            ListSerializer(LiveJoinRequest.serializer()),
+        )
+
+    /** Hôte : répond à une demande (accepter/refuser). */
+    suspend fun respondJoin(requestId: String, accept: Boolean) {
+        val status = if (accept) "accepted" else "rejected"
+        api.request<Unit>(Endpoint.post("/lives/join-requests/$requestId/respond", """{"status":"$status"}"""))
+    }
+
     /**
      * Envoie un cadeau au host dans le contexte du live. Débit atomique côté backend ;
      * `Idempotency-Key` anti double-débit.
@@ -87,6 +111,20 @@ class LiveRepository(private val api: ApiClient) {
 /** Réponse de `GET /lives/:id/likes`. */
 @Serializable
 data class LikesResponse(val likes: Int = 0)
+
+/**
+ * Demande d'un spectateur pour rejoindre le live en invité (`live_join_requests`).
+ * Le backend renvoie les lignes brutes (pas de profil hydraté) → repli d'affichage.
+ */
+@Serializable
+data class LiveJoinRequest(
+    val id: String,
+    @SerialName("user_id") val userId: String = "",
+    val status: String = "pending",
+    val user: DisplayProfile? = null,
+) {
+    val displayName: String get() = user?.displayName ?: "Spectateur"
+}
 
 /** Échappe une chaîne pour un littéral JSON minimal. */
 private fun String.jsonQuoted(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
