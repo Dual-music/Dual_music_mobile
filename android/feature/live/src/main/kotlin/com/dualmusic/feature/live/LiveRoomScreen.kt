@@ -7,10 +7,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -92,6 +94,7 @@ fun LiveRoomScreen(
     val heartTick by viewModel.heartTick.collectAsStateWithLifecycle()
     val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
     val giftFeed by viewModel.giftFeed.collectAsStateWithLifecycle()
+    val giftCatalog by viewModel.giftCatalog.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     val context = LocalContext.current
@@ -117,6 +120,7 @@ fun LiveRoomScreen(
     var hideOverlay by remember { mutableStateOf(false) }
     var showReactionBar by remember { mutableStateOf(false) }
     var showComment by remember { mutableStateOf(false) }
+    var showGiftPanel by remember { mutableStateOf(false) }
     var broadcasting by remember { mutableStateOf(false) }
 
     val track = if (isHost) localTrack else remoteTrack
@@ -270,7 +274,7 @@ fun LiveRoomScreen(
                 RailButton(Icons.Filled.EmojiEmotions, tint = Color.White, bg = Color.Black.copy(alpha = 0.3f)) { showReactionBar = !showReactionBar }
                 if (!isHost) {
                     Box(
-                        modifier = Modifier.dmGlow().size(52.dp).background(DualMusicTheme.gradients.primary, CircleShape).clickable { viewModel.sendGift(quickGiftId, hostUserId) },
+                        modifier = Modifier.dmGlow().size(52.dp).background(DualMusicTheme.gradients.primary, CircleShape).clickable { showGiftPanel = true },
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Filled.CardGiftcard, contentDescription = s.sendGift, tint = Color.White) }
                 }
@@ -296,6 +300,42 @@ fun LiveRoomScreen(
                 )
                 RailButton(Icons.Filled.Send, tint = Color.White, bg = colors.primary) {
                     viewModel.sendMessage(draft); draft = ""; showComment = false
+                }
+            }
+        }
+
+        // Panneau de sélection de cadeaux (feuille du bas).
+        if (showGiftPanel) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showGiftPanel = false })
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.5f)
+                    .background(colors.background)
+                    .navigationBarsPadding()
+                    .padding(DualMusicTheme.spacing.md),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text(s.sendGift, color = colors.foreground, fontWeight = FontWeight.Bold)
+                Column(
+                    modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+                ) {
+                    giftCatalog.forEach { gift ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                .clickable { viewModel.sendGift(gift.id, hostUserId); showGiftPanel = false }
+                                .padding(DualMusicTheme.spacing.md),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("${gift.emoji ?: "🎁"}  ${gift.name}", color = colors.foreground)
+                            Text("${gift.price.toInt()} ${s.credits}", color = colors.accent, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }

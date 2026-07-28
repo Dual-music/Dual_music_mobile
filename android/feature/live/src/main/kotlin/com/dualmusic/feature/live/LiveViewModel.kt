@@ -83,6 +83,9 @@ class LiveViewModel(
     val emojiFeed: StateFlow<List<FloatingEmoji>> = _emojiFeed.asStateFlow()
     private var emojiCounter = 0L
 
+    private val _giftCatalog = MutableStateFlow<List<com.dualmusic.domain.model.VirtualGift>>(emptyList())
+    val giftCatalog: StateFlow<List<com.dualmusic.domain.model.VirtualGift>> = _giftCatalog.asStateFlow()
+
     private var giftCounter = 0L
     private var liveSession: NamespaceSession? = null
     private var chatSession: NamespaceSession? = null
@@ -98,6 +101,9 @@ class LiveViewModel(
         }
         viewModelScope.launch {
             runCatching { repository.likesCount(liveId) }.getOrNull()?.let { _likes.value = it }
+        }
+        viewModelScope.launch {
+            runCatching { repository.giftCatalog() }.getOrNull()?.let { _giftCatalog.value = it }
         }
         connectRealtime()
     }

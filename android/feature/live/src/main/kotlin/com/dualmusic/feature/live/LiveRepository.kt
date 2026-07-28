@@ -51,6 +51,13 @@ class LiveRepository(private val api: ApiClient) {
     suspend fun likesCount(liveId: String): Int =
         api.request(Endpoint.get("/lives/$liveId/likes"), LikesResponse.serializer()).likes
 
+    /** Catalogue des cadeaux virtuels (pour le panneau de sélection). */
+    suspend fun giftCatalog(): List<com.dualmusic.domain.model.VirtualGift> =
+        api.request(
+            Endpoint.get(com.dualmusic.domain.gift.GiftEndpoints.CATALOG),
+            ListSerializer(com.dualmusic.domain.model.VirtualGift.serializer()),
+        )
+
     /** Suit l'artiste hôte du live. */
     suspend fun followArtist(artistId: String) {
         api.request<Unit>(Endpoint.post("/users/$artistId/follow"))
