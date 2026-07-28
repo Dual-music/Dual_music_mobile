@@ -9,13 +9,22 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,8 +64,11 @@ fun DuelRoomScreen(
     val giftFeed by viewModel.giftFeed.collectAsStateWithLifecycle()
     val videoTrack by viewModel.media.primaryVideoTrack.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val messages by viewModel.messages.collectAsStateWithLifecycle()
+    val viewerCount by viewModel.viewerCount.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
+    var draft by remember { mutableStateOf("") }
 
     // Démarre/arrête avec le cycle de vie du composable.
     DisposableEffect(Unit) {
@@ -89,13 +101,26 @@ fun DuelRoomScreen(
             key(gift.key) { GiftBurst(symbol = "🎁", modifier = Modifier.align(Alignment.Center)) }
         }
 
-        // --- Overlays ---
+        // --- Overlays (zones sûres : barre d'état en haut, touches système + clavier en bas) ---
         Column(
-            modifier = Modifier.fillMaxSize().padding(DualMusicTheme.spacing.lg),
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(DualMusicTheme.spacing.lg),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            // Haut : barre de votes + minuteur.
+            // Haut : LIVE + spectateurs, barre de votes + minuteur.
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
+                    Box(Modifier.background(colors.destructive, RoundedCornerShape(6.dp)).padding(horizontal = DualMusicTheme.spacing.sm, vertical = DualMusicTheme.spacing.xs)) {
+                        Text("🔴 LIVE", color = Color.White, fontWeight = FontWeight.Black)
+                    }
+                    Box(Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape).padding(horizontal = DualMusicTheme.spacing.md, vertical = DualMusicTheme.spacing.xs)) {
+                        Text("👁 $viewerCount", color = Color.White)
+                    }
+                }
                 val a1 = duel?.artist1Id
                 val a2 = duel?.artist2Id
                 VoteBar(
@@ -105,16 +130,21 @@ fun DuelRoomScreen(
                     rightTotal = a2?.let { totals[it] } ?: 0.0,
                 )
                 if (timer.isRunning) {
-                    Text(
-                        strings.timerRunning,
-                        color = colors.accent,
-                        fontWeight = FontWeight.Bold,
-                    )
+                    Text(strings.timerRunning, color = colors.accent, fontWeight = FontWeight.Bold)
                 }
             }
 
-            // Bas : panneau de vote.
+            // Bas : chat + panneau de vote + saisie message.
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                // Chat (largeur ~60%).
+                Column(modifier = Modifier.fillMaxWidth(0.62f)) {
+                    messages.takeLast(6).forEach { msg ->
+                        Row {
+                            Text(msg.authorName, color = colors.accent, fontWeight = FontWeight.Bold)
+                            Text("  ${msg.content}", color = Color.White)
+                        }
+                    }
+                }
                 error?.let { Text(it, color = colors.destructive) }
                 Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
                     duel?.artist1Id?.let { id ->
@@ -132,6 +162,18 @@ fun DuelRoomScreen(
                     }
                 }
                 Text("${strings.oneVote} = $voteAmount ${strings.credits}", color = colors.mutedForeground)
+                // Saisie de message.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        placeholder = { Text(strings.saySomething, color = Color.White.copy(alpha = 0.7f)) },
+                        singleLine = true,
+                        keyboardActions = KeyboardActions(onDone = { viewModel.sendMessage(draft); draft = "" }),
+                        modifier = Modifier.weight(1f),
+                    )
+                    DMButton(strings.send, style = DMButtonStyle.SECONDARY) { viewModel.sendMessage(draft); draft = "" }
+                }
             }
         }
     }

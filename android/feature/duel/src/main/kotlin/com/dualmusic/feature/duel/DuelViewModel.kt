@@ -8,6 +8,7 @@ import com.dualmusic.core.realtime.RealtimeClient
 import com.dualmusic.domain.model.Duel
 import com.dualmusic.domain.realtime.GiftPayload
 import com.dualmusic.domain.realtime.ChatMessagePayload
+import com.dualmusic.domain.realtime.PresencePayload
 import com.dualmusic.domain.realtime.Realtime
 import com.dualmusic.domain.realtime.StatusPayload
 import com.dualmusic.domain.realtime.TimerPayload
@@ -77,6 +78,9 @@ class DuelViewModel(
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _viewerCount = MutableStateFlow(0)
+    val viewerCount: StateFlow<Int> = _viewerCount.asStateFlow()
 
     private var giftCounter = 0L
     private var liveSession: NamespaceSession? = null
@@ -158,6 +162,10 @@ class DuelViewModel(
             // Chat.
             chat.on(Realtime.RealtimeEvent.CHAT_MESSAGE, ChatMessagePayload.serializer()) { p ->
                 _messages.update { it + DuelChatMessage(id = p.id, userId = p.userId, content = p.content, user = p.user) }
+            }
+            // Présence (spectateurs).
+            live.on(Realtime.RealtimeEvent.PRESENCE, PresencePayload.serializer()) { p ->
+                _viewerCount.value = p.count
             }
 
             live.connect()
