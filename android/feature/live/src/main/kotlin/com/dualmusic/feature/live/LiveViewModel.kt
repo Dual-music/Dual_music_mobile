@@ -137,10 +137,13 @@ class LiveViewModel(
         connectRealtime()
     }
 
-    /** Envoie un like : incrément optimiste + animation de cœur + persistance. */
+    /**
+     * Envoie un like : incrément du compteur + cœur flottant **visible par tous** (relayé
+     * comme une réaction emoji ❤️) + persistance du total.
+     */
     fun sendLike() {
         _likes.value += 1
-        _heartTick.value += 1
+        sendReaction("❤️")
         viewModelScope.launch { runCatching { repository.likeLive(liveId) } }
     }
 

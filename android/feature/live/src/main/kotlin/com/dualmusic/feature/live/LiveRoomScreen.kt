@@ -5,22 +5,31 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -62,12 +71,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -111,7 +123,6 @@ fun LiveRoomScreen(
     val camOn by viewModel.media.camEnabled.collectAsStateWithLifecycle()
     val blurOn by viewModel.media.blurEnabled.collectAsStateWithLifecycle()
     val likes by viewModel.likes.collectAsStateWithLifecycle()
-    val heartTick by viewModel.heartTick.collectAsStateWithLifecycle()
     val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
     val giftFeed by viewModel.giftFeed.collectAsStateWithLifecycle()
     val giftCatalog by viewModel.giftCatalog.collectAsStateWithLifecycle()
@@ -197,18 +208,20 @@ fun LiveRoomScreen(
             ),
         )
 
-        // Animations flottantes.
+        // Cadeau reçu : burst central (halo GPU).
         giftFeed.lastOrNull()?.let { gift ->
             androidx.compose.runtime.key(gift.id) { GiftBurst(symbol = "🎁", modifier = Modifier.align(Alignment.Center)) }
         }
-        if (heartTick > 0L) {
-            androidx.compose.runtime.key(heartTick) {
-                GiftBurst(symbol = "❤️", modifier = Modifier.align(Alignment.BottomEnd).padding(DualMusicTheme.spacing.xl))
-            }
-        }
-        emojiFeed.lastOrNull()?.let { fe ->
-            androidx.compose.runtime.key(fe.id) {
-                GiftBurst(symbol = fe.emoji, modifier = Modifier.align(Alignment.CenterEnd).padding(DualMusicTheme.spacing.xl))
+        // Réactions (cœurs + emojis) : montent bas→haut à droite, façon TikTok — vues par tous.
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(bottom = 140.dp, end = DualMusicTheme.spacing.md)
+                .size(64.dp, 460.dp),
+        ) {
+            emojiFeed.forEach { fe ->
+                androidx.compose.runtime.key(fe.id) { FloatingReaction(fe.emoji) }
             }
         }
 
@@ -297,9 +310,9 @@ fun LiveRoomScreen(
             }
         }
 
-        // Rail vertical gauche.
+        // Rail vertical gauche — remonté sous la barre du haut pour libérer le bas (chat qui défile).
         Column(
-            modifier = Modifier.align(Alignment.CenterStart).statusBarsPaddingCompat().padding(start = DualMusicTheme.spacing.md),
+            modifier = Modifier.align(Alignment.TopStart).statusBarsPaddingCompat().padding(start = DualMusicTheme.spacing.md, top = 56.dp),
             verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
         ) {
             RailButton(Icons.Filled.VisibilityOff, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { hideOverlay = true }
@@ -353,10 +366,21 @@ fun LiveRoomScreen(
                 }
             }
 
-            // Chat (largeur ~60%).
-            Column(modifier = Modifier.fillMaxWidth(0.62f)) {
-                messages.takeLast(6).forEach { msg ->
-                    Row(modifier = Modifier.padding(vertical = 1.dp)) {
+            // Chat défilant (largeur ~68%) — les messages montent du bas vers le haut façon TikTok,
+            // le plus récent reste visible en bas, auto-défilement à chaque nouveau message.
+            val chatState = rememberLazyListState()
+            LaunchedEffect(messages.size) {
+                if (messages.isNotEmpty()) chatState.animateScrollToItem(messages.size - 1)
+            }
+            LazyColumn(
+                state = chatState,
+                modifier = Modifier.fillMaxWidth(0.68f).height(200.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                items(messages) { msg ->
+                    Row(
+                        modifier = Modifier.background(Color.Black.copy(alpha = 0.28f), RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
+                    ) {
                         Text(msg.authorName, color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         Text("  ${msg.content}", color = Color.White, fontSize = 12.sp)
                     }
@@ -383,7 +407,7 @@ fun LiveRoomScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f).background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { showComment = true }.padding(horizontal = DualMusicTheme.spacing.md, vertical = DualMusicTheme.spacing.sm),
                 ) {
-                    Text(s.saySomething, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                    Text(s.saySomething, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 RailButton(Icons.Filled.Favorite, tint = colors.destructive, bg = Color.Black.copy(alpha = 0.3f)) { viewModel.sendLike() }
                 RailButton(Icons.Filled.EmojiEmotions, tint = Color.White, bg = Color.Black.copy(alpha = 0.3f)) { showReactionBar = !showReactionBar }
@@ -656,6 +680,37 @@ private fun medalFor(index: Int): String = when (index) {
 
 /** Emojis de réaction (identiques au web). */
 private val ReactionEmojis = listOf("❤️", "🔥", "😍", "👏", "🎵", "💎", "🎶", "⚡", "🌟", "😂")
+
+/**
+ * Réaction flottante façon TikTok : l'emoji monte du bas vers le haut avec une légère
+ * dérive horizontale, grossit puis s'estompe. Vu par tous les spectateurs (les réactions
+ * transitent par le relais broadcast). Chaque emoji du flux est rendu avec sa propre clé,
+ * donc l'animation démarre à l'entrée en composition et s'arrête quand le VM le retire.
+ */
+@Composable
+private fun BoxScope.FloatingReaction(symbol: String) {
+    val rise = remember { Animatable(0f) }
+    val fade = remember { Animatable(1f) }
+    val drift = remember { (-28..28).random() }
+    val startScale = remember { 0.7f + (0..30).random() / 100f }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.coroutineScope {
+            kotlinx.coroutines.launch { rise.animateTo(1f, tween(2400, easing = LinearEasing)) }
+            kotlinx.coroutines.launch {
+                fade.animateTo(1f, tween(300))
+                fade.animateTo(0f, tween(2100))
+            }
+        }
+    }
+    Text(
+        text = symbol,
+        fontSize = (26 + startScale * 8).sp,
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .offset { IntOffset((drift * rise.value).toInt(), -(rise.value * 430).toInt()) }
+            .alpha(fade.value.coerceIn(0f, 1f)),
+    )
+}
 
 /** Bouton circulaire du rail / de la barre d'action. */
 @Composable
