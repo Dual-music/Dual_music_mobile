@@ -378,6 +378,8 @@ interface Strings {
     val guests: String
     val noGuestRequests: String
     val goOnStage: String
+    val topDonors: String
+    val shareLiveText: String
     // Contenu (publier lifestyle + mes vidéos/replays).
     val publishLifestyle: String
     val chooseVideo: String
@@ -741,6 +743,8 @@ object FrStrings : Strings {
     override val guests = "Invités"
     override val noGuestRequests = "Aucune demande pour le moment"
     override val goOnStage = "Monter sur scène"
+    override val topDonors = "Top donateurs"
+    override val shareLiveText = "🔴 Je suis en live sur Dual Music ! Rejoins-moi."
     override val publishLifestyle = "Publier du contenu Lifestyle"
     override val chooseVideo = "Choisir la vidéo"
     override val publishVideo = "Publier la vidéo"
@@ -1102,6 +1106,8 @@ object EnStrings : Strings {
     override val guests = "Guests"
     override val noGuestRequests = "No request yet"
     override val goOnStage = "Go on stage"
+    override val topDonors = "Top donors"
+    override val shareLiveText = "🔴 I'm live on Dual Music! Join me."
     override val publishLifestyle = "Publish Lifestyle content"
     override val chooseVideo = "Choose video"
     override val publishVideo = "Publish video"

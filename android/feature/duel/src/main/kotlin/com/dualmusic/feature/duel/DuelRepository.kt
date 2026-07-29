@@ -16,7 +16,8 @@ data class DuelChatMessage(
     val id: String? = null,
     @SerialName("user_id") val userId: String,
     val content: String,
-    val user: DisplayProfile? = null,
+    // Le backend renvoie l'auteur sous la clé `author` (REST + temps réel).
+    @SerialName("author") val user: DisplayProfile? = null,
 ) {
     val authorName: String get() = user?.displayName ?: com.dualmusic.core.ui.i18n.appStrings.fan
 }

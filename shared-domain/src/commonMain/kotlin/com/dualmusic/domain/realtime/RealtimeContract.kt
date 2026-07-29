@@ -164,5 +164,6 @@ data class ChatMessagePayload(
     @SerialName("user_id") val userId: String,
     val content: String,
     @SerialName("created_at") val createdAt: String? = null,
-    val user: com.dualmusic.domain.model.DisplayProfile? = null,
+    // Le backend diffuse l'auteur sous la clé `author` (chat.service.js) — pas `user`.
+    @SerialName("author") val user: com.dualmusic.domain.model.DisplayProfile? = null,
 )

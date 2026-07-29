@@ -94,6 +94,10 @@ class LiveViewModel(
     private val _giftCatalog = MutableStateFlow<List<com.dualmusic.domain.model.VirtualGift>>(emptyList())
     val giftCatalog: StateFlow<List<com.dualmusic.domain.model.VirtualGift>> = _giftCatalog.asStateFlow()
 
+    /** Classement des donateurs (chargé à l'ouverture du trophée). */
+    private val _giftLeaderboard = MutableStateFlow<List<GiftLeaderboardEntry>>(emptyList())
+    val giftLeaderboard: StateFlow<List<GiftLeaderboardEntry>> = _giftLeaderboard.asStateFlow()
+
     /** Spectateur : id de sa demande d'invité en attente (non-null = en attente). */
     private val _myJoinRequestId = MutableStateFlow<String?>(null)
     val myJoinRequestId: StateFlow<String?> = _myJoinRequestId.asStateFlow()
@@ -251,6 +255,13 @@ class LiveViewModel(
     /** Envoie un cadeau au host. */
     fun sendGift(giftId: String, toUserId: String) {
         viewModelScope.launch { runCatching { repository.sendGift(liveId, giftId, toUserId) } }
+    }
+
+    /** Charge le classement des donateurs du live (trophée). */
+    fun loadGiftLeaderboard() {
+        viewModelScope.launch {
+            _giftLeaderboard.value = runCatching { repository.giftLeaderboard(liveId) }.getOrDefault(emptyList())
+        }
     }
 
     // MARK: Temps réel

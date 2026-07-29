@@ -1,6 +1,7 @@
 package com.dualmusic.feature.live
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEmotions
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Mic
@@ -39,6 +41,7 @@ import androidx.compose.material.icons.filled.PersonAddAlt1
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
@@ -53,6 +56,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -104,6 +109,7 @@ fun LiveRoomScreen(
     val joinRequests by viewModel.joinRequests.collectAsStateWithLifecycle()
     val remoteVideos by viewModel.media.remoteVideos.collectAsStateWithLifecycle()
     val isGuestAccepted by viewModel.isGuestAccepted.collectAsStateWithLifecycle()
+    val giftLeaderboard by viewModel.giftLeaderboard.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     val context = LocalContext.current
@@ -133,6 +139,7 @@ fun LiveRoomScreen(
     var showReport by remember { mutableStateOf(false) }
     var showDedication by remember { mutableStateOf(false) }
     var showGuests by remember { mutableStateOf(false) }
+    var showLeaderboard by remember { mutableStateOf(false) }
     var broadcasting by remember { mutableStateOf(false) }
     var pendingStage by remember { mutableStateOf(false) }
 
@@ -233,10 +240,22 @@ fun LiveRoomScreen(
                     Text(" $likes", color = Color.White, fontSize = 12.sp)
                 }
             }
-            if (!isHost) {
-                Chip(colors.primary, onClick = { viewModel.follow(hostUserId) }) {
-                    Icon(Icons.Filled.PersonAddAlt1, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                    Text("  ${s.followAction}", color = Color.White, fontSize = 12.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
+                // Partage du live (tous).
+                Chip(Color.Black.copy(alpha = 0.4f), onClick = {
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, s.shareLiveText)
+                    }
+                    context.startActivity(Intent.createChooser(send, null))
+                }) {
+                    Icon(Icons.Filled.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                }
+                if (!isHost) {
+                    Chip(colors.primary, onClick = { viewModel.follow(hostUserId) }) {
+                        Icon(Icons.Filled.PersonAddAlt1, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                        Text("  ${s.followAction}", color = Color.White, fontSize = 12.sp)
+                    }
                 }
             }
         }
@@ -347,19 +366,22 @@ fun LiveRoomScreen(
                 }
                 RailButton(Icons.Filled.Favorite, tint = colors.destructive, bg = Color.Black.copy(alpha = 0.3f)) { viewModel.sendLike() }
                 RailButton(Icons.Filled.EmojiEmotions, tint = Color.White, bg = Color.Black.copy(alpha = 0.3f)) { showReactionBar = !showReactionBar }
-                if (!isHost) {
-                    Box(
-                        modifier = Modifier.dmGlow().size(52.dp).background(DualMusicTheme.gradients.primary, CircleShape).clickable { showGiftPanel = true },
-                        contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Filled.CardGiftcard, contentDescription = s.sendGift, tint = Color.White) }
-                }
+                // Cadeau (tous) — l'hôte peut aussi offrir à un invité sur scène.
+                Box(
+                    modifier = Modifier.dmGlow().size(52.dp).background(DualMusicTheme.gradients.primary, CircleShape).clickable { showGiftPanel = true },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Filled.CardGiftcard, contentDescription = s.sendGift, tint = Color.White) }
+                // Classement des donateurs.
+                RailButton(Icons.Filled.EmojiEvents, tint = Color(0xFFFFC107), bg = Color.Black.copy(alpha = 0.3f)) { showLeaderboard = true; viewModel.loadGiftLeaderboard() }
             }
         }
 
-        // Popup de commentaire (feuille du bas).
+        // Popup de commentaire (feuille du bas) — auto-focus + clavier au-dessus (adjustResize).
         if (showComment) {
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showComment = false })
             var draft by remember { mutableStateOf("") }
+            val commentFocus = remember { FocusRequester() }
+            LaunchedEffect(Unit) { commentFocus.requestFocus() }
             Row(
                 modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(colors.background).navigationBarsPadding().imePadding().padding(DualMusicTheme.spacing.md),
                 verticalAlignment = Alignment.CenterVertically,
@@ -371,7 +393,7 @@ fun LiveRoomScreen(
                     placeholder = { Text(s.saySomething) },
                     singleLine = true,
                     keyboardActions = KeyboardActions(onDone = { viewModel.sendMessage(draft); draft = ""; showComment = false }),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).focusRequester(commentFocus),
                 )
                 RailButton(Icons.Filled.Send, tint = Color.White, bg = colors.primary) {
                     viewModel.sendMessage(draft); draft = ""; showComment = false
@@ -508,7 +530,53 @@ fun LiveRoomScreen(
                 }
             }
         }
+
+        // Feuille du classement des donateurs.
+        if (showLeaderboard) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showLeaderboard = false })
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.5f)
+                    .background(colors.background)
+                    .navigationBarsPadding()
+                    .padding(DualMusicTheme.spacing.md),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text("🏆 ${s.topDonors}", color = colors.foreground, fontWeight = FontWeight.Bold)
+                if (giftLeaderboard.isEmpty()) {
+                    Text(s.noGuestRequests, color = colors.mutedForeground)
+                }
+                Column(
+                    modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+                ) {
+                    giftLeaderboard.forEachIndexed { i, entry ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                .padding(DualMusicTheme.spacing.md),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("${medalFor(i)} ${entry.displayName}", color = colors.foreground, modifier = Modifier.weight(1f))
+                            Text("${entry.value}", color = colors.accent, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
     }
+}
+
+/** Médaille pour le podium, rang sinon. */
+private fun medalFor(index: Int): String = when (index) {
+    0 -> "🥇"
+    1 -> "🥈"
+    2 -> "🥉"
+    else -> "${index + 1}."
 }
 
 /** Emojis de réaction (identiques au web). */

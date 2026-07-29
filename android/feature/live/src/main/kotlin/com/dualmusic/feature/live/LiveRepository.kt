@@ -13,7 +13,8 @@ data class LiveChatMessage(
     val id: String? = null,
     @SerialName("user_id") val userId: String,
     val content: String,
-    val user: DisplayProfile? = null,
+    // Le backend renvoie l'auteur sous la clé `author` (REST + temps réel).
+    @SerialName("author") val user: DisplayProfile? = null,
 ) {
     val authorName: String get() = user?.displayName ?: com.dualmusic.core.ui.i18n.appStrings.fan
 }
@@ -56,6 +57,13 @@ class LiveRepository(private val api: ApiClient) {
         api.request(
             Endpoint.get(com.dualmusic.domain.gift.GiftEndpoints.CATALOG),
             ListSerializer(com.dualmusic.domain.model.VirtualGift.serializer()),
+        )
+
+    /** Classement des meilleurs donateurs du live (`GET /leaderboards/gifts`). */
+    suspend fun giftLeaderboard(liveId: String): List<GiftLeaderboardEntry> =
+        api.request(
+            Endpoint.get("/leaderboards/gifts", query = mapOf("contextType" to "live", "contextId" to liveId)),
+            ListSerializer(GiftLeaderboardEntry.serializer()),
         )
 
     /** Suit l'artiste hôte du live. */
@@ -120,6 +128,22 @@ class LiveRepository(private val api: ApiClient) {
 /** Réponse de `GET /lives/:id/likes`. */
 @Serializable
 data class LikesResponse(val likes: Int = 0)
+
+/** Entrée du classement des donateurs (`GET /leaderboards/gifts`). Champs souples. */
+@Serializable
+data class GiftLeaderboardEntry(
+    @SerialName("user_id") val userId: String? = null,
+    @SerialName("full_name") val fullName: String? = null,
+    @SerialName("stage_name") val stageName: String? = null,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    val total: Double = 0.0,
+    val score: Double = 0.0,
+    val user: DisplayProfile? = null,
+) {
+    val displayName: String
+        get() = user?.displayName ?: stageName?.takeIf { it.isNotBlank() } ?: fullName?.takeIf { it.isNotBlank() } ?: "Donateur"
+    val value: Int get() = (if (total > 0.0) total else score).toInt()
+}
 
 /**
  * Demande d'un spectateur pour rejoindre le live en invité (`live_join_requests`).
