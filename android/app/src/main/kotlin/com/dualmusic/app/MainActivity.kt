@@ -147,7 +147,9 @@ import kotlinx.coroutines.launch
 private const val API_BASE_URL = "http://10.0.2.2:4000"
 */
 
-private const val API_BASE_URL = "http://172.21.169.222:4000"
+// Tunnel USB `adb reverse tcp:4000 tcp:4000` : le téléphone atteint le backend du PC via
+// 127.0.0.1:4000, indépendamment de l'IP/tethering. À relancer après chaque rebranchement USB.
+private const val API_BASE_URL = "http://127.0.0.1:4000"
 
 
 
