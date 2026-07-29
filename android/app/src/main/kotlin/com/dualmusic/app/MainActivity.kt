@@ -485,6 +485,8 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
             quickGiftId = "",
             isHost = true,
             onEndLive = { broadcastLive = null },
+            liveTitle = live.title,
+            artistName = live.artist?.displayName,
         )
         return
     }

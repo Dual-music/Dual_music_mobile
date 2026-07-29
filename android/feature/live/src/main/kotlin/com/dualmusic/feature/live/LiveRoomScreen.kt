@@ -26,10 +26,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
@@ -41,7 +43,10 @@ import androidx.compose.material.icons.filled.PersonAddAlt1
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
@@ -94,12 +99,15 @@ fun LiveRoomScreen(
     prewarmedToken: com.dualmusic.domain.media.LiveKitToken? = null,
     isHost: Boolean = false,
     onEndLive: () -> Unit = {},
+    liveTitle: String? = null,
+    artistName: String? = null,
 ) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val viewerCount by viewModel.viewerCount.collectAsStateWithLifecycle()
     val remoteTrack by viewModel.media.primaryVideoTrack.collectAsStateWithLifecycle()
     val localTrack by viewModel.media.localVideoTrack.collectAsStateWithLifecycle()
     val micOn by viewModel.media.micEnabled.collectAsStateWithLifecycle()
+    val camOn by viewModel.media.camEnabled.collectAsStateWithLifecycle()
     val likes by viewModel.likes.collectAsStateWithLifecycle()
     val heartTick by viewModel.heartTick.collectAsStateWithLifecycle()
     val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
@@ -140,6 +148,8 @@ fun LiveRoomScreen(
     var showDedication by remember { mutableStateOf(false) }
     var showGuests by remember { mutableStateOf(false) }
     var showLeaderboard by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    var showDescription by remember { mutableStateOf(false) }
     var broadcasting by remember { mutableStateOf(false) }
     var pendingStage by remember { mutableStateOf(false) }
 
@@ -292,7 +302,10 @@ fun LiveRoomScreen(
         ) {
             RailButton(Icons.Filled.VisibilityOff, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { hideOverlay = true }
             if (isHost) {
-                RailButton(if (micOn) Icons.Filled.Mic else Icons.Filled.MicOff, tint = Color.White, bg = if (micOn) colors.primary else colors.destructive) { viewModel.toggleMic() }
+                // Contrôles du live (caméra/micro/flip/terminer) — visibles une fois lancé.
+                if (broadcasting) {
+                    RailButton(Icons.Filled.Settings, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showSettings = true }
+                }
                 // Invités (demandes lever-la-main) + badge de compteur.
                 Box {
                     RailButton(Icons.Filled.PersonAddAlt1, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showGuests = true; viewModel.loadJoinRequests() }
@@ -303,6 +316,8 @@ fun LiveRoomScreen(
                         ) { Text("${joinRequests.size}", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
                     }
                 }
+                // Infos artiste + description du live.
+                RailButton(Icons.Filled.Description, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showDescription = true }
                 RailButton(Icons.Filled.Close, tint = Color.White, bg = colors.destructive) { viewModel.endLive(onEndLive) }
             } else {
                 // Lever la main (demander à rejoindre / annuler).
@@ -568,6 +583,60 @@ fun LiveRoomScreen(
                 }
             }
         }
+
+        // Feuille « Contrôles du live » (hôte, en direct) : caméra / flip / micro / pause / stop.
+        if (showSettings) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showSettings = false })
+            val paused = !camOn && !micOn
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .background(colors.background)
+                    .navigationBarsPadding()
+                    .padding(DualMusicTheme.spacing.md),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text("🎛️ ${s.liveControls}", color = colors.foreground, fontWeight = FontWeight.Bold)
+                Pill(color = if (camOn) colors.primary else colors.destructive, modifier = Modifier.fillMaxWidth(), onClick = { viewModel.toggleCamera() }) {
+                    Icon(if (camOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff, contentDescription = null, tint = Color.White)
+                    Text("  ${if (camOn) s.cameraOn else s.cameraOff}", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+                Pill(color = Color.Black.copy(alpha = 0.35f), modifier = Modifier.fillMaxWidth(), onClick = { viewModel.switchCamera() }) {
+                    Icon(Icons.Filled.Cameraswitch, contentDescription = null, tint = Color.White)
+                    Text("  ${s.flipCamera}", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+                Pill(color = if (micOn) colors.primary else colors.destructive, modifier = Modifier.fillMaxWidth(), onClick = { viewModel.toggleMic() }) {
+                    Icon(if (micOn) Icons.Filled.Mic else Icons.Filled.MicOff, contentDescription = null, tint = Color.White)
+                    Text("  ${if (micOn) s.micOn else s.micOff}", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+                Pill(color = Color(0xFFEAB308), modifier = Modifier.fillMaxWidth(), onClick = { viewModel.setPaused(!paused) }) {
+                    Icon(Icons.Filled.Podcasts, contentDescription = null, tint = Color.White)
+                    Text("  ${if (paused) s.resume else s.pause}", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+                Pill(color = colors.destructive, modifier = Modifier.fillMaxWidth(), onClick = { showSettings = false; viewModel.endLive(onEndLive) }) {
+                    Icon(Icons.Filled.Close, contentDescription = null, tint = Color.White)
+                    Text("  ${s.endLive}", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        // Feuille « Description » : infos artiste + titre du live.
+        if (showDescription) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showDescription = false })
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .background(colors.background)
+                    .navigationBarsPadding()
+                    .padding(DualMusicTheme.spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text(artistName ?: s.artists, color = colors.foreground, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(liveTitle ?: s.liveActive, color = colors.mutedForeground)
+            }
+        }
     }
 }
 
@@ -611,13 +680,14 @@ private fun Chip(color: Color, onClick: (() -> Unit)? = null, content: @Composab
 
 /** Pastille cliquable (bouton). */
 @Composable
-private fun Pill(color: Color, onClick: () -> Unit, content: @Composable () -> Unit) {
+private fun Pill(color: Color, onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
+        horizontalArrangement = Arrangement.Center,
+        modifier = modifier
             .background(color, RoundedCornerShape(999.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = DualMusicTheme.spacing.lg, vertical = DualMusicTheme.spacing.sm),
+            .padding(horizontal = DualMusicTheme.spacing.lg, vertical = DualMusicTheme.spacing.md),
     ) { content() }
 }
 

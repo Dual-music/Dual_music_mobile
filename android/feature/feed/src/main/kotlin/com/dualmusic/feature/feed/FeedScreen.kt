@@ -77,6 +77,8 @@ fun FeedScreen(
                 hostUserId = item.artistId,
                 quickGiftId = "", // TODO(feature-gifts): sélecteur de cadeau réel
                 prewarmedToken = viewModel.prewarmedToken(item.id),
+                liveTitle = item.title,
+                artistName = item.artist?.displayName,
             )
         } else {
             Poster(item)

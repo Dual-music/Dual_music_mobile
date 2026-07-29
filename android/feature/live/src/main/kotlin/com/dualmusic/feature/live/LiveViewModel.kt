@@ -229,6 +229,23 @@ class LiveViewModel(
         viewModelScope.launch { runCatching { media.setMicEnabled(!media.micEnabled.value) } }
     }
 
+    /** Coupe/rétablit la caméra (mode hôte). */
+    fun toggleCamera() {
+        viewModelScope.launch { runCatching { media.setCamEnabled(!media.camEnabled.value) } }
+    }
+
+    /** Bascule caméra avant/arrière (mode hôte). */
+    fun switchCamera() {
+        runCatching { media.switchCamera() }
+    }
+
+    /** Pause/reprise du direct : coupe (ou rétablit) caméra + micro ensemble. */
+    fun setPaused(paused: Boolean) {
+        viewModelScope.launch {
+            runCatching { media.setCamEnabled(!paused); media.setMicEnabled(!paused) }
+        }
+    }
+
     /** Termine le live côté backend puis notifie l'appelant (mode hôte). */
     fun endLive(onDone: () -> Unit) {
         viewModelScope.launch {

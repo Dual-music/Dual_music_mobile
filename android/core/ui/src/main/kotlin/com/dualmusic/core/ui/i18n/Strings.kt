@@ -380,6 +380,12 @@ interface Strings {
     val goOnStage: String
     val topDonors: String
     val shareLiveText: String
+    val liveControls: String
+    val cameraOn: String
+    val cameraOff: String
+    val flipCamera: String
+    val pause: String
+    val resume: String
     // Contenu (publier lifestyle + mes vidéos/replays).
     val publishLifestyle: String
     val chooseVideo: String
@@ -745,6 +751,12 @@ object FrStrings : Strings {
     override val goOnStage = "Monter sur scène"
     override val topDonors = "Top donateurs"
     override val shareLiveText = "🔴 Je suis en live sur Dual Music ! Rejoins-moi."
+    override val liveControls = "Contrôles du live"
+    override val cameraOn = "Caméra activée"
+    override val cameraOff = "Caméra coupée"
+    override val flipCamera = "Retourner la caméra"
+    override val pause = "Pause"
+    override val resume = "Reprendre"
     override val publishLifestyle = "Publier du contenu Lifestyle"
     override val chooseVideo = "Choisir la vidéo"
     override val publishVideo = "Publier la vidéo"
@@ -1108,6 +1120,12 @@ object EnStrings : Strings {
     override val goOnStage = "Go on stage"
     override val topDonors = "Top donors"
     override val shareLiveText = "🔴 I'm live on Dual Music! Join me."
+    override val liveControls = "Live controls"
+    override val cameraOn = "Camera on"
+    override val cameraOff = "Camera off"
+    override val flipCamera = "Flip camera"
+    override val pause = "Pause"
+    override val resume = "Resume"
     override val publishLifestyle = "Publish Lifestyle content"
     override val chooseVideo = "Choose video"
     override val publishVideo = "Publish video"

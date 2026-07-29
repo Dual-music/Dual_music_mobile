@@ -5,6 +5,7 @@ import io.livekit.android.LiveKit
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
 import io.livekit.android.room.Room
+import io.livekit.android.room.track.LocalVideoTrack
 import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +58,10 @@ class LiveRoomClient(
     private val _micEnabled = MutableStateFlow(true)
     val micEnabled: StateFlow<Boolean> = _micEnabled.asStateFlow()
 
+    /** Caméra activée (mode hôte). */
+    private val _camEnabled = MutableStateFlow(true)
+    val camEnabled: StateFlow<Boolean> = _camEnabled.asStateFlow()
+
     /**
      * Rejoint une room : récupère un jeton (ou utilise un jeton pré-chauffé) puis se
      * connecte au SFU.
@@ -108,6 +113,7 @@ class LiveRoomClient(
         room.localParticipant.setCameraEnabled(true)
         room.localParticipant.setMicrophoneEnabled(true)
         _micEnabled.value = true
+        _camEnabled.value = true
         var tries = 0
         while (_localVideoTrack.value == null && tries < 12) {
             refreshLocalTrack()
@@ -130,6 +136,21 @@ class LiveRoomClient(
     suspend fun setMicEnabled(enabled: Boolean) {
         room.localParticipant.setMicrophoneEnabled(enabled)
         _micEnabled.value = enabled
+    }
+
+    /** Active/désactive la caméra (mode hôte). */
+    suspend fun setCamEnabled(enabled: Boolean) {
+        room.localParticipant.setCameraEnabled(enabled)
+        _camEnabled.value = enabled
+        refreshLocalTrack()
+    }
+
+    /** Bascule caméra avant/arrière. */
+    fun switchCamera() {
+        room.localParticipant.videoTrackPublications
+            .mapNotNull { it.second as? LocalVideoTrack }
+            .firstOrNull()
+            ?.switchCamera()
     }
 
     /** Rafraîchit la liste des pistes distantes + la piste primaire (première = hôte). */
