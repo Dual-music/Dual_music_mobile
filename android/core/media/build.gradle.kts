@@ -26,7 +26,9 @@ dependencies {
     implementation(project(":core:network"))
 
     // LiveKit Android (WebRTC + décodage HW). Bump 2.11→2.15 requis par track-processors.
-    implementation("io.livekit:livekit-android:2.15.0")
+    // `api` : les features (duel/live) utilisent SurfaceViewRenderer du SDK via ce module
+    // (avant, elles l'obtenaient transitivement des compose-components, désormais retirés).
+    api("io.livekit:livekit-android:2.15.0")
     // Traitement vidéo temps réel (flou d'arrière-plan / fond virtuel) — même version que le SDK.
     implementation("io.livekit:livekit-android-track-processors:2.15.0")
     // Fournit CameraXHelper (livekit.org.webrtc) requis par le processor.
