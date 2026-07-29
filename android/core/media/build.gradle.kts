@@ -25,11 +25,10 @@ dependencies {
     implementation(project(":shared-domain"))
     implementation(project(":core:network"))
 
-    // LiveKit Android (WebRTC + décodage HW) + composants Compose de rendu vidéo.
-    implementation("io.livekit:livekit-android:2.11.0")
-    implementation("io.livekit:livekit-android-compose-components:1.3.1")
-    // Traitement vidéo temps réel (flou d'arrière-plan / fond virtuel) — version = SDK.
-    implementation("io.livekit:livekit-android-track-processors:2.11.0")
+    // LiveKit Android (WebRTC + décodage HW). Bump 2.11→2.15 requis par track-processors.
+    implementation("io.livekit:livekit-android:2.15.0")
+    // Traitement vidéo temps réel (flou d'arrière-plan / fond virtuel) — même version que le SDK.
+    implementation("io.livekit:livekit-android-track-processors:2.15.0")
     // CameraX (requis par le provider caméra du processor) + ProcessLifecycleOwner.
     implementation("androidx.camera:camera-core:1.3.4")
     implementation("androidx.camera:camera-camera2:1.3.4")
