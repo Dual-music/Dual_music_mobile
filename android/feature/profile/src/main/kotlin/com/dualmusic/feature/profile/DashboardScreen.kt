@@ -78,9 +78,21 @@ class DashboardViewModel(private val repository: ProfileRepository) : ViewModel(
         if (_uiState.value.isLoading) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            val me = runCatching { repository.me() }.getOrNull()
+            // `/auth/me` porte les RÔLES (gating du menu artiste/manager). Un échec transitoire
+            // (réseau instable en tethering) ne doit PAS retomber silencieusement sur « fan » :
+            // on réessaie, et on conserve les rôles déjà chargés si l'appel échoue.
+            var me: MeResponse? = null
+            for (attempt in 0 until 3) {
+                me = runCatching { repository.me() }.getOrNull()
+                if (me != null) break
+                if (attempt < 2) kotlinx.coroutines.delay(700)
+            }
             val stats = runCatching { repository.stats() }.getOrDefault(UserStats())
-            _uiState.value = DashboardUiState(me = me, stats = stats, isLoading = false)
+            _uiState.value = DashboardUiState(
+                me = me ?: _uiState.value.me,
+                stats = stats,
+                isLoading = false,
+            )
         }
     }
 }
