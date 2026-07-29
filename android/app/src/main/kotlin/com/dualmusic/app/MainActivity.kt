@@ -147,7 +147,7 @@ import kotlinx.coroutines.launch
 private const val API_BASE_URL = "http://10.0.2.2:4000"
 */
 
-private const val API_BASE_URL = "http://172.21.169.43:4000"
+private const val API_BASE_URL = "http://172.21.169.222:4000"
 
 
 
