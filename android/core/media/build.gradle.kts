@@ -29,6 +29,8 @@ dependencies {
     implementation("io.livekit:livekit-android:2.15.0")
     // Traitement vidéo temps réel (flou d'arrière-plan / fond virtuel) — même version que le SDK.
     implementation("io.livekit:livekit-android-track-processors:2.15.0")
+    // Fournit CameraXHelper (livekit.org.webrtc) requis par le processor.
+    implementation("io.livekit:livekit-android-camerax:2.15.0")
     // CameraX (requis par le provider caméra du processor) + ProcessLifecycleOwner.
     implementation("androidx.camera:camera-core:1.3.4")
     implementation("androidx.camera:camera-camera2:1.3.4")
