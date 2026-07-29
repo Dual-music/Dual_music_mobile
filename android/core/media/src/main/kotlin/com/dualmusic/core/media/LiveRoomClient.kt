@@ -130,8 +130,8 @@ class LiveRoomClient(
      */
     private fun ensureProcessor() {
         if (processor != null) return
-        val p = VirtualBackgroundVideoProcessor(eglBase, Dispatchers.IO, initialBlurRadius = 16f)
-        p.enabled = false // passthrough par défaut (vidéo normale)
+        val p = VirtualBackgroundVideoProcessor(eglBase, Dispatchers.IO)
+        p.enabled = false // passthrough par défaut (vidéo normale ; flou activé via toggleBlur)
         processor = p
         val imageAnalysis = ImageAnalysis.Builder()
             .setResolutionSelector(
