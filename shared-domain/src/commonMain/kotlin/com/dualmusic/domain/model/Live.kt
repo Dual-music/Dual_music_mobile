@@ -21,6 +21,10 @@ data class Live(
     /** Profil d'affichage du host (nom, avatar, nom de scène). */
     val artist: DisplayProfile? = null,
 ) {
-    /** Room LiveKit effective (repli sur `live:id` si `roomId` absent). */
-    val liveKitRoom: String get() = roomId ?: "live:$id"
+    /**
+     * Room LiveKit effective. DOIT correspondre exactement à la convention du web
+     * (`live-<id>`, cf. LiveStream.tsx) pour que web et mobile publient/regardent la
+     * MÊME room. Le backend laisse `room_id` à null → on dérive toujours `live-<id>`.
+     */
+    val liveKitRoom: String get() = "live-$id"
 }
