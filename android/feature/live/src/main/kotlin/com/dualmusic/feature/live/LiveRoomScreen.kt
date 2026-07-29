@@ -55,6 +55,7 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material.icons.filled.Visibility
@@ -126,6 +127,7 @@ fun LiveRoomScreen(
     val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
     val giftFeed by viewModel.giftFeed.collectAsStateWithLifecycle()
     val giftCatalog by viewModel.giftCatalog.collectAsStateWithLifecycle()
+    val inventory by viewModel.inventory.collectAsStateWithLifecycle()
     val myJoinRequestId by viewModel.myJoinRequestId.collectAsStateWithLifecycle()
     val joinRequests by viewModel.joinRequests.collectAsStateWithLifecycle()
     val remoteVideos by viewModel.media.remoteVideos.collectAsStateWithLifecycle()
@@ -446,36 +448,71 @@ fun LiveRoomScreen(
             }
         }
 
-        // Panneau de sélection de cadeaux (feuille du bas).
+        // Panneau cadeaux (feuille du bas) : onglet « Mes cadeaux » (envoi depuis l'inventaire,
+        // parité web) + onglet « Boutique » (achat au catalogue → crédite l'inventaire).
         if (showGiftPanel) {
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showGiftPanel = false })
+            var giftShop by remember { mutableStateOf(false) }
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .fillMaxHeight(0.5f)
+                    .fillMaxHeight(0.55f)
                     .background(colors.background)
                     .navigationBarsPadding()
                     .padding(DualMusicTheme.spacing.md),
                 verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
             ) {
-                Text(s.sendGift, color = colors.foreground, fontWeight = FontWeight.Bold)
+                // Sélecteur d'onglet segmenté.
+                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    Pill(color = if (!giftShop) colors.primary else Color.Black.copy(alpha = 0.25f), onClick = { giftShop = false }) {
+                        Text(s.myGifts, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                    Pill(color = if (giftShop) colors.primary else Color.Black.copy(alpha = 0.25f), onClick = { giftShop = true }) {
+                        Text(s.giftShop, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
                 Column(
                     modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
                 ) {
-                    giftCatalog.forEach { gift ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-                                .clickable { viewModel.sendGift(gift.id, hostUserId); showGiftPanel = false }
-                                .padding(DualMusicTheme.spacing.md),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("${gift.emoji ?: "🎁"}  ${gift.name}", color = colors.foreground)
-                            Text("${gift.price.toInt()} ${s.credits}", color = colors.accent, fontWeight = FontWeight.Bold)
+                    if (!giftShop) {
+                        // Mes cadeaux : cliquer envoie au host (consomme 1 exemplaire).
+                        if (inventory.isEmpty()) {
+                            Text(s.noGiftsBuyInShop, color = colors.mutedForeground, fontSize = 13.sp)
+                        }
+                        inventory.forEach { g ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                    .clickable { viewModel.sendGift(g.id, hostUserId); showGiftPanel = false }
+                                    .padding(DualMusicTheme.spacing.md),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("${g.imageUrl ?: "🎁"}  ${g.name}", color = colors.foreground)
+                                Text("×${g.quantity}", color = colors.accent, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    } else {
+                        // Boutique : cliquer achète 1 exemplaire (débite le wallet).
+                        giftCatalog.forEach { gift ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                    .clickable { viewModel.purchaseGift(gift.id) }
+                                    .padding(DualMusicTheme.spacing.md),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("${gift.emoji ?: "🎁"}  ${gift.name}", color = colors.foreground)
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                                    Text("${gift.price.toInt()} ${s.credits}", color = colors.accent, fontWeight = FontWeight.Bold)
+                                    Icon(Icons.Filled.ShoppingBag, contentDescription = s.giftShop, tint = colors.primary, modifier = Modifier.size(18.dp))
+                                }
+                            }
                         }
                     }
                 }

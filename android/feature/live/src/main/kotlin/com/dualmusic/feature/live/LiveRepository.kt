@@ -52,12 +52,29 @@ class LiveRepository(private val api: ApiClient) {
     suspend fun likesCount(liveId: String): Int =
         api.request(Endpoint.get("/lives/$liveId/likes"), LikesResponse.serializer()).likes
 
-    /** Catalogue des cadeaux virtuels (pour le panneau de sélection). */
+    /** Catalogue des cadeaux virtuels (pour la boutique d'achat). */
     suspend fun giftCatalog(): List<com.dualmusic.domain.model.VirtualGift> =
         api.request(
             Endpoint.get(com.dualmusic.domain.gift.GiftEndpoints.CATALOG),
             ListSerializer(com.dualmusic.domain.model.VirtualGift.serializer()),
         )
+
+    /**
+     * Inventaire du spectateur : cadeaux possédés (achetés) avec leur quantité.
+     * L'envoi consomme un cadeau de l'inventaire (parité web — le backend exige la possession).
+     */
+    suspend fun inventory(): List<OwnedGift> =
+        api.request(Endpoint.get("/gifts/inventory"), ListSerializer(OwnedGift.serializer()))
+
+    /**
+     * Achète `quantity` exemplaires d'un cadeau dans l'inventaire (débit wallet atomique).
+     * `Idempotency-Key` anti double-débit.
+     */
+    suspend fun purchaseGift(giftId: String, quantity: Int = 1) {
+        val body = """{"giftId":"$giftId","quantity":$quantity}"""
+        val idem = "buy-$giftId-$quantity-${System.nanoTime()}"
+        api.request<Unit>(Endpoint.post("/wallet/gifts/purchase", body, idempotencyKey = idem))
+    }
 
     /** Classement des meilleurs donateurs du live (`GET /leaderboards/gifts`). */
     suspend fun giftLeaderboard(liveId: String): List<GiftLeaderboardEntry> =
@@ -128,6 +145,16 @@ class LiveRepository(private val api: ApiClient) {
 /** Réponse de `GET /lives/:id/likes`. */
 @Serializable
 data class LikesResponse(val likes: Int = 0)
+
+/** Cadeau possédé dans l'inventaire (`GET /gifts/inventory`). */
+@Serializable
+data class OwnedGift(
+    @SerialName("gift_id") val id: String,
+    val name: String = "",
+    val price: Double = 0.0,
+    @SerialName("image_url") val imageUrl: String? = null,
+    val quantity: Int = 0,
+)
 
 /** Entrée du classement des donateurs (`GET /leaderboards/gifts`). Champs souples. */
 @Serializable

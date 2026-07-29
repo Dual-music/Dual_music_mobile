@@ -94,6 +94,10 @@ class LiveViewModel(
     private val _giftCatalog = MutableStateFlow<List<com.dualmusic.domain.model.VirtualGift>>(emptyList())
     val giftCatalog: StateFlow<List<com.dualmusic.domain.model.VirtualGift>> = _giftCatalog.asStateFlow()
 
+    /** Inventaire (cadeaux possédés) — l'envoi consomme un cadeau d'ici (parité web). */
+    private val _inventory = MutableStateFlow<List<OwnedGift>>(emptyList())
+    val inventory: StateFlow<List<OwnedGift>> = _inventory.asStateFlow()
+
     /** Classement des donateurs (chargé à l'ouverture du trophée). */
     private val _giftLeaderboard = MutableStateFlow<List<GiftLeaderboardEntry>>(emptyList())
     val giftLeaderboard: StateFlow<List<GiftLeaderboardEntry>> = _giftLeaderboard.asStateFlow()
@@ -132,6 +136,7 @@ class LiveViewModel(
         viewModelScope.launch {
             runCatching { repository.giftCatalog() }.getOrNull()?.let { _giftCatalog.value = it }
         }
+        loadInventory()
         if (isHost) loadJoinRequests()
         if (!isHost) viewModelScope.launch { myUserId = repository.myUserId() }
         connectRealtime()
@@ -277,9 +282,29 @@ class LiveViewModel(
         viewModelScope.launch { runCatching { repository.postMessage(liveId, content) } }
     }
 
-    /** Envoie un cadeau au host. */
+    /** Charge l'inventaire (cadeaux possédés). */
+    fun loadInventory() {
+        viewModelScope.launch {
+            runCatching { repository.inventory() }.getOrNull()?.let { _inventory.value = it }
+        }
+    }
+
+    /**
+     * Envoie un cadeau possédé au host. Le backend débite l'inventaire, distribue les crédits
+     * et diffuse l'animation `gift` à toute la room (tous les spectateurs — dont l'émetteur —
+     * la voient via l'event temps réel `gift`). Recharge l'inventaire pour la quantité restante.
+     */
     fun sendGift(giftId: String, toUserId: String) {
-        viewModelScope.launch { runCatching { repository.sendGift(liveId, giftId, toUserId) } }
+        viewModelScope.launch {
+            runCatching { repository.sendGift(liveId, giftId, toUserId) }.onSuccess { loadInventory() }
+        }
+    }
+
+    /** Achète un cadeau (boutique) puis recharge l'inventaire. */
+    fun purchaseGift(giftId: String) {
+        viewModelScope.launch {
+            runCatching { repository.purchaseGift(giftId, 1) }.onSuccess { loadInventory() }
+        }
     }
 
     /** Charge le classement des donateurs du live (trophée). */
