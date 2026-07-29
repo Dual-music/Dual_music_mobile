@@ -246,6 +246,11 @@ class LiveViewModel(
         }
     }
 
+    /** Active/désactive le flou d'arrière-plan (filtre). */
+    fun toggleBlur() {
+        runCatching { media.toggleBlur() }
+    }
+
     /** Termine le live côté backend puis notifie l'appelant (mode hôte). */
     fun endLive(onDone: () -> Unit) {
         viewModelScope.launch {

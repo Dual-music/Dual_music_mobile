@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CardGiftcard
@@ -108,6 +109,7 @@ fun LiveRoomScreen(
     val localTrack by viewModel.media.localVideoTrack.collectAsStateWithLifecycle()
     val micOn by viewModel.media.micEnabled.collectAsStateWithLifecycle()
     val camOn by viewModel.media.camEnabled.collectAsStateWithLifecycle()
+    val blurOn by viewModel.media.blurEnabled.collectAsStateWithLifecycle()
     val likes by viewModel.likes.collectAsStateWithLifecycle()
     val heartTick by viewModel.heartTick.collectAsStateWithLifecycle()
     val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
@@ -318,6 +320,10 @@ fun LiveRoomScreen(
                 }
                 // Infos artiste + description du live.
                 RailButton(Icons.Filled.Description, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showDescription = true }
+                // Filtre : flou d'arrière-plan (en direct). Surligné quand actif.
+                if (broadcasting) {
+                    RailButton(Icons.Filled.BlurOn, tint = Color.White, bg = if (blurOn) colors.primary else Color.Black.copy(alpha = 0.4f)) { viewModel.toggleBlur() }
+                }
                 RailButton(Icons.Filled.Close, tint = Color.White, bg = colors.destructive) { viewModel.endLive(onEndLive) }
             } else {
                 // Lever la main (demander à rejoindre / annuler).

@@ -1,17 +1,30 @@
 package com.dualmusic.core.media
 
 import android.content.Context
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.lifecycle.ProcessLifecycleOwner
 import io.livekit.android.LiveKit
+import io.livekit.android.LiveKitOverrides
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
 import io.livekit.android.room.Room
+import io.livekit.android.room.track.CameraPosition
 import io.livekit.android.room.track.LocalVideoTrack
+import io.livekit.android.room.track.LocalVideoTrackOptions
 import io.livekit.android.room.track.VideoTrack
+import io.livekit.android.room.track.video.CameraCapturerUtils
+import io.livekit.android.track.processing.video.VirtualBackgroundVideoProcessor
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import livekit.org.webrtc.CameraXHelper
+import livekit.org.webrtc.EglBase
 
 /** État de connexion simplifié pour l'UI. */
 sealed interface LiveConnectionState {
@@ -23,12 +36,13 @@ sealed interface LiveConnectionState {
 }
 
 /**
- * Client d'une room live LiveKit (viewer) — Android.
+ * Client d'une room live LiveKit — Android.
  *
  * Enveloppe le `Room` LiveKit : connexion via jeton backend, souscription automatique, et
- * exposition de la **piste vidéo primaire** (le host) en [StateFlow] pour un rendu Compose
- * (`io.livekit.android.compose` dans la feature). Décodage matériel (MediaCodec) géré par
- * le SDK.
+ * exposition des pistes vidéo (host + invités) en [StateFlow] pour un rendu Compose.
+ *
+ * Mode hôte : publie la caméra via un `LocalVideoTrack` auquel est attaché un
+ * [VirtualBackgroundVideoProcessor] (flou d'arrière-plan togglable, passthrough sinon).
  *
  * @param scope portée coroutine (viewModelScope) où sont collectés les événements de room.
  */
@@ -37,8 +51,11 @@ class LiveRoomClient(
     private val tokenService: LiveKitTokenService,
     private val scope: CoroutineScope,
 ) {
-    /** Room LiveKit sous-jacente (exposée pour le rendu Compose / diagnostics). */
-    val room: Room = LiveKit.create(context.applicationContext)
+    private val appContext = context.applicationContext
+    private val eglBase: EglBase = EglBase.create()
+
+    /** Room LiveKit sous-jacente (créée avec notre EglBase pour le processor vidéo). */
+    val room: Room = LiveKit.create(appContext, overrides = LiveKitOverrides(eglBase = eglBase))
 
     private val _connectionState = MutableStateFlow<LiveConnectionState>(LiveConnectionState.Idle)
     val connectionState: StateFlow<LiveConnectionState> = _connectionState.asStateFlow()
@@ -62,13 +79,18 @@ class LiveRoomClient(
     private val _camEnabled = MutableStateFlow(true)
     val camEnabled: StateFlow<Boolean> = _camEnabled.asStateFlow()
 
+    /** Flou d'arrière-plan actif (mode hôte). */
+    private val _blurEnabled = MutableStateFlow(false)
+    val blurEnabled: StateFlow<Boolean> = _blurEnabled.asStateFlow()
+
+    // --- Traitement vidéo (flou d'arrière-plan) ---
+    private var processor: VirtualBackgroundVideoProcessor? = null
+    private var cameraProvider: CameraCapturerUtils.CameraProvider? = null
+    private var cameraTrack: LocalVideoTrack? = null
+
     /**
      * Rejoint une room : récupère un jeton (ou utilise un jeton pré-chauffé) puis se
      * connecte au SFU.
-     * @param roomName nom de room fourni par l'API.
-     * @param isHost vrai pour l'artiste (publication), faux pour un viewer.
-     * @param prewarmedToken jeton déjà obtenu par le feed (prefetch) — évite un aller-retour
-     *   réseau au scroll, réduisant la latence d'entrée-live.
      */
     suspend fun join(
         roomName: String,
@@ -78,7 +100,6 @@ class LiveRoomClient(
     ) {
         _connectionState.value = LiveConnectionState.Connecting
         try {
-            // Collecte des événements de room pour rafraîchir l'état + la piste primaire.
             scope.launch {
                 room.events.collect { event ->
                     when (event) {
@@ -96,8 +117,7 @@ class LiveRoomClient(
             val creds = prewarmedToken ?: tokenService.token(roomName = roomName, isHost = isHost, canPublish = canPublish)
             room.connect(creds.url, creds.token)
             _connectionState.value = LiveConnectionState.Connected
-            // La publication caméra/micro (hôte) est déclenchée par l'UI via [startBroadcast]
-            // (bouton « Démarrer le Live ») — pas automatiquement à la connexion.
+            // La publication caméra/micro (hôte) est déclenchée par l'UI via [startBroadcast].
             refreshPrimaryTrack()
         } catch (e: Throwable) {
             _connectionState.value = LiveConnectionState.Failed(e.message ?: "Connexion impossible")
@@ -105,14 +125,44 @@ class LiveRoomClient(
     }
 
     /**
-     * Démarre la DIFFUSION (hôte) : publie caméra + micro puis expose l'aperçu local.
-     * La piste locale pouvant apparaître de façon asynchrone, on la rafraîchit en boucle
-     * courte jusqu'à sa disponibilité.
+     * Prépare (une fois) le processor de flou + le provider CameraX qui l'alimente.
+     * Si CameraX n'est pas supporté, on retombe sur la caméra par défaut (sans flou).
+     */
+    private fun ensureProcessor() {
+        if (processor != null) return
+        val p = VirtualBackgroundVideoProcessor(eglBase, Dispatchers.IO, initialBlurRadius = 16f)
+        p.enabled = false // passthrough par défaut (vidéo normale)
+        processor = p
+        val imageAnalysis = ImageAnalysis.Builder()
+            .setResolutionSelector(
+                ResolutionSelector.Builder()
+                    .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
+                    .build(),
+            )
+            .build()
+            .apply { setAnalyzer(Dispatchers.IO.asExecutor(), p.imageAnalyzer) }
+        val provider = CameraXHelper.createCameraProvider(ProcessLifecycleOwner.get(), arrayOf(imageAnalysis))
+        if (provider.isSupported(appContext)) {
+            CameraCapturerUtils.registerCameraProvider(provider)
+            cameraProvider = provider
+        }
+    }
+
+    /**
+     * Démarre la DIFFUSION (hôte) : micro + publication d'une piste caméra dotée du
+     * processor (flou désactivé au départ). Rafraîchit l'aperçu local.
      */
     suspend fun startBroadcast() {
-        room.localParticipant.setCameraEnabled(true)
         room.localParticipant.setMicrophoneEnabled(true)
         _micEnabled.value = true
+        ensureProcessor()
+        val track = room.localParticipant.createVideoTrack(
+            options = LocalVideoTrackOptions(position = CameraPosition.FRONT),
+            videoProcessor = processor,
+        )
+        track.startCapture()
+        room.localParticipant.publishVideoTrack(track)
+        cameraTrack = track
         _camEnabled.value = true
         var tries = 0
         while (_localVideoTrack.value == null && tries < 12) {
@@ -123,12 +173,19 @@ class LiveRoomClient(
         }
     }
 
-    /** Quitte la room (arrière-plan / scroll hors du live). */
+    /** Quitte la room + libère la caméra / le processor. */
     fun leave() {
         room.disconnect()
+        cameraTrack?.let { runCatching { it.stopCapture() } }
+        cameraTrack = null
+        cameraProvider?.let { runCatching { CameraCapturerUtils.unregisterCameraProvider(it) } }
+        cameraProvider = null
+        runCatching { processor?.dispose() }
+        processor = null
         _primaryVideoTrack.value = null
         _remoteVideos.value = emptyList()
         _localVideoTrack.value = null
+        _blurEnabled.value = false
         _connectionState.value = LiveConnectionState.Idle
     }
 
@@ -138,19 +195,25 @@ class LiveRoomClient(
         _micEnabled.value = enabled
     }
 
-    /** Active/désactive la caméra (mode hôte). */
-    suspend fun setCamEnabled(enabled: Boolean) {
-        room.localParticipant.setCameraEnabled(enabled)
+    /** Active/désactive la caméra (mode hôte) : suspend/reprend la capture de la piste. */
+    fun setCamEnabled(enabled: Boolean) {
+        val t = cameraTrack ?: return
+        if (enabled) t.startCapture() else t.stopCapture()
         _camEnabled.value = enabled
         refreshLocalTrack()
     }
 
-    /** Bascule caméra avant/arrière. */
+    /** Bascule caméra avant/arrière (mode hôte). */
     fun switchCamera() {
-        room.localParticipant.videoTrackPublications
-            .mapNotNull { it.second as? LocalVideoTrack }
-            .firstOrNull()
-            ?.switchCamera()
+        cameraTrack?.switchCamera()
+    }
+
+    /** Active/désactive le flou d'arrière-plan (sans republier la piste). */
+    fun toggleBlur() {
+        processor?.let {
+            it.enabled = !it.enabled
+            _blurEnabled.value = it.enabled
+        }
     }
 
     /** Rafraîchit la liste des pistes distantes + la piste primaire (première = hôte). */
