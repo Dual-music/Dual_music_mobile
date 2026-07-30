@@ -384,6 +384,7 @@ interface Strings {
     val pendingRequests: String
     val activeGuests: String
     val timeRemaining: String
+    val liveWaiting: String
     val goOnStage: String
     val topDonors: String
     val shareLiveText: String
@@ -762,6 +763,7 @@ object FrStrings : Strings {
     override val pendingRequests = "Demandes en attente"
     override val activeGuests = "Invités actifs"
     override val timeRemaining = "Temps restant"
+    override val liveWaiting = "Live en attente… l'artiste revient bientôt"
     override val goOnStage = "Monter sur scène"
     override val topDonors = "Top donateurs"
     override val shareLiveText = "🔴 Je suis en live sur Dual Music ! Rejoins-moi."
@@ -1138,6 +1140,7 @@ object EnStrings : Strings {
     override val pendingRequests = "Pending requests"
     override val activeGuests = "Active guests"
     override val timeRemaining = "Time left"
+    override val liveWaiting = "Live paused… the artist will be back soon"
     override val goOnStage = "Go on stage"
     override val topDonors = "Top donors"
     override val shareLiveText = "🔴 I'm live on Dual Music! Join me."

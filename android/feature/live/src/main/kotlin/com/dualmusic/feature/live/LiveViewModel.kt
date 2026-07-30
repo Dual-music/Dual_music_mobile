@@ -45,6 +45,7 @@ data class BroadcastPayload(
     val targetUserId: String? = null,
     val targetUserName: String? = null,
     val value: kotlinx.serialization.json.JsonElement? = null,
+    val status: String? = null,
 )
 
 /** Événement de demande d'invité (`join:new` / `join:update`). */
@@ -130,6 +131,10 @@ class LiveViewModel(
     /** Chrono de temps de parole par invité (userId → secondes restantes). Vu par tous. */
     private val _guestTimers = MutableStateFlow<Map<String, Int>>(emptyMap())
     val guestTimers: StateFlow<Map<String, Int>> = _guestTimers.asStateFlow()
+
+    /** Spectateur : l'hôte a quitté sans terminer → le live est « en attente ». */
+    private val _liveWaiting = MutableStateFlow(false)
+    val liveWaiting: StateFlow<Boolean> = _liveWaiting.asStateFlow()
 
     /** Spectateur : sa demande a été acceptée → il peut monter sur scène (publier). */
     private val _isGuestAccepted = MutableStateFlow(false)
@@ -231,6 +236,20 @@ class LiveViewModel(
             _guestTimers.update { it - userId }
             loadJoinRequests()
         }
+    }
+
+    /** Hôte : signale aux spectateurs que le live passe « en attente » (il quitte sans terminer). */
+    fun broadcastLiveWaiting() {
+        liveSession?.emit(
+            "broadcast",
+            org.json.JSONObject(
+                mapOf(
+                    "channel" to "live-controls-$liveId",
+                    "event" to "live_status",
+                    "payload" to org.json.JSONObject().put("status", "waiting"),
+                ),
+            ),
+        )
     }
 
     /** Construit et émet une action invité sur le canal `live-controls-<id>`. */
@@ -451,6 +470,7 @@ class LiveViewModel(
                 when (env.event) {
                     "emoji_reaction" -> env.payload?.emoji?.let { pushEmoji(it) }
                     "guest_action" -> env.payload?.let { onGuestAction(it) }
+                    "live_status" -> if (!isHost) _liveWaiting.value = env.payload?.status == "waiting"
                 }
             }
             // Demandes d'invités (hôte) : rafraîchir la liste à chaque nouvelle demande / MAJ.

@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.PanTool
@@ -135,6 +136,7 @@ fun LiveRoomScreen(
     val joinRequests by viewModel.joinRequests.collectAsStateWithLifecycle()
     val acceptedGuests by viewModel.acceptedGuests.collectAsStateWithLifecycle()
     val guestTimers by viewModel.guestTimers.collectAsStateWithLifecycle()
+    val liveWaiting by viewModel.liveWaiting.collectAsStateWithLifecycle()
     val remoteVideos by viewModel.media.remoteVideos.collectAsStateWithLifecycle()
     val isGuestAccepted by viewModel.isGuestAccepted.collectAsStateWithLifecycle()
     val giftLeaderboard by viewModel.giftLeaderboard.collectAsStateWithLifecycle()
@@ -214,6 +216,19 @@ fun LiveRoomScreen(
                 Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent, Color.Black.copy(alpha = 0.55f))),
             ),
         )
+
+        // Spectateur : l'hôte a quitté sans terminer → bannière « live en attente ».
+        if (liveWaiting && !isHost) {
+            Box(
+                modifier = Modifier.align(Alignment.Center).background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(16.dp)).padding(DualMusicTheme.spacing.lg),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    Icon(Icons.Filled.Schedule, contentDescription = null, tint = Color.White, modifier = Modifier.size(36.dp))
+                    Text(s.liveWaiting, color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
 
         // Cadeau reçu : burst central (halo GPU).
         giftFeed.lastOrNull()?.let { gift ->
@@ -351,7 +366,7 @@ fun LiveRoomScreen(
                 if (broadcasting) {
                     RailButton(Icons.Filled.BlurOn, tint = Color.White, bg = if (blurOn) colors.primary else Color.Black.copy(alpha = 0.4f)) { viewModel.toggleBlur() }
                 }
-                RailButton(Icons.Filled.Close, tint = Color.White, bg = colors.destructive) { viewModel.endLive(onEndLive) }
+                // (« Terminer le live » est dans la feuille de contrôles ⚙️, pas ici.)
             } else {
                 // Lever la main (demander à rejoindre / annuler).
                 RailButton(
@@ -361,6 +376,16 @@ fun LiveRoomScreen(
                 ) { if (myJoinRequestId == null) viewModel.requestJoin() else viewModel.cancelJoin() }
                 RailButton(Icons.Filled.Campaign, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showDedication = true }
                 RailButton(Icons.Filled.Flag, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showReport = true }
+                // Invité sur scène : ses propres contrôles (micro/caméra/flip) via la feuille ⚙️.
+                if (broadcasting) {
+                    RailButton(Icons.Filled.Settings, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showSettings = true }
+                }
+            }
+            // Quitter le live SANS y mettre fin — disponible pour TOUT LE MONDE. Si c'est l'hôte
+            // qui quitte, le live passe « en attente » pour tous les spectateurs.
+            RailButton(Icons.Filled.Logout, tint = Color.White, bg = colors.destructive) {
+                if (isHost) viewModel.broadcastLiveWaiting()
+                onEndLive()
             }
         }
 
@@ -774,9 +799,12 @@ fun LiveRoomScreen(
                     Icon(Icons.Filled.Podcasts, contentDescription = null, tint = Color.White)
                     Text("  ${if (paused) s.resume else s.pause}", color = Color.White, fontWeight = FontWeight.Bold)
                 }
-                Pill(color = colors.destructive, modifier = Modifier.fillMaxWidth(), onClick = { showSettings = false; viewModel.endLive(onEndLive) }) {
-                    Icon(Icons.Filled.Close, contentDescription = null, tint = Color.White)
-                    Text("  ${s.endLive}", color = Color.White, fontWeight = FontWeight.Bold)
+                // « Terminer le live » : réservé à l'hôte (met fin au direct pour tout le monde).
+                if (isHost) {
+                    Pill(color = colors.destructive, modifier = Modifier.fillMaxWidth(), onClick = { showSettings = false; viewModel.endLive(onEndLive) }) {
+                        Icon(Icons.Filled.Close, contentDescription = null, tint = Color.White)
+                        Text("  ${s.endLive}", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
