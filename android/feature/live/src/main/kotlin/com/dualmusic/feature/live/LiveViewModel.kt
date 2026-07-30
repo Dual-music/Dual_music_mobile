@@ -244,7 +244,7 @@ class LiveViewModel(
 
     /** Bascule caméra avant/arrière (mode hôte). */
     fun switchCamera() {
-        runCatching { media.switchCamera() }
+        viewModelScope.launch { runCatching { media.switchCamera() } }
     }
 
     /** Pause/reprise du direct : coupe (ou rétablit) caméra + micro ensemble. */

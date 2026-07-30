@@ -87,6 +87,7 @@ class LiveRoomClient(
     private var processor: VirtualBackgroundVideoProcessor? = null
     private var cameraProvider: CameraCapturerUtils.CameraProvider? = null
     private var cameraTrack: LocalVideoTrack? = null
+    private var currentPosition: CameraPosition = CameraPosition.FRONT
 
     /**
      * Rejoint une room : récupère un jeton (ou utilise un jeton pré-chauffé) puis se
@@ -163,6 +164,7 @@ class LiveRoomClient(
         track.startCapture()
         room.localParticipant.publishVideoTrack(track)
         cameraTrack = track
+        currentPosition = CameraPosition.FRONT
         _camEnabled.value = true
         var tries = 0
         while (_localVideoTrack.value == null && tries < 12) {
@@ -203,9 +205,29 @@ class LiveRoomClient(
         refreshLocalTrack()
     }
 
-    /** Bascule caméra avant/arrière (mode hôte). */
-    fun switchCamera() {
-        cameraTrack?.switchCamera()
+    /**
+     * Bascule caméra avant/arrière (mode hôte).
+     *
+     * On NE passe PAS par `LocalVideoTrack.switchCamera()` : avec un provider CameraX enregistré
+     * (pour le flou), son chemin interne peut lever une exception ASYNCHRONE (thread capturer)
+     * qui échappe au runCatching de l'appelant et fait crasher l'app. On recrée proprement la
+     * piste avec la position opposée (même processor), ce qui est robuste.
+     */
+    suspend fun switchCamera() {
+        val old = cameraTrack ?: return
+        val newPos = if (currentPosition == CameraPosition.FRONT) CameraPosition.BACK else CameraPosition.FRONT
+        runCatching { room.localParticipant.unpublishTrack(old) }
+        runCatching { old.stopCapture() }
+        val newTrack = room.localParticipant.createVideoTrack(
+            options = LocalVideoTrackOptions(position = newPos),
+            videoProcessor = processor,
+        )
+        runCatching { newTrack.startCapture() }
+        room.localParticipant.publishVideoTrack(newTrack)
+        cameraTrack = newTrack
+        currentPosition = newPos
+        _camEnabled.value = true
+        refreshLocalTrack()
     }
 
     /** Active/désactive le flou d'arrière-plan (sans republier la piste). */
