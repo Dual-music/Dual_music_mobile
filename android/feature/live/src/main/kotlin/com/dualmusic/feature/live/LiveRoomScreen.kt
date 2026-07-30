@@ -90,6 +90,8 @@ import com.dualmusic.core.ui.gifts.GiftBurst
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import io.livekit.android.renderer.SurfaceViewRenderer
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * Écran d'un live plein écran, style TikTok — parité avec le format mobile du web
@@ -731,9 +733,9 @@ private fun BoxScope.FloatingReaction(symbol: String) {
     val drift = remember { (-28..28).random() }
     val startScale = remember { 0.7f + (0..30).random() / 100f }
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.coroutineScope {
-            kotlinx.coroutines.launch { rise.animateTo(1f, tween(2400, easing = LinearEasing)) }
-            kotlinx.coroutines.launch {
+        coroutineScope {
+            launch { rise.animateTo(1f, tween(2400, easing = LinearEasing)) }
+            launch {
                 fade.animateTo(1f, tween(300))
                 fade.animateTo(0f, tween(2100))
             }
