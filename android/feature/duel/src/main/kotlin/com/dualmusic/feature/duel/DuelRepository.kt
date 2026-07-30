@@ -15,7 +15,8 @@ import kotlinx.serialization.builtins.ListSerializer
 data class DuelChatMessage(
     val id: String? = null,
     @SerialName("user_id") val userId: String,
-    val content: String,
+    // Le backend utilise la clé `message` (colonne DB), pas `content`.
+    @SerialName("message") val content: String,
     // Le backend renvoie l'auteur sous la clé `author` (REST + temps réel).
     @SerialName("author") val user: DisplayProfile? = null,
 ) {
@@ -64,7 +65,7 @@ class DuelRepository(private val api: ApiClient) {
 
     /** Poste un message (le backend diffuse ensuite via Socket.IO). */
     suspend fun postMessage(duelId: String, content: String) {
-        api.request<Unit>(Endpoint.post(DuelEndpoints.messages(duelId), """{"content":${content.jsonQuoted()}}"""))
+        api.request<Unit>(Endpoint.post(DuelEndpoints.messages(duelId), """{"message":${content.jsonQuoted()}}"""))
     }
 }
 

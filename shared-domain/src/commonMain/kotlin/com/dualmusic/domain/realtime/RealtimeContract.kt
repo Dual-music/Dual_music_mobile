@@ -162,7 +162,8 @@ data class PresencePayload(
 data class ChatMessagePayload(
     val id: String? = null,
     @SerialName("user_id") val userId: String,
-    val content: String,
+    // Le backend utilise la clé `message` (colonne DB), pas `content`.
+    @SerialName("message") val content: String,
     @SerialName("created_at") val createdAt: String? = null,
     // Le backend diffuse l'auteur sous la clé `author` (chat.service.js) — pas `user`.
     @SerialName("author") val user: com.dualmusic.domain.model.DisplayProfile? = null,

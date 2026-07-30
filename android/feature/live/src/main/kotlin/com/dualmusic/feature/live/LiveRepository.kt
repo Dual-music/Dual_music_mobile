@@ -12,7 +12,8 @@ import kotlinx.serialization.builtins.ListSerializer
 data class LiveChatMessage(
     val id: String? = null,
     @SerialName("user_id") val userId: String,
-    val content: String,
+    // Le backend utilise la clé `message` (colonne DB), pas `content`.
+    @SerialName("message") val content: String,
     // Le backend renvoie l'auteur sous la clé `author` (REST + temps réel).
     @SerialName("author") val user: DisplayProfile? = null,
 ) {
@@ -33,9 +34,9 @@ class LiveRepository(private val api: ApiClient) {
             ListSerializer(LiveChatMessage.serializer()),
         )
 
-    /** Poste un message (le backend diffuse ensuite via Socket.IO). */
+    /** Poste un message (le backend diffuse ensuite via Socket.IO). Clé `message` (colonne DB). */
     suspend fun postMessage(liveId: String, content: String) {
-        api.request<Unit>(Endpoint.post("/lives/$liveId/messages", """{"content":${content.jsonQuoted()}}"""))
+        api.request<Unit>(Endpoint.post("/lives/$liveId/messages", """{"message":${content.jsonQuoted()}}"""))
     }
 
     /** Termine le live (hôte). */
