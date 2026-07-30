@@ -366,6 +366,7 @@ interface Strings {
     val sendGift: String
     val myGifts: String
     val giftShop: String
+    val buyGift: String
     val noGiftsBuyInShop: String
     val readyToStart: String
     val clickToStart: String
@@ -740,6 +741,7 @@ object FrStrings : Strings {
     override val sendGift = "Envoyer un cadeau"
     override val myGifts = "Mes cadeaux"
     override val giftShop = "Boutique"
+    override val buyGift = "Acheter"
     override val noGiftsBuyInShop = "Aucun cadeau. Achète-en dans la Boutique."
     override val readyToStart = "Prêt à démarrer"
     override val clickToStart = "Appuyez pour commencer le direct"
@@ -1112,6 +1114,7 @@ object EnStrings : Strings {
     override val sendGift = "Send a gift"
     override val myGifts = "My gifts"
     override val giftShop = "Shop"
+    override val buyGift = "Buy"
     override val noGiftsBuyInShop = "No gifts yet. Buy some in the Shop."
     override val readyToStart = "Ready to start"
     override val clickToStart = "Tap to go live"

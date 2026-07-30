@@ -431,21 +431,38 @@ fun LiveRoomScreen(
             var draft by remember { mutableStateOf("") }
             val commentFocus = remember { FocusRequester() }
             LaunchedEffect(Unit) { commentFocus.requestFocus() }
-            Row(
+            var showChatEmoji by remember { mutableStateOf(false) }
+            Column(
                 modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(colors.background).navigationBarsPadding().imePadding().padding(DualMusicTheme.spacing.md),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
             ) {
-                OutlinedTextField(
-                    value = draft,
-                    onValueChange = { draft = it },
-                    placeholder = { Text(s.saySomething) },
-                    singleLine = true,
-                    keyboardActions = KeyboardActions(onDone = { viewModel.sendMessage(draft); draft = ""; showComment = false }),
-                    modifier = Modifier.weight(1f).focusRequester(commentFocus),
-                )
-                RailButton(Icons.Filled.Send, tint = Color.White, bg = colors.primary) {
-                    viewModel.sendMessage(draft); draft = ""; showComment = false
+                // Sélecteur d'emojis : ajoute l'emoji au texte du commentaire (comme le web).
+                if (showChatEmoji) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+                    ) {
+                        ChatComposeEmojis.forEach { e ->
+                            Text(e, fontSize = 22.sp, modifier = Modifier.clickable { draft += e })
+                        }
+                    }
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+                ) {
+                    RailButton(Icons.Filled.EmojiEmotions, tint = Color.White, bg = Color.Black.copy(alpha = 0.3f)) { showChatEmoji = !showChatEmoji }
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        placeholder = { Text(s.saySomething) },
+                        singleLine = true,
+                        keyboardActions = KeyboardActions(onDone = { viewModel.sendMessage(draft); draft = ""; showComment = false }),
+                        modifier = Modifier.weight(1f).focusRequester(commentFocus),
+                    )
+                    RailButton(Icons.Filled.Send, tint = Color.White, bg = colors.primary) {
+                        viewModel.sendMessage(draft); draft = ""; showComment = false
+                    }
                 }
             }
         }
@@ -498,22 +515,41 @@ fun LiveRoomScreen(
                             }
                         }
                     } else {
-                        // Boutique : cliquer achète 1 exemplaire (débite le wallet).
-                        giftCatalog.forEach { gift ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-                                    .clickable { viewModel.purchaseGift(gift.id) }
-                                    .padding(DualMusicTheme.spacing.md),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text("${gift.emoji ?: "🎁"}  ${gift.name}", color = colors.foreground)
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                                    Text("${gift.price.toInt()} ${s.credits}", color = colors.accent, fontWeight = FontWeight.Bold)
-                                    Icon(Icons.Filled.ShoppingBag, contentDescription = s.giftShop, tint = colors.primary, modifier = Modifier.size(18.dp))
+                        // Boutique : marketplace en grille 2 colonnes (tuile emoji + nom + prix +
+                        // bouton acheter), comme la vraie page boutique web. Clic = achète 1 (débit wallet).
+                        giftCatalog.chunked(2).forEach { pair ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                                pair.forEach { gift ->
+                                    val owned = inventory.firstOrNull { it.id == gift.id }?.quantity ?: 0
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(14.dp))
+                                            .clickable { viewModel.purchaseGift(gift.id) }
+                                            .padding(DualMusicTheme.spacing.sm),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs),
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.fillMaxWidth().height(72.dp).background(DualMusicTheme.gradients.hero, RoundedCornerShape(10.dp)),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Text(gift.emoji ?: "🎁", fontSize = 40.sp)
+                                            if (owned > 0) {
+                                                Box(
+                                                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).background(Color(0xFF22C55E), CircleShape).padding(horizontal = 6.dp, vertical = 1.dp),
+                                                ) { Text("×$owned", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                                            }
+                                        }
+                                        Text(gift.name, color = colors.foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text("${gift.price.toInt()} ${s.credits}", color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Pill(color = colors.primary, onClick = { viewModel.purchaseGift(gift.id) }, modifier = Modifier.fillMaxWidth()) {
+                                            Icon(Icons.Filled.ShoppingBag, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                                            Text("  ${s.buyGift}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                 }
+                                if (pair.size == 1) Box(modifier = Modifier.weight(1f))
                             }
                         }
                     }
@@ -719,6 +755,9 @@ private fun medalFor(index: Int): String = when (index) {
 
 /** Emojis de réaction (identiques au web). */
 private val ReactionEmojis = listOf("❤️", "🔥", "😍", "👏", "🎵", "💎", "🎶", "⚡", "🌟", "😂")
+
+/** Emojis à insérer dans le texte d'un commentaire (identiques au web). */
+private val ChatComposeEmojis = listOf("😀", "😂", "❤️", "🔥", "👏", "🎵", "🎤", "💯", "😍", "🙌", "💪", "🎉", "😮", "👀", "✨", "🥳")
 
 /**
  * Réaction flottante façon TikTok : l'emoji monte du bas vers le haut avec une légère
