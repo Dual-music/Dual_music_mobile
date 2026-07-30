@@ -1,13 +1,10 @@
 package com.dualmusic.core.media
 
-import android.opengl.GLES20
 import android.view.Surface
 import io.livekit.android.room.track.video.ChainVideoProcessor
+import livekit.org.webrtc.ColorFilterGlDrawer
 import livekit.org.webrtc.EglBase
 import livekit.org.webrtc.EglRenderer
-import livekit.org.webrtc.GlGenericDrawer
-import livekit.org.webrtc.GlShader
-import livekit.org.webrtc.RendererCommon
 import livekit.org.webrtc.SurfaceTextureHelper
 import livekit.org.webrtc.VideoFrame
 import livekit.org.webrtc.VideoProcessor
@@ -87,86 +84,5 @@ class ColorFilterVideoProcessor(eglBase: EglBase) : ChainVideoProcessor() {
         surface.release()
         eglRenderer.release()
         drawer.release()
-    }
-}
-
-/**
- * [RendererCommon.GlDrawer] qui applique une matrice de couleur 4×4 dans le fragment shader.
- * Délègue à un [GlGenericDrawer] (gère OES/RGB/YUV + la fonction `sample()`).
- */
-private class ColorFilterGlDrawer(private val matrixProvider: () -> FloatArray?) : RendererCommon.GlDrawer {
-
-    private val inner = GlGenericDrawer(FRAGMENT_SHADER, Callbacks())
-
-    private inner class Callbacks : GlGenericDrawer.ShaderCallbacks {
-        override fun onNewShader(shader: GlShader) = Unit
-
-        override fun onPrepareShader(
-            shader: GlShader,
-            texMatrix: FloatArray,
-            frameWidth: Int,
-            frameHeight: Int,
-            viewportWidth: Int,
-            viewportHeight: Int,
-        ) {
-            val m = matrixProvider() ?: IDENTITY
-            val loc = shader.getUniformLocation("uColorMatrix")
-            // GLES2 exige transpose = false → la matrice est déjà en colonne-major.
-            GLES20.glUniformMatrix4fv(loc, 1, false, m, 0)
-        }
-    }
-
-    override fun drawOes(
-        oesTextureId: Int,
-        texMatrix: FloatArray,
-        frameWidth: Int,
-        frameHeight: Int,
-        viewportX: Int,
-        viewportY: Int,
-        viewportWidth: Int,
-        viewportHeight: Int,
-    ) = inner.drawOes(oesTextureId, texMatrix, frameWidth, frameHeight, viewportX, viewportY, viewportWidth, viewportHeight)
-
-    override fun drawRgb(
-        textureId: Int,
-        texMatrix: FloatArray,
-        frameWidth: Int,
-        frameHeight: Int,
-        viewportX: Int,
-        viewportY: Int,
-        viewportWidth: Int,
-        viewportHeight: Int,
-    ) = inner.drawRgb(textureId, texMatrix, frameWidth, frameHeight, viewportX, viewportY, viewportWidth, viewportHeight)
-
-    override fun drawYuv(
-        yuvTextures: IntArray,
-        texMatrix: FloatArray,
-        frameWidth: Int,
-        frameHeight: Int,
-        viewportX: Int,
-        viewportY: Int,
-        viewportWidth: Int,
-        viewportHeight: Int,
-    ) = inner.drawYuv(yuvTextures, texMatrix, frameWidth, frameHeight, viewportX, viewportY, viewportWidth, viewportHeight)
-
-    override fun release() = inner.release()
-
-    companion object {
-        private val IDENTITY = floatArrayOf(
-            1f, 0f, 0f, 0f,
-            0f, 1f, 0f, 0f,
-            0f, 0f, 1f, 0f,
-            0f, 0f, 0f, 1f,
-        )
-
-        // Fragment shader générique de GlGenericDrawer : `sample(tc)` et le varying `tc` sont
-        // injectés par GlGenericDrawer selon le type de texture (OES/RGB/YUV).
-        private const val FRAGMENT_SHADER =
-            "uniform mat4 uColorMatrix;\n" +
-                "void main() {\n" +
-                "  vec4 c = sample(tc);\n" +
-                "  vec3 rgb = (uColorMatrix * vec4(c.rgb, 1.0)).rgb;\n" +
-                "  gl_FragColor = vec4(clamp(rgb, 0.0, 1.0), c.a);\n" +
-                "}\n"
     }
 }
