@@ -311,19 +311,22 @@ fun LiveRoomScreen(
         }
 
         // Vignettes multi-caméra (autres participants sur scène) — sous la barre du haut.
+        // Cap à 3 visibles + tuile « +N » pour rester dans l'écran (pas de débordement).
         val thumbs = if (isHost) remoteVideos else (remoteVideos.drop(1) + listOfNotNull(if (broadcasting) localTrack else null))
         if (thumbs.isNotEmpty()) {
+            val maxThumbs = 3
+            val visible = thumbs.take(maxThumbs)
+            val overflow = thumbs.size - visible.size
             Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .statusBarsPaddingCompat()
-                    .padding(top = 56.dp, end = DualMusicTheme.spacing.md)
-                    .horizontalScroll(rememberScrollState()),
+                    .padding(top = 56.dp, end = DualMusicTheme.spacing.md),
                 horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
             ) {
-                thumbs.forEach { t ->
+                visible.forEach { t ->
                     androidx.compose.runtime.key(t) {
-                        Box(modifier = Modifier.size(84.dp, 112.dp).background(Color.Black, RoundedCornerShape(12.dp))) {
+                        Box(modifier = Modifier.size(72.dp, 96.dp).background(Color.Black, RoundedCornerShape(12.dp))) {
                             AndroidView(
                                 modifier = Modifier.fillMaxSize(),
                                 factory = { ctx -> SurfaceViewRenderer(ctx).apply { viewModel.media.room.initVideoRenderer(this) } },
@@ -331,6 +334,12 @@ fun LiveRoomScreen(
                             )
                         }
                     }
+                }
+                if (overflow > 0) {
+                    Box(
+                        modifier = Modifier.size(72.dp, 96.dp).background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center,
+                    ) { Text("+$overflow", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp) }
                 }
             }
         }
