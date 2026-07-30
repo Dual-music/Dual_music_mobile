@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
 
 /** Payload de l'événement temps réel `likes` (`/live` room event) : total courant. */
 @kotlinx.serialization.Serializable
@@ -27,12 +30,22 @@ data class LikesPayload(
 data class BroadcastEnvelope(
     val channel: String? = null,
     val event: String? = null,
-    val payload: EmojiPayload? = null,
+    val payload: BroadcastPayload? = null,
 )
 
-/** Charge utile d'une réaction emoji. */
+/**
+ * Charge utile du relais broadcast — champs souples selon l'événement :
+ * `emoji_reaction` → emoji ; `guest_action` → action/targetUserId/targetUserName/value.
+ * `value` est polymorphe (secondes du chrono = nombre ; mute = booléen) → JsonElement.
+ */
 @kotlinx.serialization.Serializable
-data class EmojiPayload(val emoji: String? = null)
+data class BroadcastPayload(
+    val emoji: String? = null,
+    val action: String? = null,
+    val targetUserId: String? = null,
+    val targetUserName: String? = null,
+    val value: kotlinx.serialization.json.JsonElement? = null,
+)
 
 /** Événement de demande d'invité (`join:new` / `join:update`). */
 @kotlinx.serialization.Serializable
@@ -110,6 +123,14 @@ class LiveViewModel(
     private val _joinRequests = MutableStateFlow<List<LiveJoinRequest>>(emptyList())
     val joinRequests: StateFlow<List<LiveJoinRequest>> = _joinRequests.asStateFlow()
 
+    /** Hôte : invités acceptés (sur scène). Alimente le badge vert + la liste de gestion. */
+    private val _acceptedGuests = MutableStateFlow<List<LiveJoinRequest>>(emptyList())
+    val acceptedGuests: StateFlow<List<LiveJoinRequest>> = _acceptedGuests.asStateFlow()
+
+    /** Chrono de temps de parole par invité (userId → secondes restantes). Vu par tous. */
+    private val _guestTimers = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val guestTimers: StateFlow<Map<String, Int>> = _guestTimers.asStateFlow()
+
     /** Spectateur : sa demande a été acceptée → il peut monter sur scène (publier). */
     private val _isGuestAccepted = MutableStateFlow(false)
     val isGuestAccepted: StateFlow<Boolean> = _isGuestAccepted.asStateFlow()
@@ -183,7 +204,88 @@ class LiveViewModel(
     /** Hôte : (re)charge les demandes en attente. */
     fun loadJoinRequests() {
         viewModelScope.launch {
-            _joinRequests.value = runCatching { repository.joinRequests(liveId) }.getOrDefault(emptyList())
+            _joinRequests.value = runCatching { repository.joinRequests(liveId, "pending") }.getOrDefault(emptyList())
+            _acceptedGuests.value = runCatching { repository.joinRequests(liveId, "accepted") }.getOrDefault(emptyList())
+        }
+    }
+
+    /**
+     * Hôte : accorde un temps de parole (chrono) à un invité. Diffuse `start_timer` à tout le
+     * monde (canal `live-controls-<id>`) — chaque client décompte localement et l'affiche.
+     */
+    fun grantGuestTimer(userId: String, name: String?, seconds: Int = 120) {
+        _guestTimers.update { it + (userId to seconds) }
+        emitGuestAction("start_timer", userId, name, org.json.JSONObject().put("value", seconds))
+    }
+
+    /** Hôte : coupe/rétablit le micro d'un invité (diffusé ; l'invité ciblé applique à sa piste). */
+    fun toggleGuestMic(userId: String, mute: Boolean) {
+        emitGuestAction("toggle_mic", userId, null, org.json.JSONObject().put("value", mute))
+    }
+
+    /** Hôte : retire un invité (state `ended` persistant + diffusion `kick`). */
+    fun kickGuest(requestId: String, userId: String) {
+        viewModelScope.launch {
+            runCatching { repository.respondJoinStatus(requestId, "ended") }
+            emitGuestAction("kick", userId, null, null)
+            _guestTimers.update { it - userId }
+            loadJoinRequests()
+        }
+    }
+
+    /** Construit et émet une action invité sur le canal `live-controls-<id>`. */
+    private fun emitGuestAction(action: String, targetUserId: String, targetUserName: String?, extra: org.json.JSONObject?) {
+        val payload = (extra ?: org.json.JSONObject())
+            .put("action", action)
+            .put("targetUserId", targetUserId)
+        targetUserName?.let { payload.put("targetUserName", it) }
+        liveSession?.emit(
+            "broadcast",
+            org.json.JSONObject(
+                mapOf(
+                    "channel" to "live-controls-$liveId",
+                    "event" to "guest_action",
+                    "payload" to payload,
+                ),
+            ),
+        )
+    }
+
+    /** Applique une action invité reçue (émetteur exclu côté serveur). */
+    private fun onGuestAction(p: BroadcastPayload) {
+        val target = p.targetUserId ?: return
+        when (p.action) {
+            "start_timer" -> {
+                val secs = (p.value as? kotlinx.serialization.json.JsonPrimitive)?.intOrNull ?: 120
+                _guestTimers.update { it + (target to secs) }
+            }
+            "timer_ended" -> _guestTimers.update { it - target }
+            "toggle_mic" -> {
+                val mute = (p.value as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull ?: false
+                if (target == myUserId) viewModelScope.launch { runCatching { media.setMicEnabled(!mute) } }
+            }
+            "kick" -> if (target == myUserId) {
+                _isGuestAccepted.value = false
+                viewModelScope.launch { runCatching { media.leave() } }
+            }
+        }
+    }
+
+    /** Décompte des chronos de parole : -1s/s ; émet `timer_ended` (hôte) à échéance. */
+    private fun startGuestTimerTicker() {
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(1000)
+                val current = _guestTimers.value
+                if (current.isEmpty()) continue
+                val next = mutableMapOf<String, Int>()
+                current.forEach { (uid, rem) ->
+                    val r = rem - 1
+                    if (r > 0) next[uid] = r
+                    else if (isHost) emitGuestAction("timer_ended", uid, null, null)
+                }
+                _guestTimers.value = next
+            }
         }
     }
 
@@ -324,6 +426,7 @@ class LiveViewModel(
             live.onConnect {
                 live.join(Realtime.RoomType.LIVE, liveId)
                 live.emit("broadcast:join", "live-emojis-$liveId")
+                live.emit("broadcast:join", "live-controls-$liveId")
             }
             chat.onConnect { chat.join(Realtime.RoomType.LIVE, liveId) }
 
@@ -343,9 +446,12 @@ class LiveViewModel(
             live.on("likes", LikesPayload.serializer()) { p ->
                 if (p.likes > _likes.value) _likes.value = p.likes
             }
-            // Réactions emojis relayées (canal live-emojis-<id>) — l'émetteur est exclu.
+            // Relais broadcast : réactions emojis (live-emojis-<id>) + actions invités (live-controls-<id>).
             live.on("broadcast", BroadcastEnvelope.serializer()) { env ->
-                if (env.event == "emoji_reaction") env.payload?.emoji?.let { pushEmoji(it) }
+                when (env.event) {
+                    "emoji_reaction" -> env.payload?.emoji?.let { pushEmoji(it) }
+                    "guest_action" -> env.payload?.let { onGuestAction(it) }
+                }
             }
             // Demandes d'invités (hôte) : rafraîchir la liste à chaque nouvelle demande / MAJ.
             live.on("join:new", JoinEventPayload.serializer()) { if (isHost) loadJoinRequests() }
@@ -363,6 +469,7 @@ class LiveViewModel(
             live.connect()
             chat.connect()
         }
+        startGuestTimerTicker()
     }
 
     override fun onCleared() {

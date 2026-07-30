@@ -381,6 +381,9 @@ interface Strings {
     val dedicationHint: String
     val guests: String
     val noGuestRequests: String
+    val pendingRequests: String
+    val activeGuests: String
+    val timeRemaining: String
     val goOnStage: String
     val topDonors: String
     val shareLiveText: String
@@ -756,6 +759,9 @@ object FrStrings : Strings {
     override val dedicationHint = "Envoyez un message dédié à l'artiste"
     override val guests = "Invités"
     override val noGuestRequests = "Aucune demande pour le moment"
+    override val pendingRequests = "Demandes en attente"
+    override val activeGuests = "Invités actifs"
+    override val timeRemaining = "Temps restant"
     override val goOnStage = "Monter sur scène"
     override val topDonors = "Top donateurs"
     override val shareLiveText = "🔴 Je suis en live sur Dual Music ! Rejoins-moi."
@@ -1129,6 +1135,9 @@ object EnStrings : Strings {
     override val dedicationHint = "Send a dedicated message to the artist"
     override val guests = "Guests"
     override val noGuestRequests = "No request yet"
+    override val pendingRequests = "Pending requests"
+    override val activeGuests = "Active guests"
+    override val timeRemaining = "Time left"
     override val goOnStage = "Go on stage"
     override val topDonors = "Top donors"
     override val shareLiveText = "🔴 I'm live on Dual Music! Join me."

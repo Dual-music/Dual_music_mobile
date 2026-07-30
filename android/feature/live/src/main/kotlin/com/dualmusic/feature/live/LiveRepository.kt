@@ -117,8 +117,11 @@ class LiveRepository(private val api: ApiClient) {
         )
 
     /** Hôte : répond à une demande (accepter/refuser). */
-    suspend fun respondJoin(requestId: String, accept: Boolean) {
-        val status = if (accept) "accepted" else "rejected"
+    suspend fun respondJoin(requestId: String, accept: Boolean) =
+        respondJoinStatus(requestId, if (accept) "accepted" else "rejected")
+
+    /** Hôte : change l'état d'une demande (`accepted` | `rejected` | `ended`). `ended` = retirer un invité. */
+    suspend fun respondJoinStatus(requestId: String, status: String) {
         api.request<Unit>(Endpoint.post("/lives/join-requests/$requestId/respond", """{"status":"$status"}"""))
     }
 

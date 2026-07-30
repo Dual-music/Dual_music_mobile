@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.PersonAddAlt1
+import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Send
@@ -132,6 +133,8 @@ fun LiveRoomScreen(
     val inventory by viewModel.inventory.collectAsStateWithLifecycle()
     val myJoinRequestId by viewModel.myJoinRequestId.collectAsStateWithLifecycle()
     val joinRequests by viewModel.joinRequests.collectAsStateWithLifecycle()
+    val acceptedGuests by viewModel.acceptedGuests.collectAsStateWithLifecycle()
+    val guestTimers by viewModel.guestTimers.collectAsStateWithLifecycle()
     val remoteVideos by viewModel.media.remoteVideos.collectAsStateWithLifecycle()
     val isGuestAccepted by viewModel.isGuestAccepted.collectAsStateWithLifecycle()
     val giftLeaderboard by viewModel.giftLeaderboard.collectAsStateWithLifecycle()
@@ -325,7 +328,8 @@ fun LiveRoomScreen(
                 if (broadcasting) {
                     RailButton(Icons.Filled.Settings, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showSettings = true }
                 }
-                // Invités (demandes lever-la-main) + badge de compteur.
+                // Invités : badge ROUGE = demandes en attente (haut-droite), badge VERT = invités
+                // actifs (bas-gauche), deux couleurs distinctes comme le web.
                 Box {
                     RailButton(Icons.Filled.PersonAddAlt1, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showGuests = true; viewModel.loadJoinRequests() }
                     if (joinRequests.isNotEmpty()) {
@@ -333,6 +337,12 @@ fun LiveRoomScreen(
                             modifier = Modifier.align(Alignment.TopEnd).size(18.dp).background(colors.destructive, CircleShape),
                             contentAlignment = Alignment.Center,
                         ) { Text("${joinRequests.size}", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                    }
+                    if (acceptedGuests.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier.align(Alignment.BottomStart).size(18.dp).background(Color(0xFF22C55E), CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) { Text("${acceptedGuests.size}", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
                     }
                 }
                 // Infos artiste + description du live.
@@ -610,27 +620,33 @@ fun LiveRoomScreen(
             }
         }
 
-        // Feuille des invités (hôte) : demandes lever-la-main + accepter/refuser.
+        // Feuille des invités (hôte) : demandes en attente (accepter/refuser) + invités actifs
+        // (couper le micro, accorder un temps de parole, retirer). Parité écran mobile web.
         if (showGuests) {
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showGuests = false })
+            var mutedGuests by remember { mutableStateOf(setOf<String>()) }
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .fillMaxHeight(0.5f)
+                    .fillMaxHeight(0.55f)
                     .background(colors.background)
                     .navigationBarsPadding()
                     .padding(DualMusicTheme.spacing.md),
                 verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
             ) {
                 Text(s.guests, color = colors.foreground, fontWeight = FontWeight.Bold)
-                if (joinRequests.isEmpty()) {
+                if (joinRequests.isEmpty() && acceptedGuests.isEmpty()) {
                     Text(s.noGuestRequests, color = colors.mutedForeground)
                 }
                 Column(
                     modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
                 ) {
+                    // Demandes en attente.
+                    if (joinRequests.isNotEmpty()) {
+                        Text("${s.pendingRequests} (${joinRequests.size})", color = colors.destructive, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
                     joinRequests.forEach { req ->
                         Row(
                             modifier = Modifier
@@ -644,6 +660,45 @@ fun LiveRoomScreen(
                             Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
                                 RailButton(Icons.Filled.Check, tint = Color.White, bg = colors.primary) { viewModel.respondJoin(req.id, true) }
                                 RailButton(Icons.Filled.Close, tint = Color.White, bg = colors.destructive) { viewModel.respondJoin(req.id, false) }
+                            }
+                        }
+                    }
+                    // Invités actifs (sur scène).
+                    if (acceptedGuests.isNotEmpty()) {
+                        Text("${s.activeGuests} (${acceptedGuests.size})", color = Color(0xFF22C55E), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    acceptedGuests.forEach { g ->
+                        val remaining = guestTimers[g.userId]
+                        val muted = mutedGuests.contains(g.userId)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                .padding(DualMusicTheme.spacing.md),
+                            verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs),
+                        ) {
+                            Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("🎤 ${g.displayName}", color = colors.foreground, modifier = Modifier.weight(1f))
+                                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                                    RailButton(
+                                        if (muted) Icons.Filled.MicOff else Icons.Filled.Mic,
+                                        tint = Color.White,
+                                        bg = if (muted) colors.destructive else Color.Black.copy(alpha = 0.4f),
+                                    ) {
+                                        mutedGuests = if (muted) mutedGuests - g.userId else mutedGuests + g.userId
+                                        viewModel.toggleGuestMic(g.userId, !muted)
+                                    }
+                                    RailButton(Icons.Filled.Schedule, tint = Color.White, bg = colors.accent) { viewModel.grantGuestTimer(g.userId, g.displayName, 120) }
+                                    RailButton(Icons.Filled.PersonRemove, tint = Color.White, bg = colors.destructive) { viewModel.kickGuest(g.id, g.userId) }
+                                }
+                            }
+                            if (remaining != null && remaining > 0) {
+                                Text(
+                                    "${s.timeRemaining} : ${remaining / 60}:${(remaining % 60).toString().padStart(2, '0')}",
+                                    color = colors.accent,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
                             }
                         }
                     }
