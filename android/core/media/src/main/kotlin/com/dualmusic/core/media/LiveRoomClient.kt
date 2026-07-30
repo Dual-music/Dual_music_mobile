@@ -83,8 +83,18 @@ class LiveRoomClient(
     private val _blurEnabled = MutableStateFlow(false)
     val blurEnabled: StateFlow<Boolean> = _blurEnabled.asStateFlow()
 
-    // --- Traitement vidéo (flou d'arrière-plan) ---
+    /** Fond du direct : `none` | `blur` | `image` (mode hôte). */
+    private val _backgroundMode = MutableStateFlow("none")
+    val backgroundMode: StateFlow<String> = _backgroundMode.asStateFlow()
+
+    /** Id du filtre couleur actif (mode hôte). `none` = aucun. */
+    private val _activeFilter = MutableStateFlow("none")
+    val activeFilter: StateFlow<String> = _activeFilter.asStateFlow()
+
+    // --- Traitement vidéo (filtre couleur + flou/fond d'arrière-plan) ---
+    // Chaîne : caméra → colorProcessor (filtre couleur) → processor (fond virtuel) → SFU.
     private var processor: VirtualBackgroundVideoProcessor? = null
+    private var colorProcessor: ColorFilterVideoProcessor? = null
     private var cameraProvider: CameraCapturerUtils.CameraProvider? = null
     private var cameraTrack: LocalVideoTrack? = null
     private var currentPosition: CameraPosition = CameraPosition.FRONT
@@ -132,8 +142,12 @@ class LiveRoomClient(
     private fun ensureProcessor() {
         if (processor != null) return
         val p = VirtualBackgroundVideoProcessor(eglBase, Dispatchers.IO)
-        p.enabled = false // passthrough par défaut (vidéo normale ; flou activé via toggleBlur)
+        p.enabled = false // passthrough par défaut (vidéo normale ; fond activé via setBackground*)
         processor = p
+        // Filtre couleur en tête de chaîne, alimente le fond virtuel (les deux combinables).
+        val cp = ColorFilterVideoProcessor(eglBase)
+        cp.childVideoProcessor = p
+        colorProcessor = cp
         val imageAnalysis = ImageAnalysis.Builder()
             .setResolutionSelector(
                 ResolutionSelector.Builder()
@@ -159,7 +173,7 @@ class LiveRoomClient(
         ensureProcessor()
         val track = room.localParticipant.createVideoTrack(
             options = LocalVideoTrackOptions(position = CameraPosition.FRONT),
-            videoProcessor = processor,
+            videoProcessor = colorProcessor ?: processor,
         )
         track.startCapture()
         room.localParticipant.publishVideoTrack(track)
@@ -182,6 +196,8 @@ class LiveRoomClient(
         cameraTrack = null
         cameraProvider?.let { runCatching { CameraCapturerUtils.unregisterCameraProvider(it) } }
         cameraProvider = null
+        runCatching { colorProcessor?.dispose() }
+        colorProcessor = null
         runCatching { processor?.dispose() }
         processor = null
         _primaryVideoTrack.value = null
@@ -220,7 +236,7 @@ class LiveRoomClient(
         runCatching { old.stopCapture() }
         val newTrack = room.localParticipant.createVideoTrack(
             options = LocalVideoTrackOptions(position = newPos),
-            videoProcessor = processor,
+            videoProcessor = colorProcessor ?: processor,
         )
         runCatching { newTrack.startCapture() }
         room.localParticipant.publishVideoTrack(newTrack)
@@ -232,10 +248,43 @@ class LiveRoomClient(
 
     /** Active/désactive le flou d'arrière-plan (sans republier la piste). */
     fun toggleBlur() {
+        if (_backgroundMode.value == "blur") clearBackground() else setBackgroundBlur()
+    }
+
+    /** Applique un filtre couleur (matrice `null` = aucun). Sans republier la piste. */
+    fun setColorFilter(id: String, matrix: FloatArray?) {
+        colorProcessor?.matrix = matrix
+        _activeFilter.value = id
+    }
+
+    /** Fond : flou d'arrière-plan (segmentation ML). */
+    fun setBackgroundBlur() {
         processor?.let {
-            it.enabled = !it.enabled
-            _blurEnabled.value = it.enabled
+            it.backgroundImage = null
+            it.enabled = true
         }
+        _backgroundMode.value = "blur"
+        _blurEnabled.value = true
+    }
+
+    /** Fond : remplace l'arrière-plan par une image (segmentation ML). */
+    fun setBackgroundImage(bitmap: android.graphics.Bitmap) {
+        processor?.let {
+            it.backgroundImage = bitmap
+            it.enabled = true
+        }
+        _backgroundMode.value = "image"
+        _blurEnabled.value = false
+    }
+
+    /** Fond : aucun (vidéo normale). */
+    fun clearBackground() {
+        processor?.let {
+            it.enabled = false
+            it.backgroundImage = null
+        }
+        _backgroundMode.value = "none"
+        _blurEnabled.value = false
     }
 
     /** Rafraîchit la liste des pistes distantes + la piste primaire (première = hôte). */

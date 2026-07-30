@@ -35,7 +35,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BlurOn
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CardGiftcard
@@ -90,6 +90,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dualmusic.core.ui.dmGlow
 import com.dualmusic.core.ui.gifts.GiftBurst
 import com.dualmusic.core.ui.i18n.LocalStrings
+import com.dualmusic.core.media.VideoFilterPresets
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import io.livekit.android.renderer.SurfaceViewRenderer
 import kotlinx.coroutines.coroutineScope
@@ -126,7 +127,8 @@ fun LiveRoomScreen(
     val localTrack by viewModel.media.localVideoTrack.collectAsStateWithLifecycle()
     val micOn by viewModel.media.micEnabled.collectAsStateWithLifecycle()
     val camOn by viewModel.media.camEnabled.collectAsStateWithLifecycle()
-    val blurOn by viewModel.media.blurEnabled.collectAsStateWithLifecycle()
+    val activeFilter by viewModel.media.activeFilter.collectAsStateWithLifecycle()
+    val backgroundMode by viewModel.media.backgroundMode.collectAsStateWithLifecycle()
     val likes by viewModel.likes.collectAsStateWithLifecycle()
     val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
     val giftFeed by viewModel.giftFeed.collectAsStateWithLifecycle()
@@ -171,6 +173,7 @@ fun LiveRoomScreen(
     var showGuests by remember { mutableStateOf(false) }
     var showLeaderboard by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showEffects by remember { mutableStateOf(false) }
     var showDescription by remember { mutableStateOf(false) }
     var broadcasting by remember { mutableStateOf(false) }
     var pendingStage by remember { mutableStateOf(false) }
@@ -362,9 +365,10 @@ fun LiveRoomScreen(
                 }
                 // Infos artiste + description du live.
                 RailButton(Icons.Filled.Description, tint = Color.White, bg = Color.Black.copy(alpha = 0.4f)) { showDescription = true }
-                // Filtre : flou d'arrière-plan (en direct). Surligné quand actif.
+                // Effets : filtres couleur + fond (flou/image), en direct, publiés à tous.
                 if (broadcasting) {
-                    RailButton(Icons.Filled.BlurOn, tint = Color.White, bg = if (blurOn) colors.primary else Color.Black.copy(alpha = 0.4f)) { viewModel.toggleBlur() }
+                    val effectsOn = activeFilter != "none" || backgroundMode != "none"
+                    RailButton(Icons.Filled.AutoAwesome, tint = Color.White, bg = if (effectsOn) colors.primary else Color.Black.copy(alpha = 0.4f)) { showEffects = true }
                 }
                 // (« Terminer le live » est dans la feuille de contrôles ⚙️, pas ici.)
             } else {
@@ -809,6 +813,80 @@ fun LiveRoomScreen(
             }
         }
 
+        // Feuille « Effets » : filtres couleur + fond (flou/image), en direct, publiés à tous.
+        if (showEffects) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showEffects = false })
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.62f)
+                    .background(colors.background)
+                    .navigationBarsPadding()
+                    .padding(DualMusicTheme.spacing.md),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text("🎬 ${s.videoFilters}", color = colors.foreground, fontWeight = FontWeight.Bold)
+                Text(s.visibleToAll, color = colors.mutedForeground, fontSize = 11.sp)
+                Column(
+                    modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+                ) {
+                    // Grille des filtres couleur (4 par ligne).
+                    VideoFilterPresets.all.chunked(4).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                            row.forEach { f ->
+                                val selected = activeFilter == f.id
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { viewModel.media.setColorFilter(f.id, f.matrix) },
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(56.dp)
+                                            .background(if (selected) colors.primary else Color.Black.copy(alpha = 0.25f), RoundedCornerShape(12.dp)),
+                                        contentAlignment = Alignment.Center,
+                                    ) { Text(f.emoji, fontSize = 24.sp) }
+                                    Text(filterLabel(f.id), color = if (selected) colors.primary else colors.mutedForeground, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                            repeat(4 - row.size) { Box(modifier = Modifier.weight(1f)) }
+                        }
+                    }
+                    // Fond du direct.
+                    Text(s.background, color = colors.foreground, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                        // Aucun.
+                        EffectBgTile(label = s.none, brush = null, selected = backgroundMode == "none", modifier = Modifier.weight(1f)) {
+                            viewModel.media.clearBackground()
+                        }
+                        // Flou.
+                        EffectBgTile(label = s.blur, brush = Brush.verticalGradient(listOf(Color(0xFF334155), Color(0xFF0F172A))), selected = backgroundMode == "blur", modifier = Modifier.weight(1f)) {
+                            viewModel.media.setBackgroundBlur()
+                        }
+                        // Images de fond (dégradés).
+                        BackgroundPresets.take(2).forEach { bg ->
+                            EffectBgTile(label = bg.label, brush = Brush.verticalGradient(listOf(Color(bg.top), Color(bg.bottom))), selected = false, modifier = Modifier.weight(1f)) {
+                                viewModel.media.setBackgroundImage(makeGradientBitmap(bg.top, bg.bottom))
+                            }
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                        BackgroundPresets.drop(2).forEach { bg ->
+                            EffectBgTile(label = bg.label, brush = Brush.verticalGradient(listOf(Color(bg.top), Color(bg.bottom))), selected = false, modifier = Modifier.weight(1f)) {
+                                viewModel.media.setBackgroundImage(makeGradientBitmap(bg.top, bg.bottom))
+                            }
+                        }
+                        repeat((4 - BackgroundPresets.drop(2).size).coerceAtLeast(0)) { Box(modifier = Modifier.weight(1f)) }
+                    }
+                }
+            }
+        }
+
         // Feuille « Description » : infos artiste + titre du live.
         if (showDescription) {
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showDescription = false })
@@ -841,6 +919,69 @@ private val ReactionEmojis = listOf("❤️", "🔥", "😍", "👏", "🎵", "�
 
 /** Emojis à insérer dans le texte d'un commentaire (identiques au web). */
 private val ChatComposeEmojis = listOf("😀", "😂", "❤️", "🔥", "👏", "🎵", "🎤", "💯", "😍", "🙌", "💪", "🎉", "😮", "👀", "✨", "🥳")
+
+/** Libellé FR d'un filtre couleur (mêmes noms que la grille web). */
+private fun filterLabel(id: String): String = when (id) {
+    "beauty" -> "Beauté"
+    "glow" -> "Lumineux"
+    "warm" -> "Chaud"
+    "cool" -> "Froid"
+    "vivid" -> "Vif"
+    "vintage" -> "Vintage"
+    "noir" -> "N&B"
+    "studio" -> "Studio"
+    "neon" -> "Néon"
+    else -> "Aucun"
+}
+
+/** Fond dégradé préréglé (couleurs ARGB). */
+private data class BgPreset(val label: String, val top: Int, val bottom: Int)
+
+private val BackgroundPresets = listOf(
+    BgPreset("Sunset", 0xFFFF7E5F.toInt(), 0xFF7B2FF7.toInt()),
+    BgPreset("Océan", 0xFF2193B0.toInt(), 0xFF0F2027.toInt()),
+    BgPreset("Studio", 0xFF434343.toInt(), 0xFF000000.toInt()),
+    BgPreset("Néon", 0xFFEC38BC.toInt(), 0xFF7303C0.toInt()),
+)
+
+/** Génère un bitmap dégradé vertical (fond virtuel). */
+private fun makeGradientBitmap(top: Int, bottom: Int): android.graphics.Bitmap {
+    val w = 720
+    val h = 1280
+    val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bmp)
+    val paint = android.graphics.Paint().apply {
+        shader = android.graphics.LinearGradient(0f, 0f, 0f, h.toFloat(), top, bottom, android.graphics.Shader.TileMode.CLAMP)
+    }
+    canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), paint)
+    return bmp
+}
+
+/** Tuile de sélection de fond (dégradé ou « aucun »). */
+@Composable
+private fun EffectBgTile(
+    label: String,
+    brush: androidx.compose.ui.graphics.Brush?,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val colors = DualMusicTheme.colors
+    Column(
+        modifier = modifier.clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .background(brush ?: androidx.compose.ui.graphics.SolidColor(Color.Black.copy(alpha = 0.25f)), RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center,
+        ) { if (selected) Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White) }
+        Text(label, color = if (selected) colors.primary else colors.mutedForeground, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
 
 /**
  * Réaction flottante façon TikTok : l'emoji monte du bas vers le haut avec une légère

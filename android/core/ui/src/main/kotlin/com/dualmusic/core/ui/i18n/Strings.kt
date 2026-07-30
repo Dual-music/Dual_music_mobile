@@ -385,6 +385,11 @@ interface Strings {
     val activeGuests: String
     val timeRemaining: String
     val liveWaiting: String
+    val videoFilters: String
+    val visibleToAll: String
+    val background: String
+    val none: String
+    val blur: String
     val goOnStage: String
     val topDonors: String
     val shareLiveText: String
@@ -764,6 +769,11 @@ object FrStrings : Strings {
     override val activeGuests = "Invités actifs"
     override val timeRemaining = "Temps restant"
     override val liveWaiting = "Live en attente… l'artiste revient bientôt"
+    override val videoFilters = "Filtres vidéo"
+    override val visibleToAll = "Visible par tous les spectateurs en temps réel."
+    override val background = "Fond"
+    override val none = "Aucun"
+    override val blur = "Flou"
     override val goOnStage = "Monter sur scène"
     override val topDonors = "Top donateurs"
     override val shareLiveText = "🔴 Je suis en live sur Dual Music ! Rejoins-moi."
@@ -1141,6 +1151,11 @@ object EnStrings : Strings {
     override val activeGuests = "Active guests"
     override val timeRemaining = "Time left"
     override val liveWaiting = "Live paused… the artist will be back soon"
+    override val videoFilters = "Video filters"
+    override val visibleToAll = "Visible to all viewers in real time."
+    override val background = "Background"
+    override val none = "None"
+    override val blur = "Blur"
     override val goOnStage = "Go on stage"
     override val topDonors = "Top donors"
     override val shareLiveText = "🔴 I'm live on Dual Music! Join me."
