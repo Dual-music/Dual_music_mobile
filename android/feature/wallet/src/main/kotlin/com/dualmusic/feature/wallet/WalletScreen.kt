@@ -120,7 +120,7 @@ private fun PurchaseRow(item: CreditPurchase) {
         ) {
             Column {
                 Text(item.paymentMethod ?: "Mobile Money", color = colors.foreground)
-                val date = item.createdAt?.take(10)
+                val date = item.createdAt?.let { com.dualmusic.core.ui.datetime.formatTz(it, "dd/MM/yyyy") }
                 val status = item.status
                 Text(listOfNotNull(date, status).joinToString(" · "), color = colors.mutedForeground)
             }
@@ -140,7 +140,7 @@ private fun SpendRow(item: SpendItem) {
         ) {
             Column {
                 Text(labelForSource(item.sourceType), color = colors.foreground)
-                item.createdAt?.let { Text(it.take(10), color = colors.mutedForeground) }
+                item.createdAt?.let { Text(com.dualmusic.core.ui.datetime.formatTz(it, "dd/MM/yyyy"), color = colors.mutedForeground) }
             }
             Text("-${item.totalCredits}", color = colors.destructive, fontWeight = FontWeight.Bold)
         }
@@ -176,7 +176,7 @@ private fun WithdrawalRow(item: WithdrawalRequest) {
         ) {
             Column {
                 Text(item.paymentMethod ?: "Mobile Money", color = colors.foreground)
-                val date = item.createdAt?.take(10)
+                val date = item.createdAt?.let { com.dualmusic.core.ui.datetime.formatTz(it, "dd/MM/yyyy") }
                 Text(listOfNotNull(date, item.status.name.lowercase()).joinToString(" · "), color = colors.mutedForeground)
             }
             Text("-${item.amount.toInt()}", color = colors.destructive, fontWeight = FontWeight.Bold)

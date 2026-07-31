@@ -176,7 +176,7 @@ fun PreferencesScreen(
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
                 if (deletionScheduledAt != null) {
                     Text(
-                        "⚠️ Ton compte sera supprimé le ${deletionScheduledAt.take(10)}. " +
+                        "⚠️ Ton compte sera supprimé le ${com.dualmusic.core.ui.datetime.formatTz(deletionScheduledAt, "dd/MM/yyyy")}. " +
                             "Tu peux encore l'annuler.",
                         color = colors.destructive,
                     )

@@ -112,7 +112,7 @@ private fun ConcertRow(concert: Concert, onClick: () -> Unit) {
         ) {
             Column {
                 Text(concert.title, color = colors.foreground, fontWeight = FontWeight.Bold)
-                concert.scheduledDate?.let { Text(it.take(16), color = colors.mutedForeground) }
+                concert.scheduledDate?.let { Text(com.dualmusic.core.ui.datetime.formatTz(it), color = colors.mutedForeground) }
                 if (concert.allowsDedications) {
                     Text("💌 Dédicaces ouvertes", color = colors.accent)
                 }

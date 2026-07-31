@@ -132,6 +132,8 @@ fun LiveRoomScreen(
     val likes by viewModel.likes.collectAsStateWithLifecycle()
     val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
     val giftFeed by viewModel.giftFeed.collectAsStateWithLifecycle()
+    // Préférences visuelles (parité web) : réduire les animations / carte top donateur.
+    val uiPrefs by com.dualmusic.core.ui.prefs.UiPreferencesStore.state.collectAsStateWithLifecycle()
     val giftCatalog by viewModel.giftCatalog.collectAsStateWithLifecycle()
     val inventory by viewModel.inventory.collectAsStateWithLifecycle()
     val myJoinRequestId by viewModel.myJoinRequestId.collectAsStateWithLifecycle()
@@ -233,20 +235,25 @@ fun LiveRoomScreen(
             }
         }
 
-        // Cadeau reçu : burst central (halo GPU).
-        giftFeed.lastOrNull()?.let { gift ->
-            androidx.compose.runtime.key(gift.id) { GiftBurst(symbol = "🎁", modifier = Modifier.align(Alignment.Center)) }
+        // Cadeau reçu : burst central (halo GPU). Masqué si « Réduire les animations ».
+        if (!uiPrefs.reduceAnimations) {
+            giftFeed.lastOrNull()?.let { gift ->
+                androidx.compose.runtime.key(gift.id) { GiftBurst(symbol = "🎁", modifier = Modifier.align(Alignment.Center)) }
+            }
         }
         // Réactions (cœurs + emojis) : montent bas→haut à droite, façon TikTok — vues par tous.
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .navigationBarsPadding()
-                .padding(bottom = 140.dp, end = DualMusicTheme.spacing.md)
-                .size(64.dp, 460.dp),
-        ) {
-            emojiFeed.forEach { fe ->
-                androidx.compose.runtime.key(fe.id) { FloatingReaction(fe.emoji) }
+        // Désactivées si « Réduire les animations » (les compteurs continuent d'incrémenter).
+        if (!uiPrefs.reduceAnimations) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(bottom = 140.dp, end = DualMusicTheme.spacing.md)
+                    .size(64.dp, 460.dp),
+            ) {
+                emojiFeed.forEach { fe ->
+                    androidx.compose.runtime.key(fe.id) { FloatingReaction(fe.emoji) }
+                }
             }
         }
 

@@ -120,7 +120,7 @@ private fun DuelRow(duel: Duel, onClick: () -> Unit) {
                     color = colors.foreground,
                     fontWeight = FontWeight.Bold,
                 )
-                duel.scheduledTime?.let { Text(it.take(16), color = colors.mutedForeground) }
+                duel.scheduledTime?.let { Text(com.dualmusic.core.ui.datetime.formatTz(it), color = colors.mutedForeground) }
             }
             Text(
                 statusLabel(duel.status),

@@ -176,7 +176,10 @@ private fun SeasonRow(season: LeaderboardSeason) {
         ) {
             androidx.compose.foundation.layout.Column {
                 Text(season.name, color = colors.foreground, fontWeight = FontWeight.Bold)
-                val period = listOfNotNull(season.startDate?.take(10), season.endDate?.take(10)).joinToString(" → ")
+                val period = listOfNotNull(
+                    season.startDate?.let { com.dualmusic.core.ui.datetime.formatTz(it, "dd/MM/yyyy") },
+                    season.endDate?.let { com.dualmusic.core.ui.datetime.formatTz(it, "dd/MM/yyyy") },
+                ).joinToString(" → ")
                 if (period.isNotBlank()) Text(period, color = colors.mutedForeground)
                 if (season.isMysteryReward) Text(strings.mysteryReward, color = colors.accent)
             }

@@ -114,7 +114,7 @@ private fun CompetitionRow(competition: Competition, onClick: () -> Unit) {
         ) {
             Column {
                 Text(competition.title, color = colors.foreground, fontWeight = FontWeight.Bold)
-                competition.startAt?.let { Text(it.take(10), color = colors.mutedForeground) }
+                competition.startAt?.let { Text(com.dualmusic.core.ui.datetime.formatTz(it, "dd/MM/yyyy"), color = colors.mutedForeground) }
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(competition.status.replaceFirstChar { it.uppercase() }, color = colors.mutedForeground)

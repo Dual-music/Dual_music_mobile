@@ -264,7 +264,7 @@ fun ProfileScreen(viewModel: EditProfileViewModel, onOpenMenu: () -> Unit) {
                 Text(strings.deleteAccount, color = colors.destructive, fontWeight = FontWeight.Bold)
                 val scheduled = ui.deletionScheduledAt
                 if (scheduled != null) {
-                    Text("${strings.accountDeletionScheduledOn} ${scheduled.take(10)}. ${strings.deletionCanStillCancel}", color = colors.destructive)
+                    Text("${strings.accountDeletionScheduledOn} ${com.dualmusic.core.ui.datetime.formatTz(scheduled, "dd/MM/yyyy")}. ${strings.deletionCanStillCancel}", color = colors.destructive)
                     DMButton(
                         strings.cancelDeletion,
                         modifier = Modifier.fillMaxWidth(),

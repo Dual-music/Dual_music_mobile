@@ -120,7 +120,7 @@ private fun CandidacyRow(candidacy: MyCandidacy) {
                     color = colors.foreground,
                     fontWeight = FontWeight.Bold,
                 )
-                val date = candidacy.competition?.startAt?.take(10)
+                val date = candidacy.competition?.startAt?.let { com.dualmusic.core.ui.datetime.formatTz(it, "dd/MM/yyyy") }
                 if (!date.isNullOrBlank()) Text(date, color = colors.mutedForeground)
                 Text("${s.candScore} : ${candidacy.score.toInt()}", color = colors.accent)
             }

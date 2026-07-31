@@ -205,7 +205,7 @@ private fun RequestRow(request: WithdrawalRequest) {
         ) {
             Column {
                 Text("${request.amount.toInt()} ${strings.credits}", color = colors.foreground)
-                request.createdAt?.let { Text(it.take(10), color = colors.mutedForeground) }
+                request.createdAt?.let { Text(com.dualmusic.core.ui.datetime.formatTz(it, "dd/MM/yyyy"), color = colors.mutedForeground) }
             }
             Text(statusLabel(request.status.name, strings), color = statusColor(request.status.name))
         }
@@ -215,14 +215,17 @@ private fun RequestRow(request: WithdrawalRequest) {
 private fun statusLabel(status: String, strings: Strings): String = when (status.lowercase()) {
     "pending" -> strings.statusPending
     "approved" -> strings.statusApproved
+    "processing" -> strings.statusProcessing
     "completed" -> strings.statusPaid
     "rejected" -> strings.statusRejected
+    "failed" -> strings.statusFailed
     else -> status
 }
 
 @Composable
 private fun statusColor(status: String) = when (status.lowercase()) {
     "completed" -> DualMusicTheme.colors.primary
-    "rejected" -> DualMusicTheme.colors.destructive
+    // `processing` reste neutre : l'argent n'est pas encore arrivé chez l'utilisateur.
+    "rejected", "failed" -> DualMusicTheme.colors.destructive
     else -> DualMusicTheme.colors.mutedForeground
 }
