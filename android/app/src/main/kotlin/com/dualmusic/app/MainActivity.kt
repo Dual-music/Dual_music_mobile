@@ -366,6 +366,10 @@ class AppContainer(context: Context) {
     fun makeMyCompetitionsViewModel(): com.dualmusic.feature.competition.MyCompetitionsViewModel =
         com.dualmusic.feature.competition.MyCompetitionsViewModel(competitionRepository)
 
+    /** Espace « Mes compétitions » du manager (créer/gérer des compétitions). */
+    fun makeManagerCompetitionsViewModel(): com.dualmusic.feature.competition.ManagerCompetitionsViewModel =
+        com.dualmusic.feature.competition.ManagerCompetitionsViewModel(competitionRepository)
+
     /** Nouveau ViewModel « Mes Lives » (gestion + lancement de lives). */
     fun makeMyLivesViewModel(): com.dualmusic.feature.live.MyLivesViewModel =
         com.dualmusic.feature.live.MyLivesViewModel(api)
@@ -793,9 +797,16 @@ private fun ProfileSection(
             )
         }
         25 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuMyCompetitions, onBack = { onSub(PROFILE_MENU) }) {
-            com.dualmusic.feature.competition.MyCompetitionsScreen(
-                viewModel = viewModel { container.makeMyCompetitionsViewModel() },
-            )
+            // Manager (non-artiste) : gestion (créer/gérer). Artiste/fan : ses candidatures.
+            if (isManager && !isArtist) {
+                com.dualmusic.feature.competition.ManagerCompetitionsScreen(
+                    viewModel = viewModel { container.makeManagerCompetitionsViewModel() },
+                )
+            } else {
+                com.dualmusic.feature.competition.MyCompetitionsScreen(
+                    viewModel = viewModel { container.makeMyCompetitionsViewModel() },
+                )
+            }
         }
         26 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuContent, onBack = { onSub(PROFILE_MENU) }) {
             com.dualmusic.feature.content.MyContentScreen(

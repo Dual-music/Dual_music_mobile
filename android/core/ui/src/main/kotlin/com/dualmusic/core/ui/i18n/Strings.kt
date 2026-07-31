@@ -425,6 +425,16 @@ interface Strings {
     val createDuelAction: String
     val managedDuels: String
     val joinAction: String
+    val competitionCreated: String
+    val createCompetitionTitle: String
+    val createCompetitionHint: String
+    val createCompetitionAction: String
+    val titleLabel: String
+    val descriptionLabel: String
+    val rewardLabel: String
+    val maxCandidatesLabel: String
+    val startDateLabel: String
+    val endDateLabel: String
     val goOnStage: String
     val topDonors: String
     val shareLiveText: String
@@ -843,6 +853,16 @@ object FrStrings : Strings {
     override val createDuelAction = "Créer le duel"
     override val managedDuels = "Duels gérés"
     override val joinAction = "Rejoindre"
+    override val competitionCreated = "Compétition créée"
+    override val createCompetitionTitle = "Créer une compétition"
+    override val createCompetitionHint = "Organisez une compétition et gérez les candidats"
+    override val createCompetitionAction = "Créer la compétition"
+    override val titleLabel = "Titre"
+    override val descriptionLabel = "Description"
+    override val rewardLabel = "Récompense (crédits)"
+    override val maxCandidatesLabel = "Candidats max"
+    override val startDateLabel = "Date de début"
+    override val endDateLabel = "Date de fin"
     override val goOnStage = "Monter sur scène"
     override val topDonors = "Top donateurs"
     override val shareLiveText = "🔴 Je suis en live sur Dual Music ! Rejoins-moi."
@@ -1259,6 +1279,16 @@ object EnStrings : Strings {
     override val createDuelAction = "Create the duel"
     override val managedDuels = "Managed duels"
     override val joinAction = "Join"
+    override val competitionCreated = "Competition created"
+    override val createCompetitionTitle = "Create a competition"
+    override val createCompetitionHint = "Organize a competition and manage candidates"
+    override val createCompetitionAction = "Create the competition"
+    override val titleLabel = "Title"
+    override val descriptionLabel = "Description"
+    override val rewardLabel = "Reward (credits)"
+    override val maxCandidatesLabel = "Max candidates"
+    override val startDateLabel = "Start date"
+    override val endDateLabel = "End date"
     override val goOnStage = "Go on stage"
     override val topDonors = "Top donors"
     override val shareLiveText = "🔴 I'm live on Dual Music! Join me."

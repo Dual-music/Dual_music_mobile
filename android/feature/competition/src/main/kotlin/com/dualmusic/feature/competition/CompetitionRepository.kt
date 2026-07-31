@@ -90,4 +90,64 @@ class CompetitionRepository(private val api: ApiClient) {
             Endpoint.post(CompetitionEndpoints.tickets(competitionId), idempotencyKey = idempotencyKey),
         )
     }
+
+    // --- Espace MANAGER (organisateur de compétitions) ---
+
+    /** Id du caller (manager) — `manager_id` à la création. */
+    suspend fun myUserId(): String? =
+        runCatching {
+            api.request(
+                Endpoint.get(com.dualmusic.domain.user.UserEndpoints.ME),
+                com.dualmusic.domain.auth.MeResponse.serializer(),
+            ).user?.id
+        }.getOrNull()
+
+    /** Compétitions gérées par ce manager (`GET /competitions/mine`). */
+    suspend fun myCompetitions(): List<Competition> =
+        api.request(Endpoint.get("/competitions/mine"), ListSerializer(Competition.serializer()))
+
+    /**
+     * Crée une compétition (le manager s'assigne organisateur). `POST /competitions`.
+     * Champs essentiels ; le backend applique ses valeurs par défaut pour le reste.
+     */
+    suspend fun createCompetition(
+        managerId: String,
+        title: String,
+        description: String,
+        rewardAmount: Double,
+        maxCandidates: Int,
+        startAt: String?,
+        endAt: String?,
+    ) {
+        val start = startAt?.takeIf { it.isNotBlank() }?.let { """"$it"""" } ?: "null"
+        val end = endAt?.takeIf { it.isNotBlank() }?.let { """"$it"""" } ?: "null"
+        val body = json.encodeToString(
+            CreateCompetitionBody.serializer(),
+            CreateCompetitionBody(
+                managerId = managerId,
+                title = title,
+                description = description,
+                rewardAmount = rewardAmount,
+                maxCandidates = maxCandidates,
+                startAt = startAt?.takeIf { it.isNotBlank() },
+                endAt = endAt?.takeIf { it.isNotBlank() },
+            ),
+        )
+        api.request<Unit>(Endpoint.post("/competitions", body))
+    }
 }
+
+/** Corps JSON de création d'une compétition (`POST /competitions`). */
+@kotlinx.serialization.Serializable
+private data class CreateCompetitionBody(
+    val managerId: String,
+    val title: String,
+    val description: String,
+    val rewardAmount: Double,
+    val maxCandidates: Int,
+    val mode: String = "online",
+    val eligibilityScope: String = "world",
+    val startAt: String? = null,
+    val endAt: String? = null,
+    val status: String = "open",
+)
