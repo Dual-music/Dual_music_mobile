@@ -27,11 +27,16 @@ android {
 dependencies {
     implementation(project(":shared-domain"))
     implementation(project(":core:network"))
+    implementation(project(":core:realtime"))
+    implementation(project(":core:media"))
     implementation(project(":core:ui"))
+    // L'achat de billet est une opération de portefeuille.
+    implementation(project(":feature:wallet"))
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")

@@ -375,6 +375,22 @@ class AppContainer(context: Context) {
         CompetitionRoomViewModel(competitionId, competitionRepository, realtimeClient)
 
     /**
+     * Fabrique un ViewModel de room de concert (viewer + hôte artiste). L'hôte est déterminé
+     * par le VM (fetch `me`). Une connexion SFU par concert ouvert.
+     */
+    fun makeConcertRoomViewModel(concert: com.dualmusic.domain.model.Concert): com.dualmusic.feature.concert.ConcertRoomViewModel {
+        val media = LiveRoomClient(appContext, tokenService, appScope)
+        return com.dualmusic.feature.concert.ConcertRoomViewModel(
+            concertId = concert.id,
+            media = media,
+            realtime = realtimeClient,
+            repository = concertRepository,
+            hostUserId = concert.artistId,
+            ticketPrice = concert.ticketPrice,
+        )
+    }
+
+    /**
      * Fabrique un ViewModel de room de duel (une connexion SFU par duel ouvert).
      * Le vote payant est délégué au portefeuille (procédure atomique serveur).
      */
@@ -505,6 +521,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
     var notifOpen by remember { mutableStateOf(false) }
     var openDuel by remember { mutableStateOf<Duel?>(null) }
     var openCompetition by remember { mutableStateOf<Competition?>(null) }
+    var openConcert by remember { mutableStateOf<com.dualmusic.domain.model.Concert?>(null) }
     // Diffusion live (hôte) en plein écran, au-dessus du Scaffold → SANS la barre du bas.
     var broadcastLive by remember { mutableStateOf<Live?>(null) }
 
@@ -575,7 +592,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                     )
                     NavigationBarItem(
                         selected = !showProfile && tab == 3,
-                        onClick = { goTab(3) },
+                        onClick = { goTab(3); openConcert = null },
                         icon = { Icon(Icons.Filled.MusicNote, contentDescription = null) },
                         label = { Text(navS.navConcerts) },
                         colors = navItemColors,
@@ -638,8 +655,20 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                     }
                 }
                 3 -> {
-                    val concertsVm: ConcertsViewModel = viewModel { container.makeConcertsViewModel() }
-                    ConcertsListScreen(viewModel = concertsVm)
+                    val concert = openConcert
+                    if (concert == null) {
+                        val concertsVm: ConcertsViewModel = viewModel { container.makeConcertsViewModel() }
+                        ConcertsListScreen(viewModel = concertsVm, onOpen = { openConcert = it })
+                    } else {
+                        // Clé = id du concert → un ViewModel (et une room SFU) par concert ouvert.
+                        val roomVm: com.dualmusic.feature.concert.ConcertRoomViewModel =
+                            viewModel(key = concert.id) { container.makeConcertRoomViewModel(concert) }
+                        com.dualmusic.feature.concert.ConcertRoomScreen(
+                            viewModel = roomVm,
+                            concertTitle = concert.title,
+                            onLeave = { openConcert = null },
+                        )
+                    }
                 }
                 4 -> {
                     val competition = openCompetition

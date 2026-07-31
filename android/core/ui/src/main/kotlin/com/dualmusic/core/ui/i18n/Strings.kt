@@ -416,6 +416,9 @@ interface Strings {
     val background: String
     val none: String
     val blur: String
+    val startConcert: String
+    val ticketRequired: String
+    val buyTicket: String
     val goOnStage: String
     val topDonors: String
     val shareLiveText: String
@@ -825,6 +828,9 @@ object FrStrings : Strings {
     override val background = "Fond"
     override val none = "Aucun"
     override val blur = "Flou"
+    override val startConcert = "Démarrer le concert"
+    override val ticketRequired = "Ce concert nécessite un billet pour être regardé."
+    override val buyTicket = "Acheter le billet"
     override val goOnStage = "Monter sur scène"
     override val topDonors = "Top donateurs"
     override val shareLiveText = "🔴 Je suis en live sur Dual Music ! Rejoins-moi."
@@ -1232,6 +1238,9 @@ object EnStrings : Strings {
     override val background = "Background"
     override val none = "None"
     override val blur = "Blur"
+    override val startConcert = "Start the concert"
+    override val ticketRequired = "This concert requires a ticket to watch."
+    override val buyTicket = "Buy ticket"
     override val goOnStage = "Go on stage"
     override val topDonors = "Top donors"
     override val shareLiveText = "🔴 I'm live on Dual Music! Join me."
