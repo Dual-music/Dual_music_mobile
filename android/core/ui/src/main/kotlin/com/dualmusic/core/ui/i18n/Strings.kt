@@ -419,6 +419,12 @@ interface Strings {
     val startConcert: String
     val ticketRequired: String
     val buyTicket: String
+    val duelCreated: String
+    val createDuelTitle: String
+    val createDuelHint: String
+    val createDuelAction: String
+    val managedDuels: String
+    val joinAction: String
     val goOnStage: String
     val topDonors: String
     val shareLiveText: String
@@ -831,6 +837,12 @@ object FrStrings : Strings {
     override val startConcert = "Démarrer le concert"
     override val ticketRequired = "Ce concert nécessite un billet pour être regardé."
     override val buyTicket = "Acheter le billet"
+    override val duelCreated = "Duel créé"
+    override val createDuelTitle = "Créer un duel"
+    override val createDuelHint = "Opposez deux artistes dans un duel"
+    override val createDuelAction = "Créer le duel"
+    override val managedDuels = "Duels gérés"
+    override val joinAction = "Rejoindre"
     override val goOnStage = "Monter sur scène"
     override val topDonors = "Top donateurs"
     override val shareLiveText = "🔴 Je suis en live sur Dual Music ! Rejoins-moi."
@@ -1241,6 +1253,12 @@ object EnStrings : Strings {
     override val startConcert = "Start the concert"
     override val ticketRequired = "This concert requires a ticket to watch."
     override val buyTicket = "Buy ticket"
+    override val duelCreated = "Duel created"
+    override val createDuelTitle = "Create a duel"
+    override val createDuelHint = "Pit two artists against each other"
+    override val createDuelAction = "Create the duel"
+    override val managedDuels = "Managed duels"
+    override val joinAction = "Join"
     override val goOnStage = "Go on stage"
     override val topDonors = "Top donors"
     override val shareLiveText = "🔴 I'm live on Dual Music! Join me."

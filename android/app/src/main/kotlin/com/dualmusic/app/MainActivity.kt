@@ -352,6 +352,10 @@ class AppContainer(context: Context) {
     /** Nouveau ViewModel du catalogue de duels. */
     fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository)
 
+    /** Espace « Mes Duels » du manager (créer/organiser des duels). */
+    fun makeManagerDuelsViewModel(): com.dualmusic.feature.duel.ManagerDuelsViewModel =
+        com.dualmusic.feature.duel.ManagerDuelsViewModel(duelRepository)
+
     /** Nouveau ViewModel du catalogue de concerts. */
     fun makeConcertsViewModel(): ConcertsViewModel = ConcertsViewModel(concertRepository)
 
@@ -770,8 +774,13 @@ private fun ProfileSection(
             SponsorScreen(viewModel = sponsorVm)
         }
         12 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.navDuels, onBack = { onSub(PROFILE_MENU) }) {
-            val creatorVm: CreatorViewModel = viewModel { container.makeCreatorViewModel() }
-            CreatorScreen(viewModel = creatorVm, initialTab = 0)
+            // Manager (non-artiste) : gestion des duels (créer/organiser). Artiste : « demander un duel ».
+            if (isManager && !isArtist) {
+                com.dualmusic.feature.duel.ManagerDuelsScreen(viewModel = viewModel { container.makeManagerDuelsViewModel() })
+            } else {
+                val creatorVm: CreatorViewModel = viewModel { container.makeCreatorViewModel() }
+                CreatorScreen(viewModel = creatorVm, initialTab = 0)
+            }
         }
         23 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.navConcerts, onBack = { onSub(PROFILE_MENU) }) {
             val creatorVm: CreatorViewModel = viewModel { container.makeCreatorViewModel() }

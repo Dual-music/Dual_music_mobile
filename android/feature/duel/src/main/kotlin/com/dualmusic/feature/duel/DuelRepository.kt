@@ -74,6 +74,48 @@ class DuelRepository(private val api: ApiClient) {
             Endpoint.get("/leaderboards/gifts", query = mapOf("contextType" to "duel", "contextId" to duelId)),
             ListSerializer(DuelDonorEntry.serializer()),
         )
+
+    // --- Espace MANAGER (organisateur de duels) ---
+
+    /** Id du caller (manager) — sert de `manager_id` à la création + à filtrer ses duels. */
+    suspend fun myUserId(): String? =
+        runCatching {
+            api.request(
+                Endpoint.get(com.dualmusic.domain.user.UserEndpoints.ME),
+                com.dualmusic.domain.auth.MeResponse.serializer(),
+            ).user?.id
+        }.getOrNull()
+
+    /** Duels gérés par ce manager (`GET /duels?managerId=&limit=`). */
+    suspend fun managedDuels(managerId: String, status: String? = null): List<Duel> =
+        api.request(
+            Endpoint.get(
+                DuelEndpoints.LIST,
+                query = buildMap {
+                    put("managerId", managerId)
+                    status?.let { put("status", it) }
+                    put("limit", "200")
+                },
+            ),
+            ListSerializer(Duel.serializer()),
+        )
+
+    /** Annuaire des artistes (pour choisir les 2 adversaires). */
+    suspend fun artists(): List<com.dualmusic.domain.artist.ArtistSummary> =
+        api.request(
+            Endpoint.get(com.dualmusic.domain.artist.ArtistEndpoints.LIST),
+            ListSerializer(com.dualmusic.domain.artist.ArtistSummary.serializer()),
+        )
+
+    /**
+     * Crée un duel entre 2 artistes (le manager s'assigne arbitre). `POST /duels`.
+     * @param artist1Id / artist2Id ids UTILISATEUR des artistes.
+     */
+    suspend fun createDuel(artist1Id: String, artist2Id: String, scheduledTime: String?, managerId: String) {
+        val sched = scheduledTime?.let { """"$it"""" } ?: "null"
+        val body = """{"artist1_id":"$artist1Id","artist2_id":"$artist2Id","scheduled_time":$sched,"manager_id":"$managerId","status":"upcoming"}"""
+        api.request<Unit>(Endpoint.post(DuelEndpoints.LIST, body))
+    }
 }
 
 /** Entrée du classement des donateurs (`GET /leaderboards/gifts`). */
