@@ -269,6 +269,35 @@ class AppContainer(context: Context) {
             )
         }.getOrDefault(emptyList())
 
+    /** Charge les préférences visuelles (fuseau + notifications) et alimente le store global. */
+    suspend fun loadUiPreferences() {
+        runCatching {
+            api.request(
+                Endpoint.get(com.dualmusic.domain.settings.SettingsEndpoints.UI_PREFERENCES),
+                com.dualmusic.domain.settings.UiPreferencesDto.serializer(),
+            )
+        }.getOrNull()?.let { dto ->
+            val cur = com.dualmusic.core.ui.prefs.UiPreferencesStore.current()
+            com.dualmusic.core.ui.prefs.UiPreferencesStore.set(
+                com.dualmusic.core.ui.prefs.UiPrefs(
+                    topDonorMode = dto.topDonorMode?.takeIf { it in setOf("full", "reduced", "off") } ?: cur.topDonorMode,
+                    topDonorAnimation = dto.topDonorAnimation?.takeIf { it in setOf("default", "traversing") } ?: cur.topDonorAnimation,
+                    reduceAnimations = dto.reduceAnimations ?: cur.reduceAnimations,
+                    timezone = dto.timezone?.takeIf { it.isNotBlank() } ?: cur.timezone,
+                ),
+            )
+        }
+    }
+
+    /** Met à jour le store immédiatement puis persiste (best-effort) via PUT camelCase. */
+    suspend fun saveUiPreferences(prefs: com.dualmusic.core.ui.prefs.UiPrefs) {
+        com.dualmusic.core.ui.prefs.UiPreferencesStore.set(prefs)
+        runCatching {
+            val body = """{"topDonorMode":"${prefs.topDonorMode}","topDonorAnimation":"${prefs.topDonorAnimation}","reduceAnimations":${prefs.reduceAnimations},"timezone":"${prefs.timezone}"}"""
+            api.request<Unit>(Endpoint.put(com.dualmusic.domain.settings.SettingsEndpoints.UI_PREFERENCES, body))
+        }
+    }
+
     /** Nouveau ViewModel d'édition du profil (avec upload d'avatar). */
     fun makeEditProfileViewModel(): EditProfileViewModel = EditProfileViewModel(profileRepository, mediaUploader)
 
@@ -432,6 +461,8 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(authState) {
                     if (authState is AuthState.SignedIn) {
                         container.registerPushToken()
+                        // Préférences visuelles (fuseau horaire) → store global, appliqué partout.
+                        container.loadUiPreferences()
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         }
@@ -756,7 +787,9 @@ private fun ProfileSection(
             var deletionAt by remember { mutableStateOf<String?>(null) }
             var refresh by remember { mutableIntStateOf(0) }
             val prefScope = rememberCoroutineScope()
+            val uiPrefs by com.dualmusic.core.ui.prefs.UiPreferencesStore.state.collectAsStateWithLifecycle()
             LaunchedEffect(Unit) { rates = container.exchangeRates() }
+            LaunchedEffect(Unit) { container.loadUiPreferences() }
             LaunchedEffect(refresh) { deletionAt = container.accountDeletionScheduledAt() }
             PreferencesScreen(
                 currentMode = mode,
@@ -766,6 +799,8 @@ private fun ProfileSection(
                 currentCurrency = currency,
                 currencyOptions = rates,
                 onSelectCurrency = { container.currencyController.set(it) },
+                uiPrefs = uiPrefs,
+                onUiPrefsChange = { prefScope.launch { container.saveUiPreferences(it) } },
                 deletionScheduledAt = deletionAt,
                 onRequestDeletion = { prefScope.launch { runCatching { container.requestAccountDeletion() }; refresh++ } },
                 onCancelDeletion = { prefScope.launch { runCatching { container.cancelAccountDeletion() }; refresh++ } },

@@ -501,7 +501,7 @@ private fun DuelRequestRow(
     DMCard(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
             Text(request.message ?: strings.duelChallenge, color = colors.foreground, fontWeight = FontWeight.Bold)
-            request.proposedDate?.let { Text("${strings.proposed} : ${it.take(16)}", color = colors.mutedForeground) }
+            request.proposedDate?.let { Text("${strings.proposed} : ${com.dualmusic.core.ui.datetime.formatTz(it)}", color = colors.mutedForeground) }
             if (canRespond) {
                 Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
                     DMButton(strings.accept, modifier = Modifier.weight(1f), onClick = onAccept)
@@ -526,7 +526,7 @@ private fun ConcertRow(concert: Concert) {
         ) {
             Column {
                 Text(concert.title, color = colors.foreground, fontWeight = FontWeight.Bold)
-                concert.scheduledDate?.let { Text(it.take(16), color = colors.mutedForeground) }
+                concert.scheduledDate?.let { Text(com.dualmusic.core.ui.datetime.formatTz(it), color = colors.mutedForeground) }
             }
             Text(concert.status.name.lowercase().replaceFirstChar { it.uppercase() }, color = colors.mutedForeground)
         }

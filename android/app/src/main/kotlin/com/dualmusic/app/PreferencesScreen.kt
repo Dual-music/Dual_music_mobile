@@ -2,6 +2,8 @@ package com.dualmusic.app
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,6 +43,8 @@ fun PreferencesScreen(
     currentCurrency: com.dualmusic.core.ui.currency.DisplayCurrency = com.dualmusic.core.ui.currency.DisplayCurrency(),
     currencyOptions: List<com.dualmusic.domain.settings.ExchangeRate> = emptyList(),
     onSelectCurrency: (com.dualmusic.core.ui.currency.DisplayCurrency) -> Unit = {},
+    uiPrefs: com.dualmusic.core.ui.prefs.UiPrefs = com.dualmusic.core.ui.prefs.UiPrefs(),
+    onUiPrefsChange: (com.dualmusic.core.ui.prefs.UiPrefs) -> Unit = {},
     deletionScheduledAt: String? = null,
     onRequestDeletion: () -> Unit = {},
     onCancelDeletion: () -> Unit = {},
@@ -51,6 +55,7 @@ fun PreferencesScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(DualMusicTheme.gradients.hero)
+            .verticalScroll(rememberScrollState())
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.lg),
     ) {
@@ -109,6 +114,62 @@ fun PreferencesScreen(
             }
         }
 
+        // --- Notifications visuelles (carte top donateur + animations + fuseau) ---
+        Text(s.vnpTitle, color = colors.foreground, fontWeight = FontWeight.Bold)
+        Text(s.vnpDesc, color = colors.mutedForeground)
+        DMCard(modifier = Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                // Carte du top donateur.
+                Text(s.vnpTopDonorCard, color = colors.foreground, fontWeight = FontWeight.Bold)
+                RadioOption(s.vnpFull, s.vnpFullDesc, uiPrefs.topDonorMode == "full") { onUiPrefsChange(uiPrefs.copy(topDonorMode = "full")) }
+                RadioOption(s.vnpReduced, s.vnpReducedDesc, uiPrefs.topDonorMode == "reduced") { onUiPrefsChange(uiPrefs.copy(topDonorMode = "reduced")) }
+                RadioOption(s.vnpOff, s.vnpOffDesc, uiPrefs.topDonorMode == "off") { onUiPrefsChange(uiPrefs.copy(topDonorMode = "off")) }
+
+                // Animation du top donateur (désactivée si carte off).
+                Text(s.vnpTopDonorAnim, color = colors.foreground, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = DualMusicTheme.spacing.sm))
+                val animEnabled = uiPrefs.topDonorMode != "off"
+                RadioOption(s.vnpDefault, s.vnpDefaultDesc, uiPrefs.topDonorAnimation == "default", enabled = animEnabled) { onUiPrefsChange(uiPrefs.copy(topDonorAnimation = "default")) }
+                RadioOption(s.vnpTraversing, s.vnpTraversingDesc, uiPrefs.topDonorAnimation == "traversing", enabled = animEnabled) { onUiPrefsChange(uiPrefs.copy(topDonorAnimation = "traversing")) }
+
+                // Réduire les animations.
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = DualMusicTheme.spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(s.vnpReduceAnim, color = colors.foreground)
+                        Text(s.vnpReduceAnimDesc, color = colors.mutedForeground)
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = uiPrefs.reduceAnimations,
+                        onCheckedChange = { onUiPrefsChange(uiPrefs.copy(reduceAnimations = it)) },
+                    )
+                }
+
+                // Fuseau horaire.
+                Text(s.vnpTimezone, color = colors.foreground, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = DualMusicTheme.spacing.sm))
+                var tzExpanded by remember { mutableStateOf(false) }
+                androidx.compose.foundation.layout.Box {
+                    DMButton(
+                        Timezones.firstOrNull { it.first == uiPrefs.timezone }?.second ?: uiPrefs.timezone,
+                        style = DMButtonStyle.OUTLINE,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { tzExpanded = true },
+                    )
+                    androidx.compose.material3.DropdownMenu(expanded = tzExpanded, onDismissRequest = { tzExpanded = false }) {
+                        Timezones.forEach { (value, label) ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = { tzExpanded = false; onUiPrefsChange(uiPrefs.copy(timezone = value)) },
+                            )
+                        }
+                    }
+                }
+                Text(s.vnpTimezoneDesc, color = colors.mutedForeground)
+            }
+        }
+
         // --- Compte (zone sensible) ---
         Text(s.account, color = colors.foreground, fontWeight = FontWeight.Bold)
         DMCard(modifier = Modifier.fillMaxWidth()) {
@@ -146,6 +207,45 @@ fun PreferencesScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+/** Fuseaux horaires proposés (valeur IANA, libellé) — identiques au web. */
+private val Timezones = listOf(
+    "GMT" to "GMT (UTC)",
+    "Europe/Paris" to "Europe/Paris (CET/CEST)",
+    "Europe/London" to "Europe/London",
+    "Africa/Abidjan" to "Africa/Abidjan (GMT)",
+    "Africa/Lagos" to "Africa/Lagos (WAT)",
+    "Africa/Casablanca" to "Africa/Casablanca",
+    "America/New_York" to "America/New_York",
+    "America/Los_Angeles" to "America/Los_Angeles",
+    "Asia/Dubai" to "Asia/Dubai",
+    "Asia/Tokyo" to "Asia/Tokyo",
+)
+
+/** Option radio avec titre + description (préférences visuelles). */
+@Composable
+private fun RadioOption(
+    label: String,
+    description: String,
+    selected: Boolean,
+    enabled: Boolean = true,
+    onSelect: () -> Unit,
+) {
+    val colors = DualMusicTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onSelect)
+            .padding(vertical = DualMusicTheme.spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = onSelect, enabled = enabled)
+        Column(modifier = Modifier.padding(start = DualMusicTheme.spacing.sm)) {
+            Text(label, color = if (enabled) colors.foreground else colors.mutedForeground, fontWeight = FontWeight.Bold)
+            Text(description, color = colors.mutedForeground)
         }
     }
 }

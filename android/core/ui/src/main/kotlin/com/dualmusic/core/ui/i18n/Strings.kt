@@ -355,6 +355,25 @@ interface Strings {
     // Préférences : devise d'affichage.
     val displayCurrency: String
     val displayCurrencyHint: String
+    // Notifications visuelles (préférences).
+    val vnpTitle: String
+    val vnpDesc: String
+    val vnpTopDonorCard: String
+    val vnpFull: String
+    val vnpFullDesc: String
+    val vnpReduced: String
+    val vnpReducedDesc: String
+    val vnpOff: String
+    val vnpOffDesc: String
+    val vnpTopDonorAnim: String
+    val vnpDefault: String
+    val vnpDefaultDesc: String
+    val vnpTraversing: String
+    val vnpTraversingDesc: String
+    val vnpReduceAnim: String
+    val vnpReduceAnimDesc: String
+    val vnpTimezone: String
+    val vnpTimezoneDesc: String
     // Mes Lives (gestion + lancement).
     val myLives: String
     val myLivesHint: String
@@ -747,6 +766,24 @@ object FrStrings : Strings {
     override val noWithdrawals = "Aucun retrait pour le moment."
     override val displayCurrency = "Devise d'affichage"
     override val displayCurrencyHint = "La valeur de tes crédits s'affiche dans cette devise."
+    override val vnpTitle = "Notifications visuelles"
+    override val vnpDesc = "Contrôlez l'intensité des animations à l'écran pendant les lives, duels et concerts."
+    override val vnpTopDonorCard = "Carte du top donateur"
+    override val vnpFull = "Complet"
+    override val vnpFullDesc = "Animation complète avec brillance, message et avatar."
+    override val vnpReduced = "Réduit"
+    override val vnpReducedDesc = "Carte plus petite, sans brillance, durée raccourcie."
+    override val vnpOff = "Désactivé"
+    override val vnpOffDesc = "Aucune notification visuelle de top donateur."
+    override val vnpTopDonorAnim = "Animation du top donateur"
+    override val vnpDefault = "Carte discrète"
+    override val vnpDefaultDesc = "Apparaît au-dessus des emojis flottants."
+    override val vnpTraversing = "Bandeau traversant"
+    override val vnpTraversingDesc = "Une bannière traverse le haut de l'écran de droite à gauche."
+    override val vnpReduceAnim = "Réduire les animations"
+    override val vnpReduceAnimDesc = "Limite les effets visuels superflus pour plus de confort."
+    override val vnpTimezone = "Fuseau horaire"
+    override val vnpTimezoneDesc = "Les dates et heures s'afficheront dans ce fuseau partout dans l'app."
     override val myLives = "Mes Lives"
     override val myLivesHint = "Gérez vos lives passés et lancez-en un nouveau"
     override val liveTitle = "Titre du live"
@@ -1136,6 +1173,24 @@ object EnStrings : Strings {
     override val noWithdrawals = "No withdrawal yet."
     override val displayCurrency = "Display currency"
     override val displayCurrencyHint = "Your credits value is shown in this currency."
+    override val vnpTitle = "Visual notifications"
+    override val vnpDesc = "Control on-screen animation intensity during lives, duels and concerts."
+    override val vnpTopDonorCard = "Top donor card"
+    override val vnpFull = "Full"
+    override val vnpFullDesc = "Full animation with glow, message and avatar."
+    override val vnpReduced = "Reduced"
+    override val vnpReducedDesc = "Smaller card, no glow, shorter duration."
+    override val vnpOff = "Disabled"
+    override val vnpOffDesc = "No top-donor visual notification."
+    override val vnpTopDonorAnim = "Top donor animation"
+    override val vnpDefault = "Subtle card"
+    override val vnpDefaultDesc = "Appears above floating emojis."
+    override val vnpTraversing = "Crossing banner"
+    override val vnpTraversingDesc = "A banner sweeps across the top of the screen right to left."
+    override val vnpReduceAnim = "Reduce animations"
+    override val vnpReduceAnimDesc = "Limits superfluous visual effects for comfort."
+    override val vnpTimezone = "Timezone"
+    override val vnpTimezoneDesc = "Dates and times will display in this timezone throughout the app."
     override val myLives = "My Lives"
     override val myLivesHint = "Manage your past lives and start a new one"
     override val liveTitle = "Live title"

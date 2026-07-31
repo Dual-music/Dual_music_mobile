@@ -1,8 +1,13 @@
 package com.dualmusic.core.ui.components
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DateRange
@@ -11,8 +16,6 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -23,7 +26,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.dualmusic.core.ui.theme.DualMusicTheme
 import java.util.Calendar
 import java.util.TimeZone
 
@@ -50,22 +57,36 @@ fun DateTimePickerField(
     var showTime by remember { mutableStateOf(false) }
     var pickedDateMillis by remember { mutableStateOf<Long?>(null) }
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        OutlinedTextField(
-            value = prettyDateTime(value),
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(label) },
-            placeholder = { Text(placeholder) },
-            trailingIcon = {
-                if (value.isNotBlank()) {
-                    IconButton(onClick = { onValueChange("") }) { Icon(Icons.Filled.Clear, contentDescription = null) }
-                } else {
-                    Icon(Icons.Filled.DateRange, contentDescription = null)
-                }
-            },
-            modifier = Modifier.fillMaxWidth().clickable { showDate = true },
-        )
+    val colors = DualMusicTheme.colors
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, color = colors.mutedForeground, fontSize = 12.sp)
+        // Champ bordé cliquable (le TextField readOnly intercepterait les clics).
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, colors.muted, RoundedCornerShape(8.dp))
+                .clickable { showDate = true }
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val shown = prettyDateTime(value)
+            Text(
+                shown.ifBlank { placeholder },
+                color = if (shown.isBlank()) colors.mutedForeground else colors.foreground,
+                modifier = Modifier.weight(1f),
+            )
+            if (value.isNotBlank()) {
+                // clickable enfant : efface sans ouvrir le sélecteur.
+                Icon(
+                    Icons.Filled.Clear,
+                    contentDescription = null,
+                    tint = colors.mutedForeground,
+                    modifier = Modifier.clickable { onValueChange("") },
+                )
+            } else {
+                Icon(Icons.Filled.DateRange, contentDescription = null, tint = colors.mutedForeground)
+            }
+        }
     }
 
     if (showDate) {
