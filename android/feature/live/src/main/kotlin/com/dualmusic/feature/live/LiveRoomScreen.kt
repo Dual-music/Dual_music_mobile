@@ -91,6 +91,7 @@ import com.dualmusic.core.ui.dmGlow
 import com.dualmusic.core.ui.gifts.GiftBurst
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.media.VideoFilterPresets
+import com.dualmusic.core.ui.overlay.TopDonorBubble
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import io.livekit.android.renderer.SurfaceViewRenderer
 import kotlinx.coroutines.coroutineScope
@@ -259,7 +260,7 @@ fun LiveRoomScreen(
         }
 
         // Bulle du meilleur donateur (parité web), pilotée par les préférences visuelles.
-        com.dualmusic.core.ui.overlay.TopDonorBubble(donor = topDonor, mode = uiPrefs.topDonorMode, animation = uiPrefs.topDonorAnimation)
+        TopDonorBubble(donor = topDonor, mode = uiPrefs.topDonorMode, animation = uiPrefs.topDonorAnimation)
 
         // Interface masquée : seul un bouton de restauration.
         if (hideOverlay) {

@@ -62,6 +62,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.overlay.FloatingReactionsLayer
+import com.dualmusic.core.ui.overlay.TopDonorBubble
 import com.dualmusic.core.ui.prefs.UiPreferencesStore
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import io.livekit.android.renderer.SurfaceViewRenderer
@@ -149,7 +150,7 @@ fun ConcertRoomScreen(
         FloatingReactionsLayer(reactions = emojiFeed, reduceAnimations = uiPrefs.reduceAnimations)
 
         // Bulle du meilleur donateur (parité web), pilotée par les préférences visuelles.
-        com.dualmusic.core.ui.overlay.TopDonorBubble(donor = topDonor, mode = uiPrefs.topDonorMode, animation = uiPrefs.topDonorAnimation)
+        TopDonorBubble(donor = topDonor, mode = uiPrefs.topDonorMode, animation = uiPrefs.topDonorAnimation)
 
         // Barre du haut : LIVE + spectateurs + likes + partage.
         Row(

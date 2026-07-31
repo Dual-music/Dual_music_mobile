@@ -48,6 +48,7 @@ import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.gifts.GiftBurst
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.overlay.FloatingReactionsLayer
+import com.dualmusic.core.ui.overlay.TopDonorBubble
 import com.dualmusic.core.ui.prefs.UiPreferencesStore
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import io.livekit.android.renderer.SurfaceViewRenderer
@@ -122,7 +123,7 @@ fun DuelRoomScreen(
         FloatingReactionsLayer(reactions = emojiFeed, reduceAnimations = uiPrefs.reduceAnimations)
 
         // Bulle du meilleur donateur (parité web), pilotée par les préférences visuelles.
-        com.dualmusic.core.ui.overlay.TopDonorBubble(donor = topDonor, mode = uiPrefs.topDonorMode, animation = uiPrefs.topDonorAnimation)
+        TopDonorBubble(donor = topDonor, mode = uiPrefs.topDonorMode, animation = uiPrefs.topDonorAnimation)
 
         // --- Overlays (zones sûres : barre d'état en haut, touches système + clavier en bas) ---
         Column(
