@@ -7,6 +7,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ArtistSummary(
     val id: String,
+    // Id de l'UTILISATEUR (≠ id du profil artiste) : clé pour défier un adversaire et s'exclure soi-même.
+    @SerialName("user_id") val userId: String? = null,
     @SerialName("full_name") val fullName: String? = null,
     @SerialName("stage_name") val stageName: String? = null,
     @SerialName("avatar_url") val avatarUrl: String? = null,
@@ -17,6 +19,9 @@ data class ArtistSummary(
         get() = stageName?.takeIf { it.isNotBlank() }
             ?: fullName?.takeIf { it.isNotBlank() }
             ?: "Artiste"
+
+    /** Id utilisateur de l'artiste (repli sur `id` si absent). */
+    val opponentUserId: String get() = userId ?: id
 }
 
 /** Chemins REST de l'annuaire artistes / suivi (source unique, partagée). */

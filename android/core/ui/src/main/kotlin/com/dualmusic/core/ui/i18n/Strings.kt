@@ -197,8 +197,10 @@ interface Strings {
     val requestWithdraw: String
     val statusPending: String
     val statusApproved: String
+    val statusProcessing: String
     val statusPaid: String
     val statusRejected: String
+    val statusFailed: String
     val pendingRewards: String
     val claimed: String
     val subscriptionActive: String
@@ -336,6 +338,11 @@ interface Strings {
     val searchArtist: String
     val noArtistAvailable: String
     val challenge: String
+    val artistsAvailable: String
+    val selectedArtist: String
+    val proposedDateOptional: String
+    val messageOptional: String
+    val sendDuelRequest: String
     val receivedInvitations: String
     val duelRequestSent: String
     // Suivis (artistes suivis uniquement).
@@ -591,8 +598,10 @@ object FrStrings : Strings {
     override val requestWithdraw = "Demander le retrait"
     override val statusPending = "En attente"
     override val statusApproved = "Approuvé"
+    override val statusProcessing = "Versement en cours"
     override val statusPaid = "Payé"
     override val statusRejected = "Rejeté"
+    override val statusFailed = "Échec — crédits rendus"
     override val pendingRewards = "crédits de récompense en attente"
     override val claimed = "✅ Réclamé"
     override val subscriptionActive = "✅ Abonnement actif :"
@@ -722,6 +731,11 @@ object FrStrings : Strings {
     override val requestDuel = "Demander un Duel"
     override val requestDuelHint = "Défiez un autre artiste pour un duel musical"
     override val searchArtist = "Rechercher un artiste…"
+    override val artistsAvailable = "artiste(s) disponible(s)"
+    override val selectedArtist = "Artiste sélectionné"
+    override val proposedDateOptional = "Date proposée (optionnel)"
+    override val messageOptional = "Message (optionnel)"
+    override val sendDuelRequest = "Envoyer la demande de duel"
     override val noArtistAvailable = "Aucun artiste disponible"
     override val challenge = "Défier"
     override val receivedInvitations = "Invitations reçues"
@@ -973,8 +987,10 @@ object EnStrings : Strings {
     override val requestWithdraw = "Request withdrawal"
     override val statusPending = "Pending"
     override val statusApproved = "Approved"
+    override val statusProcessing = "Payout in progress"
     override val statusPaid = "Paid"
     override val statusRejected = "Rejected"
+    override val statusFailed = "Failed — credits returned"
     override val pendingRewards = "reward credits pending"
     override val claimed = "✅ Claimed"
     override val subscriptionActive = "✅ Active subscription:"
@@ -1103,6 +1119,11 @@ object EnStrings : Strings {
     override val noCandidaciesHint = "You haven't entered any competition yet."
     override val requestDuel = "Request a Duel"
     override val requestDuelHint = "Challenge another artist to a music duel"
+    override val artistsAvailable = "artist(s) available"
+    override val selectedArtist = "Selected artist"
+    override val proposedDateOptional = "Proposed date (optional)"
+    override val messageOptional = "Message (optional)"
+    override val sendDuelRequest = "Send duel request"
     override val searchArtist = "Search an artist…"
     override val noArtistAvailable = "No artist available"
     override val challenge = "Challenge"

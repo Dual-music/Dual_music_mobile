@@ -3,6 +3,8 @@ package com.dualmusic.feature.creator
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.dualmusic.core.network.ApiClient
 import com.dualmusic.core.network.Endpoint
+import com.dualmusic.core.ui.components.DateTimePickerField
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
@@ -117,11 +120,18 @@ class CreatorViewModel(
         }
     }
 
-    /** Envoie une invitation de duel à un artiste, puis recharge les défis. */
-    fun createDuel(opponentId: String) {
+    /** Envoie une invitation de duel à un artiste (date + message optionnels), puis recharge. */
+    fun createDuel(opponentId: String, proposedDate: String? = null, message: String? = null) {
         viewModelScope.launch {
             _uiState.update { it.copy(submitting = true, message = null) }
-            val body = json.encodeToString(CreateDuelRequest.serializer(), CreateDuelRequest(opponentId = opponentId))
+            val body = json.encodeToString(
+                CreateDuelRequest.serializer(),
+                CreateDuelRequest(
+                    opponentId = opponentId,
+                    proposedDate = proposedDate?.takeIf { it.isNotBlank() },
+                    message = message?.takeIf { it.isNotBlank() },
+                ),
+            )
             runCatching { api.request<Unit>(Endpoint.post(CreatorEndpoints.DUEL_REQUEST_CREATE, body)) }
                 .onSuccess {
                     _uiState.update { it.copy(submitting = false, message = com.dualmusic.core.ui.i18n.appStrings.duelRequestSent) }
@@ -232,7 +242,10 @@ fun CreatorScreen(viewModel: CreatorViewModel, initialTab: Int = 0) {
         when (tab) {
             0 -> {
                 var duelQuery by remember { mutableStateOf("") }
-                // « Demander un Duel » : rechercher un artiste et lui envoyer une invitation.
+                var selectedArtist by remember { mutableStateOf<com.dualmusic.domain.artist.ArtistSummary?>(null) }
+                var proposedDate by remember { mutableStateOf("") }
+                var duelMessage by remember { mutableStateOf("") }
+                // « Demander un Duel » : rechercher un artiste, le sélectionner, puis envoyer l'invitation.
                 DMCard(modifier = Modifier.fillMaxWidth()) {
                     Text(strings.requestDuel, color = colors.foreground, fontWeight = FontWeight.Bold)
                     Text(strings.requestDuelHint, color = colors.mutedForeground)
@@ -243,10 +256,16 @@ fun CreatorScreen(viewModel: CreatorViewModel, initialTab: Int = 0) {
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().padding(top = DualMusicTheme.spacing.sm),
                     )
+                    // On s'exclut soi-même via l'id UTILISATEUR (opponentUserId), pas l'id de profil.
                     val candidates = ui.artists.filter {
-                        it.id != ui.myUserId &&
+                        it.opponentUserId != ui.myUserId &&
                             (duelQuery.isBlank() || it.displayName.contains(duelQuery, ignoreCase = true))
-                    }.take(8)
+                    }.take(10)
+                    Text(
+                        "${candidates.size} ${strings.artistsAvailable}",
+                        color = colors.mutedForeground,
+                        modifier = Modifier.padding(top = DualMusicTheme.spacing.sm),
+                    )
                     if (candidates.isEmpty()) {
                         Text(
                             strings.noArtistAvailable,
@@ -255,14 +274,52 @@ fun CreatorScreen(viewModel: CreatorViewModel, initialTab: Int = 0) {
                         )
                     } else {
                         candidates.forEach { a ->
+                            val isSel = selectedArtist?.opponentUserId == a.opponentUserId
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(top = DualMusicTheme.spacing.sm),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = DualMusicTheme.spacing.sm)
+                                    .background(
+                                        if (isSel) colors.primary.copy(alpha = 0.15f) else colors.muted.copy(alpha = 0.3f),
+                                        RoundedCornerShape(12.dp),
+                                    )
+                                    .clickable { selectedArtist = a }
+                                    .padding(DualMusicTheme.spacing.md),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text("🎤  ${a.displayName}", color = colors.foreground)
-                                DMButton(strings.challenge, onClick = { viewModel.createDuel(a.id) })
+                                Text("🎤  ${a.displayName}", color = if (isSel) colors.primary else colors.foreground, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal)
                             }
+                        }
+                    }
+
+                    // Formulaire d'invitation (apparaît quand un artiste est sélectionné) — parité web.
+                    selectedArtist?.let { artist ->
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(top = DualMusicTheme.spacing.md),
+                            verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+                        ) {
+                            Text("${artist.displayName} · ${strings.selectedArtist}", color = colors.foreground, fontWeight = FontWeight.Bold)
+                            DateTimePickerField(
+                                value = proposedDate,
+                                onValueChange = { proposedDate = it },
+                                label = strings.proposedDateOptional,
+                            )
+                            OutlinedTextField(
+                                value = duelMessage,
+                                onValueChange = { duelMessage = it },
+                                label = { Text(strings.messageOptional) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            DMButton(
+                                if (ui.submitting) strings.sending else strings.sendDuelRequest,
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = {
+                                    viewModel.createDuel(artist.opponentUserId, proposedDate, duelMessage)
+                                    selectedArtist = null
+                                    proposedDate = ""
+                                    duelMessage = ""
+                                },
+                            )
                         }
                     }
                 }
@@ -346,12 +403,10 @@ private fun CreateConcertForm(
             OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text(strings.description) }, modifier = Modifier.fillMaxWidth())
         }
         item {
-            OutlinedTextField(
+            DateTimePickerField(
                 value = date,
                 onValueChange = { date = it },
-                label = { Text(strings.dateFormatLabel) },
-                placeholder = { Text("2026-08-01T20:00") },
-                modifier = Modifier.fillMaxWidth(),
+                label = strings.dateFormatLabel,
             )
         }
         item {
