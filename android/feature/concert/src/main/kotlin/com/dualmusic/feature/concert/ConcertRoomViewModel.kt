@@ -77,6 +77,10 @@ class ConcertRoomViewModel(
     private val _leaderboard = MutableStateFlow<List<ConcertDonorEntry>>(emptyList())
     val leaderboard: StateFlow<List<ConcertDonorEntry>> = _leaderboard.asStateFlow()
 
+    /** Meilleur donateur courant (bulle top-donateur). Rechargé à chaque cadeau. */
+    private val _topDonor = MutableStateFlow<com.dualmusic.core.ui.overlay.TopDonor?>(null)
+    val topDonor: StateFlow<com.dualmusic.core.ui.overlay.TopDonor?> = _topDonor.asStateFlow()
+
     /** Billet requis pour regarder : concert payant, non-hôte, pas encore de billet. */
     private val _needsTicket = MutableStateFlow(false)
     val needsTicket: StateFlow<Boolean> = _needsTicket.asStateFlow()
@@ -107,6 +111,7 @@ class ConcertRoomViewModel(
             _likes.value = repository.likesCount(concertId)
             runCatching { repository.giftCatalog() }.getOrNull()?.let { _giftCatalog.value = it }
             loadInventory()
+            loadGiftLeaderboard()
         }
         connectRealtime()
     }
@@ -210,7 +215,11 @@ class ConcertRoomViewModel(
     }
 
     fun loadGiftLeaderboard() {
-        viewModelScope.launch { _leaderboard.value = runCatching { repository.giftLeaderboard(concertId) }.getOrDefault(emptyList()) }
+        viewModelScope.launch {
+            val list = runCatching { repository.giftLeaderboard(concertId) }.getOrDefault(emptyList())
+            _leaderboard.value = list
+            _topDonor.value = list.firstOrNull()?.let { com.dualmusic.core.ui.overlay.TopDonor(it.displayName, it.value) }
+        }
     }
 
     private fun connectRealtime() {
@@ -228,6 +237,7 @@ class ConcertRoomViewModel(
             }
             live.on(Realtime.RealtimeEvent.GIFT, GiftPayload.serializer()) { p ->
                 _giftFeed.update { it + ConcertGift(giftCounter++, p.fromUserId, p.value) }
+                loadGiftLeaderboard() // met à jour la bulle top-donateur en direct
             }
             live.on(Realtime.RealtimeEvent.PRESENCE, PresencePayload.serializer()) { p ->
                 _viewerCount.value = p.count

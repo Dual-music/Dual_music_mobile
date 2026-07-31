@@ -134,6 +134,7 @@ fun LiveRoomScreen(
     val giftFeed by viewModel.giftFeed.collectAsStateWithLifecycle()
     // Préférences visuelles (parité web) : réduire les animations / carte top donateur.
     val uiPrefs by com.dualmusic.core.ui.prefs.UiPreferencesStore.state.collectAsStateWithLifecycle()
+    val topDonor by viewModel.topDonor.collectAsStateWithLifecycle()
     val giftCatalog by viewModel.giftCatalog.collectAsStateWithLifecycle()
     val inventory by viewModel.inventory.collectAsStateWithLifecycle()
     val myJoinRequestId by viewModel.myJoinRequestId.collectAsStateWithLifecycle()
@@ -256,6 +257,9 @@ fun LiveRoomScreen(
                 }
             }
         }
+
+        // Bulle du meilleur donateur (parité web), pilotée par les préférences visuelles.
+        com.dualmusic.core.ui.overlay.TopDonorBubble(donor = topDonor, mode = uiPrefs.topDonorMode, animation = uiPrefs.topDonorAnimation)
 
         // Interface masquée : seul un bouton de restauration.
         if (hideOverlay) {

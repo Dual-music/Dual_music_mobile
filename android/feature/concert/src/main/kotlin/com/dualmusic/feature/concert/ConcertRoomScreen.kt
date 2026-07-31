@@ -92,6 +92,7 @@ fun ConcertRoomScreen(
     val leaderboard by viewModel.leaderboard.collectAsStateWithLifecycle()
     val needsTicket by viewModel.needsTicket.collectAsStateWithLifecycle()
     val broadcasting by viewModel.broadcasting.collectAsStateWithLifecycle()
+    val topDonor by viewModel.topDonor.collectAsStateWithLifecycle()
     val remoteTrack by viewModel.media.primaryVideoTrack.collectAsStateWithLifecycle()
     val localTrack by viewModel.media.localVideoTrack.collectAsStateWithLifecycle()
     val camOn by viewModel.media.camEnabled.collectAsStateWithLifecycle()
@@ -146,6 +147,9 @@ fun ConcertRoomScreen(
             }
         }
         FloatingReactionsLayer(reactions = emojiFeed, reduceAnimations = uiPrefs.reduceAnimations)
+
+        // Bulle du meilleur donateur (parité web), pilotée par les préférences visuelles.
+        com.dualmusic.core.ui.overlay.TopDonorBubble(donor = topDonor, mode = uiPrefs.topDonorMode, animation = uiPrefs.topDonorAnimation)
 
         // Barre du haut : LIVE + spectateurs + likes + partage.
         Row(

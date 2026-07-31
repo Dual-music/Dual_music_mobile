@@ -116,6 +116,10 @@ class LiveViewModel(
     private val _giftLeaderboard = MutableStateFlow<List<GiftLeaderboardEntry>>(emptyList())
     val giftLeaderboard: StateFlow<List<GiftLeaderboardEntry>> = _giftLeaderboard.asStateFlow()
 
+    /** Meilleur donateur courant (bulle top-donateur). Rechargé à chaque cadeau. */
+    private val _topDonor = MutableStateFlow<com.dualmusic.core.ui.overlay.TopDonor?>(null)
+    val topDonor: StateFlow<com.dualmusic.core.ui.overlay.TopDonor?> = _topDonor.asStateFlow()
+
     /** Spectateur : id de sa demande d'invité en attente (non-null = en attente). */
     private val _myJoinRequestId = MutableStateFlow<String?>(null)
     val myJoinRequestId: StateFlow<String?> = _myJoinRequestId.asStateFlow()
@@ -163,6 +167,7 @@ class LiveViewModel(
             runCatching { repository.giftCatalog() }.getOrNull()?.let { _giftCatalog.value = it }
         }
         loadInventory()
+        loadGiftLeaderboard() // amorce la bulle top-donateur
         if (isHost) loadJoinRequests()
         if (!isHost) viewModelScope.launch { myUserId = repository.myUserId() }
         connectRealtime()
@@ -428,10 +433,12 @@ class LiveViewModel(
         }
     }
 
-    /** Charge le classement des donateurs du live (trophée). */
+    /** Charge le classement des donateurs du live (trophée + bulle top-donateur). */
     fun loadGiftLeaderboard() {
         viewModelScope.launch {
-            _giftLeaderboard.value = runCatching { repository.giftLeaderboard(liveId) }.getOrDefault(emptyList())
+            val list = runCatching { repository.giftLeaderboard(liveId) }.getOrDefault(emptyList())
+            _giftLeaderboard.value = list
+            _topDonor.value = list.firstOrNull()?.let { com.dualmusic.core.ui.overlay.TopDonor(it.displayName, it.value) }
         }
     }
 
@@ -456,6 +463,7 @@ class LiveViewModel(
             // Cadeaux
             live.on(Realtime.RealtimeEvent.GIFT, GiftPayload.serializer()) { p ->
                 _giftFeed.update { it + LiveGift(giftCounter++, p.fromUserId, p.giftName, p.giftImage, p.value) }
+                loadGiftLeaderboard() // met à jour la bulle top-donateur en direct
             }
             // Présence (viewers)
             live.on(Realtime.RealtimeEvent.PRESENCE, PresencePayload.serializer()) { p ->
