@@ -76,6 +76,15 @@ class DuelViewModel(
     private val _giftFeed = MutableStateFlow<List<DuelGift>>(emptyList())
     val giftFeed: StateFlow<List<DuelGift>> = _giftFeed.asStateFlow()
 
+    /** Compteur local de J'aime (le cœur flotte pour tous via le relais). */
+    private val _likes = MutableStateFlow(0)
+    val likes: StateFlow<Int> = _likes.asStateFlow()
+
+    /** Flux de réactions flottantes `(id, emoji)` — relayé à tous les spectateurs. */
+    private val _emojiFeed = MutableStateFlow<List<Pair<Long, String>>>(emptyList())
+    val emojiFeed: StateFlow<List<Pair<Long, String>>> = _emojiFeed.asStateFlow()
+    private var emojiCounter = 0L
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
@@ -128,6 +137,31 @@ class DuelViewModel(
         viewModelScope.launch { runCatching { repository.postMessage(duelId, content) } }
     }
 
+    /** J'aime : incrémente le compteur local + fait flotter un cœur pour tous. */
+    fun sendLike() {
+        _likes.value += 1
+        sendReaction("❤️")
+    }
+
+    /** Envoie une réaction emoji : effet local + relais aux autres membres du canal. */
+    fun sendReaction(emoji: String) {
+        pushEmoji(emoji)
+        liveSession?.emit(
+            "broadcast",
+            org.json.JSONObject(
+                mapOf(
+                    "channel" to "duel-emojis-$duelId",
+                    "event" to "emoji_reaction",
+                    "payload" to org.json.JSONObject(mapOf("emoji" to emoji)),
+                ),
+            ),
+        )
+    }
+
+    private fun pushEmoji(emoji: String) {
+        _emojiFeed.update { (it + (emojiCounter++ to emoji)).takeLast(12) }
+    }
+
     /** Efface l'erreur affichée. */
     fun clearError() { _error.value = null }
 
@@ -138,7 +172,10 @@ class DuelViewModel(
         val chat = realtime.session(Realtime.Namespace.CHAT).also { chatSession = it }
 
         viewModelScope.launch {
-            live.onConnect { live.join(Realtime.RoomType.DUEL, duelId) }
+            live.onConnect {
+                live.join(Realtime.RoomType.DUEL, duelId)
+                live.emit("broadcast:join", "duel-emojis-$duelId")
+            }
             chat.onConnect { chat.join(Realtime.RoomType.DUEL, duelId) }
 
             // Vote payant enregistré → on cumule le tally de l'artiste visé.
@@ -162,6 +199,10 @@ class DuelViewModel(
             // Chat.
             chat.on(Realtime.RealtimeEvent.CHAT_MESSAGE, ChatMessagePayload.serializer()) { p ->
                 _messages.update { it + DuelChatMessage(id = p.id, userId = p.userId, content = p.content, user = p.user) }
+            }
+            // Réactions emojis relayées (canal duel-emojis-<id>) — l'émetteur est exclu.
+            live.on("broadcast", com.dualmusic.domain.realtime.BroadcastEnvelope.serializer()) { env ->
+                if (env.event == "emoji_reaction") env.payload?.emoji?.let { pushEmoji(it) }
             }
             // Présence (spectateurs).
             live.on(Realtime.RealtimeEvent.PRESENCE, PresencePayload.serializer()) { p ->

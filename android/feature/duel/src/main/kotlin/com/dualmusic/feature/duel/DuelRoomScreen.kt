@@ -1,6 +1,8 @@
 package com.dualmusic.feature.duel
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,7 +14,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -20,6 +27,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -32,12 +40,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.gifts.GiftBurst
 import com.dualmusic.core.ui.i18n.LocalStrings
+import com.dualmusic.core.ui.overlay.FloatingReactionsLayer
+import com.dualmusic.core.ui.prefs.UiPreferencesStore
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import io.livekit.android.renderer.SurfaceViewRenderer
 
@@ -66,6 +77,9 @@ fun DuelRoomScreen(
     val error by viewModel.error.collectAsStateWithLifecycle()
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val viewerCount by viewModel.viewerCount.collectAsStateWithLifecycle()
+    val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
+    val likes by viewModel.likes.collectAsStateWithLifecycle()
+    val uiPrefs by UiPreferencesStore.state.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     var draft by remember { mutableStateOf("") }
@@ -96,10 +110,15 @@ fun DuelRoomScreen(
             ),
         )
 
-        // --- Cadeau animé (halo GPU) ---
-        giftFeed.lastOrNull()?.let { gift ->
-            key(gift.key) { GiftBurst(symbol = "🎁", modifier = Modifier.align(Alignment.Center)) }
+        // --- Cadeau animé (halo GPU) — masqué si « Réduire les animations » ---
+        if (!uiPrefs.reduceAnimations) {
+            giftFeed.lastOrNull()?.let { gift ->
+                key(gift.key) { GiftBurst(symbol = "🎁", modifier = Modifier.align(Alignment.Center)) }
+            }
         }
+
+        // --- Réactions flottantes (cœurs/emojis) montantes, vues par tous ---
+        FloatingReactionsLayer(reactions = emojiFeed, reduceAnimations = uiPrefs.reduceAnimations)
 
         // --- Overlays (zones sûres : barre d'état en haut, touches système + clavier en bas) ---
         Column(
@@ -136,16 +155,43 @@ fun DuelRoomScreen(
 
             // Bas : chat + panneau de vote + saisie message.
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                // Chat (largeur ~60%).
-                Column(modifier = Modifier.fillMaxWidth(0.62f)) {
-                    messages.takeLast(6).forEach { msg ->
-                        Row {
-                            Text(msg.authorName, color = colors.accent, fontWeight = FontWeight.Bold)
-                            Text("  ${msg.content}", color = Color.White)
+                // Chat défilant (largeur ~68%) : plus récent en bas, auto-défilement (façon TikTok).
+                val chatState = rememberLazyListState()
+                LaunchedEffect(messages.size) {
+                    if (messages.isNotEmpty()) chatState.animateScrollToItem(messages.size - 1)
+                }
+                LazyColumn(
+                    state = chatState,
+                    modifier = Modifier.fillMaxWidth(0.68f).height(180.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    items(messages) { msg ->
+                        Row(
+                            modifier = Modifier.background(Color.Black.copy(alpha = 0.28f), RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
+                        ) {
+                            Text(msg.authorName, color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text("  ${msg.content}", color = Color.White, fontSize = 12.sp)
                         }
                     }
                 }
                 error?.let { Text(it, color = colors.destructive) }
+                // Barre de réactions : J'aime + emojis (flottent pour tous).
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+                ) {
+                    Box(
+                        modifier = Modifier.size(40.dp).background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { viewModel.sendLike() },
+                        contentAlignment = Alignment.Center,
+                    ) { Text("❤️", fontSize = 18.sp) }
+                    if (likes > 0) Text("$likes", color = Color.White, fontSize = 12.sp)
+                    DuelReactionEmojis.forEach { e ->
+                        Box(
+                            modifier = Modifier.background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { viewModel.sendReaction(e) }.padding(horizontal = 10.dp, vertical = 6.dp),
+                        ) { Text(e) }
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
                     duel?.artist1Id?.let { id ->
                         DMButton(
@@ -178,6 +224,9 @@ fun DuelRoomScreen(
         }
     }
 }
+
+/** Emojis de réaction (identiques au live/web). */
+private val DuelReactionEmojis = listOf("🔥", "😍", "👏", "🎵", "💎", "🎶", "⚡", "🌟", "😂")
 
 /**
  * Barre de répartition des votes entre les deux artistes.
