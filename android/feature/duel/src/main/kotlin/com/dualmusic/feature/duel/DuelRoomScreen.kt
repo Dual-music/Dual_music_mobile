@@ -80,6 +80,7 @@ fun DuelRoomScreen(
     val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
     val likes by viewModel.likes.collectAsStateWithLifecycle()
     val uiPrefs by UiPreferencesStore.state.collectAsStateWithLifecycle()
+    val topDonor by viewModel.topDonor.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     var draft by remember { mutableStateOf("") }
@@ -119,6 +120,9 @@ fun DuelRoomScreen(
 
         // --- Réactions flottantes (cœurs/emojis) montantes, vues par tous ---
         FloatingReactionsLayer(reactions = emojiFeed, reduceAnimations = uiPrefs.reduceAnimations)
+
+        // Bulle du meilleur donateur (parité web), pilotée par les préférences visuelles.
+        com.dualmusic.core.ui.overlay.TopDonorBubble(donor = topDonor, mode = uiPrefs.topDonorMode, animation = uiPrefs.topDonorAnimation)
 
         // --- Overlays (zones sûres : barre d'état en haut, touches système + clavier en bas) ---
         Column(

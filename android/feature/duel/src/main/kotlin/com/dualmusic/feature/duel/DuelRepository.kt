@@ -67,6 +67,28 @@ class DuelRepository(private val api: ApiClient) {
     suspend fun postMessage(duelId: String, content: String) {
         api.request<Unit>(Endpoint.post(DuelEndpoints.messages(duelId), """{"message":${content.jsonQuoted()}}"""))
     }
+
+    /** Classement des donateurs du duel (`GET /leaderboards/gifts?contextType=duel`). */
+    suspend fun giftLeaderboard(duelId: String): List<DuelDonorEntry> =
+        api.request(
+            Endpoint.get("/leaderboards/gifts", query = mapOf("contextType" to "duel", "contextId" to duelId)),
+            ListSerializer(DuelDonorEntry.serializer()),
+        )
+}
+
+/** Entrée du classement des donateurs (`GET /leaderboards/gifts`). */
+@Serializable
+data class DuelDonorEntry(
+    @SerialName("user_id") val userId: String? = null,
+    @SerialName("full_name") val fullName: String? = null,
+    @SerialName("stage_name") val stageName: String? = null,
+    val total: Double = 0.0,
+    val score: Double = 0.0,
+    val user: DisplayProfile? = null,
+) {
+    val displayName: String
+        get() = user?.displayName ?: stageName?.takeIf { it.isNotBlank() } ?: fullName?.takeIf { it.isNotBlank() } ?: "Donateur"
+    val value: Int get() = (if (total > 0.0) total else score).toInt()
 }
 
 /** Échappe une chaîne pour un littéral JSON minimal. */

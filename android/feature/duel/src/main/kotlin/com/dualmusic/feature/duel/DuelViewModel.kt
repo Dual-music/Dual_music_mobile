@@ -85,6 +85,17 @@ class DuelViewModel(
     val emojiFeed: StateFlow<List<Pair<Long, String>>> = _emojiFeed.asStateFlow()
     private var emojiCounter = 0L
 
+    /** Meilleur donateur courant (bulle top-donateur). Rechargé à chaque cadeau. */
+    private val _topDonor = MutableStateFlow<com.dualmusic.core.ui.overlay.TopDonor?>(null)
+    val topDonor: StateFlow<com.dualmusic.core.ui.overlay.TopDonor?> = _topDonor.asStateFlow()
+
+    private fun loadTopDonor() {
+        viewModelScope.launch {
+            val list = runCatching { repository.giftLeaderboard(duelId) }.getOrDefault(emptyList())
+            _topDonor.value = list.firstOrNull()?.let { com.dualmusic.core.ui.overlay.TopDonor(it.displayName, it.value) }
+        }
+    }
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
@@ -109,6 +120,7 @@ class DuelViewModel(
             }
             runCatching { repository.chatHistory(duelId) }.getOrNull()?.let { _messages.value = it }
         }
+        loadTopDonor()
         connectRealtime()
     }
 
@@ -192,9 +204,10 @@ class DuelViewModel(
             live.on(Realtime.RealtimeEvent.STATUS, StatusPayload.serializer()) { p ->
                 _duel.update { d -> d?.copy(winnerId = p.winnerId ?: d.winnerId) }
             }
-            // Cadeaux (alimente l'animation GPU).
+            // Cadeaux (alimente l'animation GPU + la bulle top-donateur).
             live.on(Realtime.RealtimeEvent.GIFT, GiftPayload.serializer()) { p ->
                 _giftFeed.update { it + DuelGift(giftCounter++, p.fromUserId, p.giftName, p.giftImage, p.value) }
+                loadTopDonor()
             }
             // Chat.
             chat.on(Realtime.RealtimeEvent.CHAT_MESSAGE, ChatMessagePayload.serializer()) { p ->
