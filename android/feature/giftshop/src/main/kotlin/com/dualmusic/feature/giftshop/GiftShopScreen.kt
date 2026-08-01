@@ -1,6 +1,13 @@
 package com.dualmusic.feature.giftshop
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -120,7 +127,7 @@ fun GiftShopScreen(viewModel: GiftShopViewModel, onOpenRecharge: () -> Unit = {}
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(com.dualmusic.core.ui.i18n.LocalStrings.current.myBalance, color = colors.mutedForeground)
                         Text(
                             formatCredits(ui.balance),
@@ -129,7 +136,20 @@ fun GiftShopScreen(viewModel: GiftShopViewModel, onOpenRecharge: () -> Unit = {}
                             fontSize = 22.sp,
                         )
                     }
-                    DMButton(com.dualmusic.core.ui.i18n.LocalStrings.current.recharge, onClick = onOpenRecharge)
+                    // Bouton « Recharger » compact (icône) à droite — ne masque plus le solde.
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(DualMusicTheme.gradients.primary, CircleShape)
+                            .clickable(onClick = onOpenRecharge),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Filled.Add,
+                            contentDescription = com.dualmusic.core.ui.i18n.LocalStrings.current.recharge,
+                            tint = Color.White,
+                        )
+                    }
                 }
             }
         }

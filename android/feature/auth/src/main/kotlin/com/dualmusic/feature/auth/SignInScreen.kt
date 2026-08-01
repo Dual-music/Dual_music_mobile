@@ -161,20 +161,24 @@ private fun RegisterFields(ui: SignInUiState, vm: AuthViewModel, onOpenLegal: (L
  * les noms des documents sont **cliquables** pour les lire avant d'accepter (comme sur le web).
  */
 @Composable
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 private fun TermsAcceptance(accepted: Boolean, onToggle: (Boolean) -> Unit, onOpenLegal: (LegalKind) -> Unit) {
     val colors = DualMusicTheme.colors
     val s = com.dualmusic.core.ui.i18n.LocalStrings.current
     Row(verticalAlignment = Alignment.CenterVertically) {
         Checkbox(checked = accepted, onCheckedChange = onToggle)
-        Column(modifier = Modifier.padding(start = DualMusicTheme.spacing.xs)) {
+        // La colonne prend la largeur restante ; les liens passent à la ligne proprement (FlowRow).
+        Column(modifier = Modifier.weight(1f).padding(start = DualMusicTheme.spacing.xs)) {
             Text("${s.iAcceptThe} :", color = colors.mutedForeground)
-            Row {
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs),
+            ) {
                 Text(
                     s.termsOfUse,
                     color = colors.primaryGlow,
                     modifier = Modifier.clickable { onOpenLegal(LegalKind.TERMS) },
                 )
-                Text("  ·  ", color = colors.mutedForeground)
+                Text("·", color = colors.mutedForeground)
                 Text(
                     s.privacyPolicy,
                     color = colors.primaryGlow,

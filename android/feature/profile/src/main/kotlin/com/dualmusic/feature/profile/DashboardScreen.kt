@@ -251,7 +251,13 @@ private fun StatTile(icon: ImageVector, value: String, label: String, modifier: 
             Icon(icon, contentDescription = null, tint = colors.foreground, modifier = Modifier.size(22.dp))
         }
         Text(value, color = colors.foreground, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        Text(label, color = colors.mutedForeground, fontSize = 12.sp)
+        Text(
+            label,
+            color = colors.mutedForeground,
+            fontSize = 12.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -307,6 +313,13 @@ private fun QuickAction(icon: ImageVector, label: String, modifier: Modifier = M
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs),
     ) {
         Icon(icon, contentDescription = null, tint = colors.accent, modifier = Modifier.size(26.dp))
-        Text(label, color = colors.foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            label,
+            color = colors.foreground,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }

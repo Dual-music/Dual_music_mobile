@@ -2,6 +2,13 @@ package com.dualmusic.feature.live
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -179,11 +186,25 @@ fun MyLivesScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(modifier = Modifier.clickable { onStartBroadcast(live) }) {
+                    Column(modifier = Modifier.weight(1f).clickable { onStartBroadcast(live) }) {
                         Text("🔴 ${live.title ?: s.liveActive}", color = colors.primary, fontWeight = FontWeight.Bold)
                         Text("${live.viewerCount} 👁", color = colors.mutedForeground)
                     }
-                    DMButton(s.endLive, style = DMButtonStyle.OUTLINE, onClick = { viewModel.endLive(live.id) })
+                    // « Terminer » compact (icône) — ne masque plus le titre.
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(colors.destructive, CircleShape)
+                            .clickable { viewModel.endLive(live.id) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = s.endLive,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
         }
