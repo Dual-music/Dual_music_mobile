@@ -136,7 +136,7 @@ fun BecomeArtistScreen(viewModel: BecomeRoleViewModel) {
 
     RoleColumn {
         ui.message?.let { Text(it, color = colors.primaryGlow) }
-        RoleCard(title = strings.menuBecomeArtist, enabled = ui.artistEnabled, pending = ui.artistPending) {
+        RoleCard(title = strings.menuBecomeArtist, enabled = ui.artistEnabled, pending = ui.artistPending, pendingMessage = strings.artistRequestPending) {
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
@@ -209,7 +209,7 @@ fun BecomeManagerScreen(viewModel: BecomeRoleViewModel) {
     var experience by remember { mutableStateOf("") }
     RoleColumn {
         ui.message?.let { Text(it, color = colors.primaryGlow) }
-        RoleCard(title = strings.menuBecomeManager, enabled = ui.managerEnabled, pending = ui.managerPending) {
+        RoleCard(title = strings.menuBecomeManager, enabled = ui.managerEnabled, pending = ui.managerPending, pendingMessage = strings.managerRequestPending) {
             OutlinedTextField(
                 value = bio,
                 onValueChange = { bio = it },
@@ -255,6 +255,7 @@ private fun RoleCard(
     title: String,
     enabled: Boolean,
     pending: Boolean,
+    pendingMessage: String,
     form: @Composable () -> Unit,
 ) {
     val colors = DualMusicTheme.colors
@@ -263,7 +264,8 @@ private fun RoleCard(
         Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
             Text(title, color = colors.foreground, fontWeight = FontWeight.Bold)
             when {
-                pending -> Text(strings.applicationPending, color = colors.mutedForeground)
+                // Demande en cours : on masque le formulaire + message spécifique au rôle.
+                pending -> Text("⏳ $pendingMessage", color = colors.accent, fontWeight = FontWeight.Bold)
                 !enabled -> Text(strings.applicationsClosed, color = colors.mutedForeground)
                 else -> form()
             }

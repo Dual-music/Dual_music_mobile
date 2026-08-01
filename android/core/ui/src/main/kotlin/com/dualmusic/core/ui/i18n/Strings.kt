@@ -444,6 +444,8 @@ interface Strings {
     val rechargeWithStripe: String
     val payMobileMoney: String
     val pushNotifs: String
+    val artistRequestPending: String
+    val managerRequestPending: String
     val competitionCreated: String
     val createCompetitionTitle: String
     val createCompetitionHint: String
@@ -891,6 +893,8 @@ object FrStrings : Strings {
     override val rechargeWithStripe = "Recharger avec Stripe"
     override val payMobileMoney = "Payer par Mobile Money"
     override val pushNotifs = "Notifications push"
+    override val artistRequestPending = "Vous avez une demande pour devenir artiste en cours de validation."
+    override val managerRequestPending = "Vous avez une demande pour devenir manager en cours de validation."
     override val competitionCreated = "Compétition créée"
     override val createCompetitionTitle = "Créer une compétition"
     override val createCompetitionHint = "Organisez une compétition et gérez les candidats"
@@ -1336,6 +1340,8 @@ object EnStrings : Strings {
     override val rechargeWithStripe = "Recharge with Stripe"
     override val payMobileMoney = "Pay with Mobile Money"
     override val pushNotifs = "Push notifications"
+    override val artistRequestPending = "You have a pending request to become an artist."
+    override val managerRequestPending = "You have a pending request to become a manager."
     override val competitionCreated = "Competition created"
     override val createCompetitionTitle = "Create a competition"
     override val createCompetitionHint = "Organize a competition and manage candidates"
