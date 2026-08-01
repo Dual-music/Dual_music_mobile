@@ -429,6 +429,9 @@ interface Strings {
     val stopAction: String
     val announceWinner: String
     val endDuelBtn: String
+    val winnerTitle: String
+    val winnerCongrats: String
+    val winnerGeneric: String
     val publishAction: String
     val finalizeAction: String
     val approveAction: String
@@ -878,6 +881,9 @@ object FrStrings : Strings {
     override val stopAction = "Arrêter"
     override val announceWinner = "Annoncer le vainqueur"
     override val endDuelBtn = "Terminer le duel"
+    override val winnerTitle = "🏆 Vainqueur"
+    override val winnerCongrats = "Félicitations !"
+    override val winnerGeneric = "L'artiste gagnant"
     override val publishAction = "Publier"
     override val finalizeAction = "Finaliser"
     override val approveAction = "Valider"
@@ -1325,6 +1331,9 @@ object EnStrings : Strings {
     override val stopAction = "Stop"
     override val announceWinner = "Announce winner"
     override val endDuelBtn = "End the duel"
+    override val winnerTitle = "🏆 Winner"
+    override val winnerCongrats = "Congratulations!"
+    override val winnerGeneric = "The winning artist"
     override val publishAction = "Publish"
     override val finalizeAction = "Finalize"
     override val approveAction = "Approve"

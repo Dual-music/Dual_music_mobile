@@ -35,7 +35,9 @@ import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
+import com.dualmusic.core.ui.celebration.WinnerCelebration
 import com.dualmusic.core.ui.components.DMEmptyState
+import com.dualmusic.core.ui.gifts.GiftBurst
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.overlay.FloatingReactionsLayer
 import com.dualmusic.core.ui.prefs.UiPreferencesStore
@@ -83,6 +85,10 @@ class CompetitionRoomViewModel(
     val emojiFeed: StateFlow<List<Pair<Long, String>>> = _emojiFeed.asStateFlow()
     private var emojiCounter = 0L
 
+    /** Impulsion de cadeau : incrémentée à chaque event `gift` → (re)joue le burst central. */
+    private val _giftPulse = MutableStateFlow(0L)
+    val giftPulse: StateFlow<Long> = _giftPulse.asStateFlow()
+
     /** Vrai si le caller est le manager (organisateur) → contrôles en direct. */
     private val _isManager = MutableStateFlow(false)
     val isManager: StateFlow<Boolean> = _isManager.asStateFlow()
@@ -112,6 +118,12 @@ class CompetitionRoomViewModel(
             // Réactions emojis relayées (canal competition-emojis-<id>) — émetteur exclu.
             live.on("broadcast", com.dualmusic.domain.realtime.BroadcastEnvelope.serializer()) { env ->
                 if (env.event == "emoji_reaction") env.payload?.emoji?.let { pushEmoji(it) }
+            }
+            // Cadeaux : burst central pour tous + resync du classement (un gift à un candidat
+            // alimente son score). Parité live/duel/concert.
+            live.on(Realtime.RealtimeEvent.GIFT, com.dualmusic.domain.realtime.GiftPayload.serializer()) { _ ->
+                _giftPulse.update { it + 1 }
+                refresh()
             }
             live.connect()
         }
@@ -218,8 +230,10 @@ fun CompetitionRoomScreen(
     voteCredits: Int = 10,
 ) {
     val candidates by viewModel.candidates.collectAsStateWithLifecycle()
+    val status by viewModel.status.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
+    val giftPulse by viewModel.giftPulse.collectAsStateWithLifecycle()
     val likes by viewModel.likes.collectAsStateWithLifecycle()
     val uiPrefs by UiPreferencesStore.state.collectAsStateWithLifecycle()
     val isManager by viewModel.isManager.collectAsStateWithLifecycle()
@@ -292,6 +306,24 @@ fun CompetitionRoomScreen(
 
         // Réactions flottantes montantes (vues par tous), respecte « Réduire les animations ».
         FloatingReactionsLayer(reactions = emojiFeed, reduceAnimations = uiPrefs.reduceAnimations)
+
+        // Cadeau reçu : burst central (halo GPU), masqué si « Réduire les animations ». Parité live.
+        if (!uiPrefs.reduceAnimations && giftPulse > 0L) {
+            androidx.compose.runtime.key(giftPulse) {
+                GiftBurst(symbol = "🎁", modifier = Modifier.align(Alignment.Center))
+            }
+        }
+
+        // Classement finalisé : célébration du vainqueur (rang 1 = plus haut score). Vue par tous
+        // les spectateurs dès que l'organisateur finalise (event `status` = finished).
+        if (status == "finished" && candidates.isNotEmpty()) {
+            WinnerCelebration(
+                winnerName = candidates.first().artist?.displayName ?: strings.winnerGeneric,
+                title = strings.winnerTitle,
+                subtitle = strings.winnerCongrats,
+                reduceAnimations = uiPrefs.reduceAnimations,
+            )
+        }
     }
 }
 

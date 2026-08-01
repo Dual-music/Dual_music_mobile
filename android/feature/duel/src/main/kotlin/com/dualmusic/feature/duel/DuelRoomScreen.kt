@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dualmusic.core.ui.celebration.WinnerCelebration
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.gifts.GiftBurst
@@ -242,6 +243,22 @@ fun DuelRoomScreen(
                     DMButton(strings.send, style = DMButtonStyle.SECONDARY) { viewModel.sendMessage(draft); draft = "" }
                 }
             }
+        }
+
+        // Célébration du vainqueur : dès que l'arbitre l'annonce (event `status` → winnerId),
+        // tous les spectateurs voient les confettis + la carte. Non bloquant pour « Terminer ».
+        duel?.winnerId?.let { wid ->
+            val name = when (wid) {
+                duel?.artist1Id -> duel?.artist1?.displayName
+                duel?.artist2Id -> duel?.artist2?.displayName
+                else -> null
+            }
+            WinnerCelebration(
+                winnerName = name ?: strings.winnerGeneric,
+                title = strings.winnerTitle,
+                subtitle = strings.winnerCongrats,
+                reduceAnimations = uiPrefs.reduceAnimations,
+            )
         }
     }
 }
