@@ -28,6 +28,8 @@ dependencies {
     implementation(project(":core:network"))
     implementation(project(":core:realtime"))
     implementation(project(":core:ui"))
+    // Diffusion pub sponsor (overlay vidéo + contrôle organisateur).
+    implementation(project(":feature:sponsor"))
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)

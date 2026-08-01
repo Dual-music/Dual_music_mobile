@@ -43,9 +43,13 @@ class ConcertRoomViewModel(
     private val repository: ConcertRepository,
     val hostUserId: String,
     private val ticketPrice: Double,
+    sponsorAds: com.dualmusic.feature.sponsor.SponsorAdRepository,
 ) : ViewModel() {
 
     val roomName: String = "concert-$concertId"
+
+    /** État + actions de diffusion pub sponsor (overlay vidéo + contrôle hôte artiste). */
+    val sponsor = com.dualmusic.feature.sponsor.SponsorAdHolder("concert", concertId, sponsorAds, viewModelScope)
 
     /** Vrai si l'utilisateur courant est l'artiste organisateur (déterminé au démarrage). */
     private val _isHost = MutableStateFlow(false)
@@ -247,6 +251,10 @@ class ConcertRoomViewModel(
             }
             // Statut : fin du concert → on pourrait fermer, mais on laisse l'UI décider.
             live.on(Realtime.RealtimeEvent.STATUS, StatusPayload.serializer()) { /* statut concert */ }
+            // Pub sponsor (start/stop) diffusée à toute la room.
+            live.on(Realtime.RealtimeEvent.SPONSOR_AD, com.dualmusic.domain.realtime.SponsorAdPayload.serializer()) { p ->
+                sponsor.onEvent(p)
+            }
 
             live.connect()
             chat.connect()

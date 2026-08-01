@@ -62,6 +62,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.overlay.FloatingReactionsLayer
+import com.dualmusic.feature.sponsor.SponsorAdLayer
 import com.dualmusic.core.ui.overlay.TopDonorBubble
 import com.dualmusic.core.ui.prefs.UiPreferencesStore
 import com.dualmusic.core.ui.theme.DualMusicTheme
@@ -101,6 +102,9 @@ fun ConcertRoomScreen(
     val uiPrefs by UiPreferencesStore.state.collectAsStateWithLifecycle()
 
     val isHost by viewModel.isHost.collectAsStateWithLifecycle()
+    val sponsorAd by viewModel.sponsor.activeAd.collectAsStateWithLifecycle()
+    val sponsorAds by viewModel.sponsor.ads.collectAsStateWithLifecycle()
+    val sponsorBusy by viewModel.sponsor.busy.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     val context = LocalContext.current
@@ -344,6 +348,17 @@ fun ConcertRoomScreen(
                 }
             }
         }
+
+        // Diffusion pub sponsor : overlay vidéo pour tous + contrôle pour l'hôte artiste.
+        SponsorAdLayer(
+            activeAd = sponsorAd,
+            canTrigger = isHost,
+            ads = sponsorAds,
+            busy = sponsorBusy,
+            onLoadAds = { viewModel.sponsor.loadAds() },
+            onPlay = { viewModel.sponsor.play(it) },
+            onStop = { viewModel.sponsor.stop() },
+        )
     }
 }
 

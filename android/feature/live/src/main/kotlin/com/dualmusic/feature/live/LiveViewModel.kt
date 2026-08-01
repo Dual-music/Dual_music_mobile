@@ -81,9 +81,13 @@ class LiveViewModel(
     val media: LiveRoomClient,
     private val realtime: RealtimeClient,
     private val repository: LiveRepository,
+    sponsorAds: com.dualmusic.feature.sponsor.SponsorAdRepository,
     /** Vrai pour l'artiste qui DIFFUSE (publie caméra/micro) ; faux pour un spectateur. */
     val isHost: Boolean = false,
 ) : ViewModel() {
+
+    /** État + actions de diffusion pub sponsor (overlay vidéo + contrôle hôte). */
+    val sponsor = com.dualmusic.feature.sponsor.SponsorAdHolder("live", liveId, sponsorAds, viewModelScope)
 
     private val _messages = MutableStateFlow<List<LiveChatMessage>>(emptyList())
     val messages: StateFlow<List<LiveChatMessage>> = _messages.asStateFlow()
@@ -492,6 +496,10 @@ class LiveViewModel(
                         "rejected", "ended" -> _isGuestAccepted.value = false
                     }
                 }
+            }
+            // Pub sponsor (start/stop) diffusée à toute la room.
+            live.on(Realtime.RealtimeEvent.SPONSOR_AD, com.dualmusic.domain.realtime.SponsorAdPayload.serializer()) { p ->
+                sponsor.onEvent(p)
             }
 
             live.connect()

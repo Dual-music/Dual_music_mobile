@@ -230,6 +230,9 @@ class AppContainer(context: Context) {
     private val concertRepository = ConcertRepository(api)
     private val competitionRepository = CompetitionRepository(api)
 
+    // --- Lot pub sponsor (diffusion en direct dans les rooms) ---
+    private val sponsorAdRepository = com.dualmusic.feature.sponsor.SponsorAdRepository(api)
+
     /** Nouveau ViewModel de feed (liste des lives + prefetch des tokens LiveKit). */
     fun makeFeedViewModel(): FeedViewModel = FeedViewModel(feedRepository, tokenService)
 
@@ -384,7 +387,7 @@ class AppContainer(context: Context) {
 
     /** Nouveau ViewModel de room de compétition (classement + votes). */
     fun makeCompetitionRoomViewModel(competitionId: String): CompetitionRoomViewModel =
-        CompetitionRoomViewModel(competitionId, competitionRepository, realtimeClient)
+        CompetitionRoomViewModel(competitionId, competitionRepository, realtimeClient, sponsorAdRepository)
 
     /**
      * Fabrique un ViewModel de room de concert (viewer + hôte artiste). L'hôte est déterminé
@@ -399,6 +402,7 @@ class AppContainer(context: Context) {
             repository = concertRepository,
             hostUserId = concert.artistId,
             ticketPrice = concert.ticketPrice,
+            sponsorAds = sponsorAdRepository,
         )
     }
 
@@ -415,6 +419,7 @@ class AppContainer(context: Context) {
             realtime = realtimeClient,
             repository = duelRepository,
             wallet = walletRepository,
+            sponsorAds = sponsorAdRepository,
         )
     }
 
@@ -430,6 +435,7 @@ class AppContainer(context: Context) {
             media = media,
             realtime = realtimeClient,
             repository = liveRepository,
+            sponsorAds = sponsorAdRepository,
         )
     }
 
@@ -445,6 +451,7 @@ class AppContainer(context: Context) {
             media = media,
             realtime = realtimeClient,
             repository = liveRepository,
+            sponsorAds = sponsorAdRepository,
             isHost = true,
         )
     }

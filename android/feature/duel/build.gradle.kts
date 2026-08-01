@@ -32,6 +32,8 @@ dependencies {
     implementation(project(":core:ui"))
     // Le vote payant est une opération de portefeuille.
     implementation(project(":feature:wallet"))
+    // Diffusion pub sponsor (overlay vidéo + contrôle hôte).
+    implementation(project(":feature:sponsor"))
 
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)

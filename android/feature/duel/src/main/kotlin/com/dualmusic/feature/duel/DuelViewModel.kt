@@ -58,7 +58,11 @@ class DuelViewModel(
     private val realtime: RealtimeClient,
     private val repository: DuelRepository,
     private val wallet: WalletRepository,
+    sponsorAds: com.dualmusic.feature.sponsor.SponsorAdRepository,
 ) : ViewModel() {
+
+    /** État + actions de diffusion pub sponsor (overlay vidéo + contrôle hôte/manager). */
+    val sponsor = com.dualmusic.feature.sponsor.SponsorAdHolder("duel", duelId, sponsorAds, viewModelScope)
 
     private val _duel = MutableStateFlow<Duel?>(null)
     val duel: StateFlow<Duel?> = _duel.asStateFlow()
@@ -261,6 +265,10 @@ class DuelViewModel(
             // Présence (spectateurs).
             live.on(Realtime.RealtimeEvent.PRESENCE, PresencePayload.serializer()) { p ->
                 _viewerCount.value = p.count
+            }
+            // Pub sponsor (start/stop) diffusée à toute la room.
+            live.on(Realtime.RealtimeEvent.SPONSOR_AD, com.dualmusic.domain.realtime.SponsorAdPayload.serializer()) { p ->
+                sponsor.onEvent(p)
             }
 
             live.connect()

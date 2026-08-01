@@ -52,6 +52,7 @@ import com.dualmusic.core.ui.overlay.FloatingReactionsLayer
 import com.dualmusic.core.ui.overlay.TopDonorBubble
 import com.dualmusic.core.ui.prefs.UiPreferencesStore
 import com.dualmusic.core.ui.theme.DualMusicTheme
+import com.dualmusic.feature.sponsor.SponsorAdLayer
 import io.livekit.android.renderer.SurfaceViewRenderer
 
 /**
@@ -85,6 +86,9 @@ fun DuelRoomScreen(
     val uiPrefs by UiPreferencesStore.state.collectAsStateWithLifecycle()
     val topDonor by viewModel.topDonor.collectAsStateWithLifecycle()
     val isManager by viewModel.isManager.collectAsStateWithLifecycle()
+    val sponsorAd by viewModel.sponsor.activeAd.collectAsStateWithLifecycle()
+    val sponsorAds by viewModel.sponsor.ads.collectAsStateWithLifecycle()
+    val sponsorBusy by viewModel.sponsor.busy.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     var draft by remember { mutableStateOf("") }
@@ -260,6 +264,17 @@ fun DuelRoomScreen(
                 reduceAnimations = uiPrefs.reduceAnimations,
             )
         }
+
+        // Diffusion pub sponsor : overlay vidéo pour tous + contrôle pour le manager.
+        SponsorAdLayer(
+            activeAd = sponsorAd,
+            canTrigger = isManager,
+            ads = sponsorAds,
+            busy = sponsorBusy,
+            onLoadAds = { viewModel.sponsor.loadAds() },
+            onPlay = { viewModel.sponsor.play(it) },
+            onStop = { viewModel.sponsor.stop() },
+        )
     }
 }
 

@@ -92,6 +92,7 @@ import com.dualmusic.core.ui.gifts.GiftBurst
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.media.VideoFilterPresets
 import com.dualmusic.core.ui.overlay.TopDonorBubble
+import com.dualmusic.feature.sponsor.SponsorAdLayer
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import io.livekit.android.renderer.SurfaceViewRenderer
 import kotlinx.coroutines.coroutineScope
@@ -146,6 +147,9 @@ fun LiveRoomScreen(
     val remoteVideos by viewModel.media.remoteVideos.collectAsStateWithLifecycle()
     val isGuestAccepted by viewModel.isGuestAccepted.collectAsStateWithLifecycle()
     val giftLeaderboard by viewModel.giftLeaderboard.collectAsStateWithLifecycle()
+    val sponsorAd by viewModel.sponsor.activeAd.collectAsStateWithLifecycle()
+    val sponsorAds by viewModel.sponsor.ads.collectAsStateWithLifecycle()
+    val sponsorBusy by viewModel.sponsor.busy.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     val context = LocalContext.current
@@ -261,6 +265,18 @@ fun LiveRoomScreen(
 
         // Bulle du meilleur donateur (parité web), pilotée par les préférences visuelles.
         TopDonorBubble(donor = topDonor, mode = uiPrefs.topDonorMode, animation = uiPrefs.topDonorAnimation)
+
+        // Diffusion pub sponsor : overlay vidéo pour tous + contrôle pour l'hôte. Placé avant
+        // le masquage d'UI pour rester visible même quand le chrome est caché.
+        SponsorAdLayer(
+            activeAd = sponsorAd,
+            canTrigger = isHost,
+            ads = sponsorAds,
+            busy = sponsorBusy,
+            onLoadAds = { viewModel.sponsor.loadAds() },
+            onPlay = { viewModel.sponsor.play(it) },
+            onStop = { viewModel.sponsor.stop() },
+        )
 
         // Interface masquée : seul un bouton de restauration.
         if (hideOverlay) {

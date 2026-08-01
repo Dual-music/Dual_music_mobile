@@ -85,6 +85,9 @@ object Realtime {
         /** `/live` · room event — présence (viewers). Payload [PresencePayload]. */
         const val PRESENCE = "presence"
 
+        /** `/live` · room event — diffusion d'une pub sponsor (start/stop). Payload [SponsorAdPayload]. */
+        const val SPONSOR_AD = "sponsor:ad"
+
         /** `/chat` · room event — nouveau message de chat. Payload [ChatMessagePayload]. */
         const val CHAT_MESSAGE = "message"
 
@@ -116,6 +119,28 @@ data class GiftPayload(
     @SerialName("gift_name") val giftName: String? = null,
     @SerialName("gift_image") val giftImage: String? = null,
 )
+
+/** Vidéo publicitaire sponsor diffusable dans un événement. */
+@Serializable
+data class SponsorAdVideo(
+    val id: String,
+    @SerialName("video_url") val videoUrl: String,
+    val title: String = "",
+    @SerialName("duration_seconds") val durationSeconds: Int = 0,
+    @SerialName("play_count") val playCount: Int = 0,
+)
+
+/** `sponsor:ad` — début/fin de diffusion d'une pub dans la room (start/stop). */
+@Serializable
+data class SponsorAdPayload(
+    val action: String, // "start" | "stop"
+    @SerialName("play_id") val playId: String? = null,
+    val ad: SponsorAdVideo? = null,
+)
+
+/** Réponse de `POST /sponsors/ads/play` : l'enregistrement de diffusion créé. */
+@Serializable
+data class SponsorAdPlay(val id: String)
 
 /** `tx:gift` — notification au destinataire d'un cadeau. */
 @Serializable

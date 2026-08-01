@@ -432,6 +432,10 @@ interface Strings {
     val winnerTitle: String
     val winnerCongrats: String
     val winnerGeneric: String
+    val sponsorStartAd: String
+    val sponsorStopAd: String
+    val sponsorNoAds: String
+    val sponsorAdBadge: String
     val publishAction: String
     val finalizeAction: String
     val approveAction: String
@@ -884,6 +888,10 @@ object FrStrings : Strings {
     override val winnerTitle = "🏆 Vainqueur"
     override val winnerCongrats = "Félicitations !"
     override val winnerGeneric = "L'artiste gagnant"
+    override val sponsorStartAd = "Démarrer pub"
+    override val sponsorStopAd = "Arrêter"
+    override val sponsorNoAds = "Aucune pub disponible"
+    override val sponsorAdBadge = "PUBLICITÉ"
     override val publishAction = "Publier"
     override val finalizeAction = "Finaliser"
     override val approveAction = "Valider"
@@ -1334,6 +1342,10 @@ object EnStrings : Strings {
     override val winnerTitle = "🏆 Winner"
     override val winnerCongrats = "Congratulations!"
     override val winnerGeneric = "The winning artist"
+    override val sponsorStartAd = "Play ad"
+    override val sponsorStopAd = "Stop"
+    override val sponsorNoAds = "No ad available"
+    override val sponsorAdBadge = "ADVERTISEMENT"
     override val publishAction = "Publish"
     override val finalizeAction = "Finalize"
     override val approveAction = "Approve"

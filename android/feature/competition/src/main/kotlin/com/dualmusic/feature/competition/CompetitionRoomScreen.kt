@@ -42,6 +42,7 @@ import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.overlay.FloatingReactionsLayer
 import com.dualmusic.core.ui.prefs.UiPreferencesStore
 import com.dualmusic.core.ui.theme.DualMusicTheme
+import com.dualmusic.feature.sponsor.SponsorAdLayer
 import com.dualmusic.domain.competition.CompetitionCandidate
 import com.dualmusic.domain.realtime.Realtime
 import com.dualmusic.domain.realtime.StatusPayload
@@ -66,7 +67,11 @@ class CompetitionRoomViewModel(
     private val competitionId: String,
     private val repository: CompetitionRepository,
     private val realtime: RealtimeClient,
+    sponsorAds: com.dualmusic.feature.sponsor.SponsorAdRepository,
 ) : ViewModel() {
+
+    /** État + actions de diffusion pub sponsor (overlay vidéo + contrôle organisateur). */
+    val sponsor = com.dualmusic.feature.sponsor.SponsorAdHolder("competition", competitionId, sponsorAds, viewModelScope)
 
     /** Candidats triés par score décroissant (= classement courant). */
     private val _candidates = MutableStateFlow<List<CompetitionCandidate>>(emptyList())
@@ -124,6 +129,10 @@ class CompetitionRoomViewModel(
             live.on(Realtime.RealtimeEvent.GIFT, com.dualmusic.domain.realtime.GiftPayload.serializer()) { _ ->
                 _giftPulse.update { it + 1 }
                 refresh()
+            }
+            // Pub sponsor (start/stop) diffusée à toute la room.
+            live.on(Realtime.RealtimeEvent.SPONSOR_AD, com.dualmusic.domain.realtime.SponsorAdPayload.serializer()) { p ->
+                sponsor.onEvent(p)
             }
             live.connect()
         }
@@ -235,6 +244,9 @@ fun CompetitionRoomScreen(
     val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
     val giftPulse by viewModel.giftPulse.collectAsStateWithLifecycle()
     val likes by viewModel.likes.collectAsStateWithLifecycle()
+    val sponsorAd by viewModel.sponsor.activeAd.collectAsStateWithLifecycle()
+    val sponsorAds by viewModel.sponsor.ads.collectAsStateWithLifecycle()
+    val sponsorBusy by viewModel.sponsor.busy.collectAsStateWithLifecycle()
     val uiPrefs by UiPreferencesStore.state.collectAsStateWithLifecycle()
     val isManager by viewModel.isManager.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
@@ -324,6 +336,17 @@ fun CompetitionRoomScreen(
                 reduceAnimations = uiPrefs.reduceAnimations,
             )
         }
+
+        // Diffusion pub sponsor : overlay vidéo pour tous + contrôle pour l'organisateur.
+        SponsorAdLayer(
+            activeAd = sponsorAd,
+            canTrigger = isManager,
+            ads = sponsorAds,
+            busy = sponsorBusy,
+            onLoadAds = { viewModel.sponsor.loadAds() },
+            onPlay = { viewModel.sponsor.play(it) },
+            onStop = { viewModel.sponsor.stop() },
+        )
     }
 }
 
