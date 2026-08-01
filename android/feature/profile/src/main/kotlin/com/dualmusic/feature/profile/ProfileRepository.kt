@@ -115,11 +115,14 @@ class ProfileRepository(private val api: ApiClient) {
      * Vrai si les candidatures pour ce rôle sont ouvertes (réglage admin). Par défaut ouvert
      * si le réglage est absent/illisible.
      */
-    suspend fun requestsEnabled(key: String): Boolean =
+    suspend fun requestsEnabled(key: String): Boolean = settingEnabled(key, default = true)
+
+    /** Lit un flag public `{enabled}` avec une valeur par défaut si absent/illisible. */
+    suspend fun settingEnabled(key: String, default: Boolean): Boolean =
         runCatching {
             api.request(Endpoint.get(RoleEndpoints.publicSetting(key)), PublicSetting.serializer())
-                .value?.enabled ?: true
-        }.getOrDefault(true)
+                .value?.enabled ?: default
+        }.getOrDefault(default)
 
     // --- Admin ---
 

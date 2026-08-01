@@ -56,4 +56,7 @@ object RoleEndpoints {
 
     const val ARTIST_REQUESTS_ENABLED = "artist_requests_enabled"
     const val MANAGER_REQUESTS_ENABLED = "manager_requests_enabled"
+
+    /** Autorise (ou non) les managers à CRÉER des duels eux-mêmes. Défaut : désactivé (l'admin assigne). */
+    const val MANAGER_DUEL_CREATION = "manager_duel_creation"
 }

@@ -37,6 +37,8 @@ import kotlinx.coroutines.launch
 data class AdminUiState(
     val managerEnabled: Boolean = true,
     val artistEnabled: Boolean = true,
+    /** Autorise les managers à créer des duels eux-mêmes (défaut faux : l'admin assigne). */
+    val duelCreationEnabled: Boolean = false,
     val query: String = "",
     val users: List<AdminUser> = emptyList(),
     val searching: Boolean = false,
@@ -59,7 +61,8 @@ class AdminViewModel(private val repository: ProfileRepository) : ViewModel() {
         viewModelScope.launch {
             val manager = repository.requestsEnabled(RoleEndpoints.MANAGER_REQUESTS_ENABLED)
             val artist = repository.requestsEnabled(RoleEndpoints.ARTIST_REQUESTS_ENABLED)
-            _uiState.update { it.copy(managerEnabled = manager, artistEnabled = artist) }
+            val duelCreate = repository.settingEnabled(RoleEndpoints.MANAGER_DUEL_CREATION, default = false)
+            _uiState.update { it.copy(managerEnabled = manager, artistEnabled = artist, duelCreationEnabled = duelCreate) }
         }
     }
 
@@ -73,6 +76,11 @@ class AdminViewModel(private val repository: ProfileRepository) : ViewModel() {
     /** Ouvre/ferme les candidatures « Devenir artiste ». */
     fun toggleArtist(enabled: Boolean) = setRequests(RoleEndpoints.ARTIST_REQUESTS_ENABLED, enabled) {
         _uiState.update { it.copy(artistEnabled = enabled) }
+    }
+
+    /** Autorise/interdit aux managers de créer des duels (sinon assignés par l'admin). */
+    fun toggleDuelCreation(enabled: Boolean) = setRequests(RoleEndpoints.MANAGER_DUEL_CREATION, enabled) {
+        _uiState.update { it.copy(duelCreationEnabled = enabled) }
     }
 
     private fun setRequests(key: String, enabled: Boolean, onOk: () -> Unit) {
@@ -147,6 +155,7 @@ fun AdminScreen(viewModel: AdminViewModel) {
                 )
                 AdminToggle("Demandes « Devenir artiste »", ui.artistEnabled) { viewModel.toggleArtist(it) }
                 AdminToggle("Demandes « Devenir manager »", ui.managerEnabled) { viewModel.toggleManager(it) }
+                AdminToggle("Création de duels par les managers", ui.duelCreationEnabled) { viewModel.toggleDuelCreation(it) }
             }
         }
 

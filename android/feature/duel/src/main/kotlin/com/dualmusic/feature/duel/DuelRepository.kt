@@ -77,6 +77,18 @@ class DuelRepository(private val api: ApiClient) {
 
     // --- Espace MANAGER (organisateur de duels) ---
 
+    /**
+     * Les managers ont-ils le droit de CRÉER des duels ? Réglage admin `manager_duel_creation`.
+     * Défaut **false** (les duels sont assignés par l'admin) si le réglage est absent/illisible.
+     */
+    suspend fun managerDuelCreationEnabled(): Boolean =
+        runCatching {
+            api.request(
+                Endpoint.get(com.dualmusic.domain.role.RoleEndpoints.publicSetting(com.dualmusic.domain.role.RoleEndpoints.MANAGER_DUEL_CREATION)),
+                com.dualmusic.domain.role.PublicSetting.serializer(),
+            ).value?.enabled ?: false
+        }.getOrDefault(false)
+
     /** Id du caller (manager) — sert de `manager_id` à la création + à filtrer ses duels. */
     suspend fun myUserId(): String? =
         runCatching {

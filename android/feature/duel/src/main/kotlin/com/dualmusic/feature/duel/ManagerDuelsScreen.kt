@@ -56,6 +56,7 @@ class ManagerDuelsViewModel(private val repository: DuelRepository) : ViewModel(
         val artists: List<ArtistSummary> = emptyList(),
         val myId: String? = null,
         val creating: Boolean = false,
+        val canCreate: Boolean = false,
         val message: String? = null,
     )
 
@@ -67,7 +68,8 @@ class ManagerDuelsViewModel(private val repository: DuelRepository) : ViewModel(
             val myId = repository.myUserId()
             val duels = myId?.let { runCatching { repository.managedDuels(it) }.getOrDefault(emptyList()) } ?: emptyList()
             val artists = runCatching { repository.artists() }.getOrDefault(emptyList())
-            _ui.update { it.copy(myId = myId, duels = duels, artists = artists) }
+            val canCreate = runCatching { repository.managerDuelCreationEnabled() }.getOrDefault(false)
+            _ui.update { it.copy(myId = myId, duels = duels, artists = artists, canCreate = canCreate) }
         }
     }
 
@@ -112,7 +114,8 @@ fun ManagerDuelsScreen(viewModel: ManagerDuelsViewModel, onOpenDuel: (Duel) -> U
             .padding(DualMusicTheme.spacing.md),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        // --- Créer un duel ---
+        // --- Créer un duel (visible seulement si l'admin l'autorise ; sinon assignation admin) ---
+        if (ui.canCreate) {
         DMCard(modifier = Modifier.fillMaxWidth()) {
             Text(s.createDuelTitle, color = colors.foreground, fontWeight = FontWeight.Bold)
             Text(s.createDuelHint, color = colors.mutedForeground)
@@ -168,6 +171,7 @@ fun ManagerDuelsScreen(viewModel: ManagerDuelsViewModel, onOpenDuel: (Duel) -> U
                     }
                 },
             )
+        }
         }
 
         // --- Duels gérés ---
