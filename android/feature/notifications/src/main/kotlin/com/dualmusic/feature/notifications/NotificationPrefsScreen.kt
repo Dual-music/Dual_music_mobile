@@ -77,6 +77,11 @@ fun NotificationPrefsScreen(viewModel: NotificationPrefsViewModel) {
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
+        // Notifications push (opt-out global).
+        DMCard(modifier = Modifier.fillMaxWidth()) {
+            PrefRow(s.pushNotifs, prefs.pushEnabled) { viewModel.update(prefs.copy(pushEnabled = it)) }
+        }
+
         Text(s.emailNotifs, color = colors.foreground, fontWeight = FontWeight.Bold)
         Text(s.emailNotifsHint, color = colors.mutedForeground)
 

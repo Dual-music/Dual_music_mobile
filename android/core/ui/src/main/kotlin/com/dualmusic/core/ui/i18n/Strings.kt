@@ -443,6 +443,7 @@ interface Strings {
     val amountLabel: String
     val rechargeWithStripe: String
     val payMobileMoney: String
+    val pushNotifs: String
     val competitionCreated: String
     val createCompetitionTitle: String
     val createCompetitionHint: String
@@ -889,6 +890,7 @@ object FrStrings : Strings {
     override val amountLabel = "Montant"
     override val rechargeWithStripe = "Recharger avec Stripe"
     override val payMobileMoney = "Payer par Mobile Money"
+    override val pushNotifs = "Notifications push"
     override val competitionCreated = "Compétition créée"
     override val createCompetitionTitle = "Créer une compétition"
     override val createCompetitionHint = "Organisez une compétition et gérez les candidats"
@@ -1333,6 +1335,7 @@ object EnStrings : Strings {
     override val amountLabel = "Amount"
     override val rechargeWithStripe = "Recharge with Stripe"
     override val payMobileMoney = "Pay with Mobile Money"
+    override val pushNotifs = "Push notifications"
     override val competitionCreated = "Competition created"
     override val createCompetitionTitle = "Create a competition"
     override val createCompetitionHint = "Organize a competition and manage candidates"

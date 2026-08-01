@@ -46,6 +46,8 @@ data class NotificationPreferences(
     @SerialName("email_requests") val emailRequests: Boolean = true,
     @SerialName("email_assignments") val emailAssignments: Boolean = true,
     @SerialName("email_system") val emailSystem: Boolean = true,
+    /** Préférence push (opt-out global). */
+    @SerialName("push_enabled") val pushEnabled: Boolean = true,
 )
 
 /** Chemins REST des notifications (source unique, partagée). */
