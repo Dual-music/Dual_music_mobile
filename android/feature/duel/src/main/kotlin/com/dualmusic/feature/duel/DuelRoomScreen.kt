@@ -69,6 +69,7 @@ import io.livekit.android.renderer.SurfaceViewRenderer
 fun DuelRoomScreen(
     viewModel: DuelViewModel,
     voteAmount: Double = 10.0,
+    onLeave: () -> Unit = {},
 ) {
     val duel by viewModel.duel.collectAsStateWithLifecycle()
     val totals by viewModel.voteTotals.collectAsStateWithLifecycle()
@@ -82,6 +83,7 @@ fun DuelRoomScreen(
     val likes by viewModel.likes.collectAsStateWithLifecycle()
     val uiPrefs by UiPreferencesStore.state.collectAsStateWithLifecycle()
     val topDonor by viewModel.topDonor.collectAsStateWithLifecycle()
+    val isManager by viewModel.isManager.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     var draft by remember { mutableStateOf("") }
@@ -155,6 +157,20 @@ fun DuelRoomScreen(
                 )
                 if (timer.isRunning) {
                     Text(strings.timerRunning, color = colors.accent, fontWeight = FontWeight.Bold)
+                }
+                // Contrôles de l'arbitre (manager) : minuteur de parole, vainqueur, fin.
+                if (isManager) {
+                    ManagerDuelControls(
+                        artist1Name = duel?.artist1?.displayName ?: strings.artist1,
+                        artist2Name = duel?.artist2?.displayName ?: strings.artist2,
+                        artist1Id = duel?.artist1Id,
+                        artist2Id = duel?.artist2Id,
+                        timerRunning = timer.isRunning,
+                        onGiveTurn = { id, sec -> viewModel.startTimer(id, sec) },
+                        onStopTimer = { viewModel.stopTimer() },
+                        onWinner = { id -> viewModel.announceWinner(id) },
+                        onEnd = { viewModel.endDuel(onLeave) },
+                    )
                 }
             }
 
@@ -232,6 +248,52 @@ fun DuelRoomScreen(
 
 /** Emojis de réaction (identiques au live/web). */
 private val DuelReactionEmojis = listOf("🔥", "😍", "👏", "🎵", "💎", "🎶", "⚡", "🌟", "😂")
+
+/** Panneau de contrôle de l'arbitre (manager) : minuteur de parole, vainqueur, fin du duel. */
+@Composable
+private fun ManagerDuelControls(
+    artist1Name: String,
+    artist2Name: String,
+    artist1Id: String?,
+    artist2Id: String?,
+    timerRunning: Boolean,
+    onGiveTurn: (String, Int) -> Unit,
+    onStopTimer: () -> Unit,
+    onWinner: (String) -> Unit,
+    onEnd: () -> Unit,
+) {
+    val colors = DualMusicTheme.colors
+    val s = LocalStrings.current
+    var seconds by remember { mutableStateOf(120) }
+    Column(
+        modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(12.dp)).padding(DualMusicTheme.spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs),
+    ) {
+        Text("🎛 ${s.speakingTime}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+            listOf(60, 120, 180).forEach { sec ->
+                Box(
+                    modifier = Modifier.background(if (seconds == sec) colors.primary else Color.Black.copy(alpha = 0.4f), RoundedCornerShape(999.dp)).clickable { seconds = sec }.padding(horizontal = 10.dp, vertical = 4.dp),
+                ) { Text("${sec}s", color = Color.White, fontSize = 12.sp) }
+            }
+            if (timerRunning) {
+                Box(
+                    modifier = Modifier.background(colors.destructive, RoundedCornerShape(999.dp)).clickable { onStopTimer() }.padding(horizontal = 10.dp, vertical = 4.dp),
+                ) { Text(s.stopAction, color = Color.White, fontSize = 12.sp) }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+            artist1Id?.let { DMButton("🎤 $artist1Name", modifier = Modifier.weight(1f), onClick = { onGiveTurn(it, seconds) }) }
+            artist2Id?.let { DMButton("🎤 $artist2Name", style = DMButtonStyle.SECONDARY, modifier = Modifier.weight(1f), onClick = { onGiveTurn(it, seconds) }) }
+        }
+        Text("🏆 ${s.announceWinner}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+            artist1Id?.let { DMButton(artist1Name, style = DMButtonStyle.OUTLINE, modifier = Modifier.weight(1f), onClick = { onWinner(it) }) }
+            artist2Id?.let { DMButton(artist2Name, style = DMButtonStyle.OUTLINE, modifier = Modifier.weight(1f), onClick = { onWinner(it) }) }
+        }
+        DMButton(s.endDuelBtn, modifier = Modifier.fillMaxWidth(), onClick = onEnd)
+    }
+}
 
 /**
  * Barre de répartition des votes entre les deux artistes.

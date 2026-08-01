@@ -425,6 +425,10 @@ interface Strings {
     val createDuelAction: String
     val managedDuels: String
     val joinAction: String
+    val speakingTime: String
+    val stopAction: String
+    val announceWinner: String
+    val endDuelBtn: String
     val competitionCreated: String
     val createCompetitionTitle: String
     val createCompetitionHint: String
@@ -853,6 +857,10 @@ object FrStrings : Strings {
     override val createDuelAction = "Créer le duel"
     override val managedDuels = "Duels gérés"
     override val joinAction = "Rejoindre"
+    override val speakingTime = "Temps de parole"
+    override val stopAction = "Arrêter"
+    override val announceWinner = "Annoncer le vainqueur"
+    override val endDuelBtn = "Terminer le duel"
     override val competitionCreated = "Compétition créée"
     override val createCompetitionTitle = "Créer une compétition"
     override val createCompetitionHint = "Organisez une compétition et gérez les candidats"
@@ -1279,6 +1287,10 @@ object EnStrings : Strings {
     override val createDuelAction = "Create the duel"
     override val managedDuels = "Managed duels"
     override val joinAction = "Join"
+    override val speakingTime = "Speaking time"
+    override val stopAction = "Stop"
+    override val announceWinner = "Announce winner"
+    override val endDuelBtn = "End the duel"
     override val competitionCreated = "Competition created"
     override val createCompetitionTitle = "Create a competition"
     override val createCompetitionHint = "Organize a competition and manage candidates"

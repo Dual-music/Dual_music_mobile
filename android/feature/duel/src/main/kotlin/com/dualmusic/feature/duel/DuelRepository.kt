@@ -128,6 +128,15 @@ class DuelRepository(private val api: ApiClient) {
         val body = """{"artist1_id":"$artist1Id","artist2_id":"$artist2Id","scheduled_time":$sched,"manager_id":"$managerId","status":"upcoming"}"""
         api.request<Unit>(Endpoint.post(DuelEndpoints.LIST, body))
     }
+
+    /**
+     * Met à jour un duel (contrôles manager en direct). `PATCH /duels/:id` — champs camelCase :
+     * `status`, `winnerId`, `currentTimerEndsAt`, `currentTimerTargetId`. Le backend rediffuse
+     * les events `timer`/`status` → tous les spectateurs se mettent à jour.
+     */
+    suspend fun updateDuel(id: String, bodyJson: String) {
+        api.request<Unit>(Endpoint.patch(DuelEndpoints.detail(id), bodyJson))
+    }
 }
 
 /** Entrée du classement des donateurs (`GET /leaderboards/gifts`). */

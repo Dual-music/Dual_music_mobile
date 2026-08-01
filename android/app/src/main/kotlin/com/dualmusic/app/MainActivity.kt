@@ -659,7 +659,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                     } else {
                         // Clé = id du duel → un ViewModel (et une room SFU) par duel ouvert.
                         val duelVm: DuelViewModel = viewModel(key = duel.id) { container.makeDuelViewModel(duel) }
-                        DuelRoomScreen(viewModel = duelVm)
+                        DuelRoomScreen(viewModel = duelVm, onLeave = { openDuel = null })
                     }
                 }
                 3 -> {

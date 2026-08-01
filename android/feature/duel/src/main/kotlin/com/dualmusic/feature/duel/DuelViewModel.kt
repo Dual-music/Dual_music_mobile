@@ -102,6 +102,11 @@ class DuelViewModel(
     private val _viewerCount = MutableStateFlow(0)
     val viewerCount: StateFlow<Int> = _viewerCount.asStateFlow()
 
+    /** Vrai si le caller est le manager (arbitre) de ce duel → contrôles en direct. */
+    private val _isManager = MutableStateFlow(false)
+    val isManager: StateFlow<Boolean> = _isManager.asStateFlow()
+    private var myUserId: String? = null
+
     private var giftCounter = 0L
     private var liveSession: NamespaceSession? = null
     private var chatSession: NamespaceSession? = null
@@ -114,6 +119,9 @@ class DuelViewModel(
                 _duel.value = d
                 // Réhydrate le minuteur persisté (arrivants tardifs).
                 _timer.value = DuelTimer(d.currentTimerEndsAt, d.currentTimerTargetId)
+                // Détermine si le caller est l'arbitre (manager) de ce duel.
+                myUserId = myUserId ?: runCatching { repository.myUserId() }.getOrNull()
+                _isManager.value = d.managerId != null && d.managerId == myUserId
             }
             runCatching { repository.voteTotals(duelId) }.getOrNull()?.let { totals ->
                 _voteTotals.value = totals.associate { it.artistId to it.total }
@@ -176,6 +184,39 @@ class DuelViewModel(
 
     /** Efface l'erreur affichée. */
     fun clearError() { _error.value = null }
+
+    // MARK: Contrôles MANAGER (arbitre) — persistés + rediffusés par le backend
+
+    /** Donne la parole à un artiste pendant [seconds] (minuteur). */
+    fun startTimer(targetId: String, seconds: Int) {
+        val endsAt = java.time.Instant.now().plusSeconds(seconds.toLong()).toString()
+        patchDuel("""{"currentTimerEndsAt":"$endsAt","currentTimerTargetId":"$targetId"}""")
+    }
+
+    /** Arrête le minuteur de parole. */
+    fun stopTimer() {
+        patchDuel("""{"currentTimerEndsAt":null,"currentTimerTargetId":null}""")
+    }
+
+    /** Annonce le vainqueur (ne termine pas le duel). */
+    fun announceWinner(artistId: String) {
+        patchDuel("""{"winnerId":"$artistId"}""")
+    }
+
+    /** Termine le duel puis notifie l'appelant (sortie d'écran). */
+    fun endDuel(onEnded: () -> Unit) {
+        viewModelScope.launch {
+            runCatching { repository.updateDuel(duelId, """{"status":"ended"}""") }
+            onEnded()
+        }
+    }
+
+    private fun patchDuel(bodyJson: String) {
+        viewModelScope.launch {
+            runCatching { repository.updateDuel(duelId, bodyJson) }
+                .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
 
     // MARK: Temps réel
 
