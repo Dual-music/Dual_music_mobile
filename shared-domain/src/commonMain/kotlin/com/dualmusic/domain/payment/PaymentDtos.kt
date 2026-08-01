@@ -72,10 +72,19 @@ data class CreditPurchase(
     @SerialName("created_at") val createdAt: String? = null,
 )
 
+/** Corps de `POST /payments/stripe/credits` — recharge de crédits par carte (Stripe Checkout). */
+@Serializable
+data class StripeCreditsRequest(val amount: Int, val currency: String = "usd")
+
+/** Réponse `POST /payments/stripe/credits` — URL de paiement hébergée à ouvrir. */
+@Serializable
+data class StripeCreditsResponse(val url: String? = null)
+
 /** Chemins REST des paiements. */
 object PaymentEndpoints {
     const val CINETPAY_INIT = "/payments/cinetpay/init"
     const val CINETPAY_COUNTRIES = "/payments/cinetpay/countries"
+    const val STRIPE_CREDITS = "/payments/stripe/credits"
     const val STRIPE_SUBSCRIPTION = "/payments/stripe/subscription"
     const val HISTORY = "/payments/history"
 }

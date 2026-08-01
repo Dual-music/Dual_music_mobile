@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -56,8 +57,12 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
-/** État de l'écran de recharge Mobile Money. */
+/** État de l'écran de recharge (carte Stripe + Mobile Money CinetPay). */
 data class RechargeUiState(
+    /** Méthode de paiement : `card` (Stripe) | `cinetpay` (Mobile Money). */
+    val method: String = "card",
+    val balance: Double = 0.0,
+    val eurValue: Double = 0.0,
     val countries: List<CinetpayCountry> = emptyList(),
     val selected: CinetpayCountry? = null,
     /** Code de l'opérateur Mobile Money choisi (ex. `OM`, `MOMO`). */
@@ -85,9 +90,12 @@ class RechargeViewModel(private val api: ApiClient) : ViewModel() {
     private val _uiState = MutableStateFlow(RechargeUiState())
     val uiState: StateFlow<RechargeUiState> = _uiState.asStateFlow()
 
-    /** Charge la liste des pays Mobile Money disponibles. */
+    /** Charge le solde + la liste des pays Mobile Money disponibles. */
     fun load() {
         viewModelScope.launch {
+            runCatching {
+                api.request(Endpoint.get(com.dualmusic.domain.wallet.WalletEndpoints.BALANCE), com.dualmusic.domain.wallet.WalletBalance.serializer())
+            }.getOrNull()?.let { b -> _uiState.update { it.copy(balance = b.balance, eurValue = b.eurValue) } }
             val countries = runCatching {
                 api.request(
                     Endpoint.get(PaymentEndpoints.CINETPAY_COUNTRIES, anonymous = true),
@@ -97,6 +105,31 @@ class RechargeViewModel(private val api: ApiClient) : ViewModel() {
             _uiState.update { s ->
                 val sel = s.selected ?: countries.firstOrNull()
                 s.copy(countries = countries, selected = sel, operator = s.operator ?: sel?.operators?.firstOrNull()?.code)
+            }
+        }
+    }
+
+    fun onMethodChange(m: String) = _uiState.update { it.copy(method = m, message = null) }
+
+    /** Recharge par carte (Stripe Checkout) : ouvre l'URL hébergée. */
+    fun payWithStripe() {
+        val amount = _uiState.value.amount.toIntOrNull()
+        if (amount == null || amount < 1) { _uiState.update { it.copy(message = com.dualmusic.core.ui.i18n.appStrings.errEnterValidAmount) }; return }
+        viewModelScope.launch {
+            _uiState.update { it.copy(loading = true, message = null) }
+            val body = json.encodeToString(
+                com.dualmusic.domain.payment.StripeCreditsRequest.serializer(),
+                com.dualmusic.domain.payment.StripeCreditsRequest(amount = amount, currency = "usd"),
+            )
+            runCatching {
+                api.request(
+                    Endpoint.post(PaymentEndpoints.STRIPE_CREDITS, body, idempotencyKey = java.util.UUID.randomUUID().toString()),
+                    com.dualmusic.domain.payment.StripeCreditsResponse.serializer(),
+                )
+            }.onSuccess { res ->
+                _uiState.update { it.copy(loading = false, paymentUrl = res.url, message = com.dualmusic.core.ui.i18n.appStrings.openingPayment) }
+            }.onFailure { e ->
+                _uiState.update { it.copy(loading = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.errRechargeFailed) }
             }
         }
     }
@@ -174,41 +207,107 @@ fun RechargeScreen(viewModel: RechargeViewModel) {
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Text(com.dualmusic.core.ui.i18n.LocalStrings.current.rechargeCredits, color = colors.foreground, fontWeight = FontWeight.Bold)
-        Text(
-            "Paie par Mobile Money. Ton compte est crédité automatiquement après le paiement.",
-            color = colors.mutedForeground,
-        )
+        val s = com.dualmusic.core.ui.i18n.LocalStrings.current
+        Text(s.rechargeCredits, color = colors.foreground, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+        Text("Ajoutez des crédits pour voter, acheter des cadeaux et des tickets.", color = colors.mutedForeground)
 
+        // --- Solde actuel ---
+        DMCard(modifier = Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
+                Text("💳 ${s.myBalance}", color = colors.mutedForeground)
+                Text("${ui.balance.toInt()} ${s.credits}", color = colors.foreground, fontWeight = FontWeight.Bold, fontSize = 28.sp)
+                Text("≈ ${"%.2f".format(ui.eurValue)} € · ${s.availableForTx}", color = colors.mutedForeground, fontSize = 12.sp)
+            }
+        }
+
+        // --- Ajouter des crédits ---
         DMCard(modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md)) {
+                Text("💲 ${s.addCredits}", color = colors.foreground, fontWeight = FontWeight.Bold)
+                Text(s.choosePaymentMethod, color = colors.mutedForeground, fontSize = 12.sp)
+
+                // Onglets méthode : Carte (Stripe) | CinetPay.
+                Row(
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(DualMusicTheme.radii.md)).background(colors.card),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    MethodTab("💳 ${s.cardMethod}", ui.method == "card", Modifier.weight(1f)) { viewModel.onMethodChange("card") }
+                    MethodTab("📱 CinetPay", ui.method == "cinetpay", Modifier.weight(1f)) { viewModel.onMethodChange("cinetpay") }
+                }
+
+                // Montant + préréglages.
                 OutlinedTextField(
                     value = ui.amount,
                     onValueChange = viewModel::onAmountChange,
-                    label = { Text(com.dualmusic.core.ui.i18n.LocalStrings.current.amountCredits) },
+                    label = { Text(s.amountLabel) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                CountrySelector(ui, viewModel)
-                if (!ui.selected?.operators.isNullOrEmpty()) OperatorSelector(ui, viewModel)
-                OutlinedTextField(
-                    value = ui.phone,
-                    onValueChange = viewModel::onPhoneChange,
-                    label = { Text(com.dualmusic.core.ui.i18n.LocalStrings.current.mobileMoneyNumber) },
-                    placeholder = { Text("${ui.selected?.phonePrefix ?: ""}...") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    listOf(5, 10, 20).forEach { amt -> PresetChip(amt, Modifier.weight(1f)) { viewModel.onAmountChange(amt.toString()) } }
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    listOf(50, 100).forEach { amt -> PresetChip(amt, Modifier.weight(1f)) { viewModel.onAmountChange(amt.toString()) } }
+                    Box(Modifier.weight(1f))
+                }
+
+                // Formulaire spécifique à la méthode.
+                if (ui.method == "cinetpay") {
+                    CountrySelector(ui, viewModel)
+                    if (!ui.selected?.operators.isNullOrEmpty()) OperatorSelector(ui, viewModel)
+                    OutlinedTextField(
+                        value = ui.phone,
+                        onValueChange = viewModel::onPhoneChange,
+                        label = { Text(s.mobileMoneyNumber) },
+                        placeholder = { Text("${ui.selected?.phonePrefix ?: ""}...") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
                 ui.message?.let { Text(it, color = colors.primaryGlow) }
+
                 DMButton(
-                    if (ui.loading) "Initialisation…" else "Payer par Mobile Money",
+                    when {
+                        ui.loading -> "…"
+                        ui.method == "card" -> s.rechargeWithStripe
+                        else -> s.payMobileMoney
+                    },
                     enabled = !ui.loading,
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = viewModel::pay,
+                    onClick = { if (ui.method == "card") viewModel.payWithStripe() else viewModel.pay() },
                 )
             }
         }
     }
+}
+
+/** Onglet de méthode de paiement (sélectionné = fond primaire). */
+@Composable
+private fun MethodTab(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val colors = DualMusicTheme.colors
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(DualMusicTheme.radii.md))
+            .background(if (selected) DualMusicTheme.gradients.primary else androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.Transparent))
+            .clickable(onClick = onClick)
+            .padding(vertical = DualMusicTheme.spacing.md),
+        contentAlignment = Alignment.Center,
+    ) { Text(label, color = if (selected) androidx.compose.ui.graphics.Color.White else colors.foreground, fontWeight = FontWeight.Bold) }
+}
+
+/** Bouton de montant préréglé ($). */
+@Composable
+private fun PresetChip(amount: Int, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val colors = DualMusicTheme.colors
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(DualMusicTheme.radii.md))
+            .border(1.dp, colors.border, RoundedCornerShape(DualMusicTheme.radii.md))
+            .clickable(onClick = onClick)
+            .padding(vertical = DualMusicTheme.spacing.md),
+        contentAlignment = Alignment.Center,
+    ) { Text("$$amount", color = colors.foreground, fontWeight = FontWeight.Bold) }
 }
 
 /** Sélecteur de pays Mobile Money. */

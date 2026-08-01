@@ -436,6 +436,13 @@ interface Strings {
     val setPerformerAction: String
     val pendingApproval: String
     val watchAction: String
+    val availableForTx: String
+    val addCredits: String
+    val choosePaymentMethod: String
+    val cardMethod: String
+    val amountLabel: String
+    val rechargeWithStripe: String
+    val payMobileMoney: String
     val competitionCreated: String
     val createCompetitionTitle: String
     val createCompetitionHint: String
@@ -875,6 +882,13 @@ object FrStrings : Strings {
     override val setPerformerAction = "Faire performer"
     override val pendingApproval = "Concerts en attente d'approbation"
     override val watchAction = "Regarder"
+    override val availableForTx = "Disponible pour vos transactions"
+    override val addCredits = "Ajouter des Crédits"
+    override val choosePaymentMethod = "Choisissez votre méthode de paiement"
+    override val cardMethod = "Carte"
+    override val amountLabel = "Montant"
+    override val rechargeWithStripe = "Recharger avec Stripe"
+    override val payMobileMoney = "Payer par Mobile Money"
     override val competitionCreated = "Compétition créée"
     override val createCompetitionTitle = "Créer une compétition"
     override val createCompetitionHint = "Organisez une compétition et gérez les candidats"
@@ -1312,6 +1326,13 @@ object EnStrings : Strings {
     override val setPerformerAction = "Set as performer"
     override val pendingApproval = "Concerts pending approval"
     override val watchAction = "Watch"
+    override val availableForTx = "Available for your transactions"
+    override val addCredits = "Add Credits"
+    override val choosePaymentMethod = "Choose your payment method"
+    override val cardMethod = "Card"
+    override val amountLabel = "Amount"
+    override val rechargeWithStripe = "Recharge with Stripe"
+    override val payMobileMoney = "Pay with Mobile Money"
     override val competitionCreated = "Competition created"
     override val createCompetitionTitle = "Create a competition"
     override val createCompetitionHint = "Organize a competition and manage candidates"
