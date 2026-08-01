@@ -434,6 +434,7 @@ interface Strings {
     val approveAction: String
     val rejectAction: String
     val setPerformerAction: String
+    val pendingApproval: String
     val competitionCreated: String
     val createCompetitionTitle: String
     val createCompetitionHint: String
@@ -871,6 +872,7 @@ object FrStrings : Strings {
     override val approveAction = "Valider"
     override val rejectAction = "Rejeter"
     override val setPerformerAction = "Faire performer"
+    override val pendingApproval = "Concerts en attente d'approbation"
     override val competitionCreated = "Compétition créée"
     override val createCompetitionTitle = "Créer une compétition"
     override val createCompetitionHint = "Organisez une compétition et gérez les candidats"
@@ -1306,6 +1308,7 @@ object EnStrings : Strings {
     override val approveAction = "Approve"
     override val rejectAction = "Reject"
     override val setPerformerAction = "Set as performer"
+    override val pendingApproval = "Concerts pending approval"
     override val competitionCreated = "Competition created"
     override val createCompetitionTitle = "Create a competition"
     override val createCompetitionHint = "Organize a competition and manage candidates"

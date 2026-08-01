@@ -76,6 +76,27 @@ class ConcertRepository(private val api: ApiClient) {
     suspend fun concert(id: String): Concert =
         api.request(Endpoint.get(ConcertEndpoints.artistDetail(id)), Concert.serializer())
 
+    /** Concerts en attente d'approbation (admin) : `GET /artist-concerts?approvalStatus=pending`. */
+    suspend fun pendingConcerts(): List<Concert> =
+        api.request(
+            Endpoint.get(ConcertEndpoints.ARTIST_LIST, query = mapOf("approvalStatus" to "pending", "limit" to "100")),
+            ListSerializer(Concert.serializer()),
+        )
+
+    /** Approuve/rejette un concert artiste (admin) : `POST /artist-concerts/:id/review`. */
+    suspend fun reviewConcert(id: String, approve: Boolean) {
+        api.request<Unit>(Endpoint.post(ConcertEndpoints.artistDetail(id) + "/review", """{"approve":$approve}"""))
+    }
+
+    /** Vrai si le caller est admin (pour afficher la file d'approbation des concerts). */
+    suspend fun amIAdmin(): Boolean =
+        runCatching {
+            api.request(
+                Endpoint.get(com.dualmusic.domain.user.UserEndpoints.ME),
+                com.dualmusic.domain.auth.MeResponse.serializer(),
+            ).roles.any { it == com.dualmusic.domain.model.UserRole.ADMIN }
+        }.getOrDefault(false)
+
     /** Billetterie : prix, places restantes, et si le caller a déjà son billet. */
     suspend fun ticketInfo(id: String): ConcertTicketInfo =
         api.request(Endpoint.get(ConcertEndpoints.ticketInfo(id)), ConcertTicketInfo.serializer())

@@ -21,6 +21,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import androidx.compose.material3.HorizontalDivider
+import com.dualmusic.core.ui.components.DMButton
+import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -47,13 +50,39 @@ class ConcertsViewModel(private val repository: ConcertRepository) : ViewModel()
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    /** Charge le catalogue. */
+    /** File d'approbation (admin) : concerts en attente de validation. */
+    private val _pending = MutableStateFlow<List<Concert>>(emptyList())
+    val pending: StateFlow<List<Concert>> = _pending.asStateFlow()
+    private val _isAdmin = MutableStateFlow(false)
+    val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
+
+    /** Charge le catalogue (+ la file d'approbation si le caller est admin). */
     fun load() {
         if (_isLoading.value) return
         viewModelScope.launch {
             _isLoading.value = true
             _concerts.value = runCatching { repository.concerts() }.getOrDefault(emptyList())
             _isLoading.value = false
+            if (runCatching { repository.amIAdmin() }.getOrDefault(false)) {
+                _isAdmin.value = true
+                loadPending()
+            }
+        }
+    }
+
+    private fun loadPending() {
+        viewModelScope.launch {
+            _pending.value = runCatching { repository.pendingConcerts() }.getOrDefault(emptyList())
+        }
+    }
+
+    /** Approuve/rejette un concert (admin) puis recharge la file + le catalogue. */
+    fun review(id: String, approve: Boolean) {
+        viewModelScope.launch {
+            runCatching { repository.reviewConcert(id, approve) }.onSuccess {
+                loadPending()
+                _concerts.value = runCatching { repository.concerts() }.getOrDefault(_concerts.value)
+            }
         }
     }
 }
@@ -71,6 +100,8 @@ fun ConcertsListScreen(
 ) {
     val concerts by viewModel.concerts.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val pending by viewModel.pending.collectAsStateWithLifecycle()
+    val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
 
     LaunchedEffect(Unit) { viewModel.load() }
@@ -95,7 +126,38 @@ fun ConcertsListScreen(
         }
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+            // Admin : file d'approbation des concerts programmés (approuver/rejeter).
+            if (isAdmin && pending.isNotEmpty()) {
+                item {
+                    Text("⏳ ${com.dualmusic.core.ui.i18n.LocalStrings.current.pendingApproval}", color = colors.accent, fontWeight = FontWeight.Bold)
+                }
+                items(pending) { concert ->
+                    PendingConcertRow(
+                        concert = concert,
+                        onApprove = { viewModel.review(concert.id, true) },
+                        onReject = { viewModel.review(concert.id, false) },
+                    )
+                }
+                item { HorizontalDivider(color = colors.mutedForeground.copy(alpha = 0.3f)) }
+            }
             items(concerts) { concert -> ConcertRow(concert) { onOpen(concert) } }
+        }
+    }
+}
+
+/** Carte d'un concert en attente d'approbation (admin) : titre, artiste, date + Valider/Rejeter. */
+@Composable
+private fun PendingConcertRow(concert: Concert, onApprove: () -> Unit, onReject: () -> Unit) {
+    val colors = DualMusicTheme.colors
+    val s = com.dualmusic.core.ui.i18n.LocalStrings.current
+    DMCard(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+            Text(concert.title, color = colors.foreground, fontWeight = FontWeight.Bold)
+            concert.scheduledDate?.let { Text(com.dualmusic.core.ui.datetime.formatTz(it), color = colors.mutedForeground) }
+            Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                DMButton(s.approveAction, modifier = Modifier.weight(1f), onClick = onApprove)
+                DMButton(s.rejectAction, style = DMButtonStyle.OUTLINE, modifier = Modifier.weight(1f), onClick = onReject)
+            }
         }
     }
 }
