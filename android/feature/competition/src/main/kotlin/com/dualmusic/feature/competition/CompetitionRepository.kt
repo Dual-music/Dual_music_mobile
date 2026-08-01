@@ -135,6 +135,29 @@ class CompetitionRepository(private val api: ApiClient) {
         )
         api.request<Unit>(Endpoint.post("/competitions", body))
     }
+
+    // --- Contrôles MANAGER en direct ---
+
+    /** Valide/rejette une candidature (`POST /competitions/candidates/:id/review`). */
+    suspend fun reviewCandidate(candidateId: String, approve: Boolean) {
+        api.request<Unit>(Endpoint.post("/competitions/candidates/$candidateId/review", """{"approve":$approve}"""))
+    }
+
+    /** Publie la compétition (ouvre les votes). `POST /competitions/:id/publish`. */
+    suspend fun publish(id: String) {
+        api.request<Unit>(Endpoint.post("/competitions/$id/publish", "{}"))
+    }
+
+    /** Désigne le performeur courant (ou `null` pour arrêter). `POST /competitions/:id/performer`. */
+    suspend fun setPerformer(id: String, candidateId: String?, durationSec: Int) {
+        val cid = candidateId?.let { """"$it"""" } ?: "null"
+        api.request<Unit>(Endpoint.post("/competitions/$id/performer", """{"candidateId":$cid,"durationSec":$durationSec}"""))
+    }
+
+    /** Finalise le classement (clôture). `POST /competitions/:id/finalize`. */
+    suspend fun finalize(id: String) {
+        api.request<Unit>(Endpoint.post("/competitions/$id/finalize", "{}"))
+    }
 }
 
 /** Corps JSON de création d'une compétition (`POST /competitions`). */

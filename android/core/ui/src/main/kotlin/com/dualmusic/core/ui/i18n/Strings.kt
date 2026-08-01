@@ -429,6 +429,11 @@ interface Strings {
     val stopAction: String
     val announceWinner: String
     val endDuelBtn: String
+    val publishAction: String
+    val finalizeAction: String
+    val approveAction: String
+    val rejectAction: String
+    val setPerformerAction: String
     val competitionCreated: String
     val createCompetitionTitle: String
     val createCompetitionHint: String
@@ -861,6 +866,11 @@ object FrStrings : Strings {
     override val stopAction = "Arrêter"
     override val announceWinner = "Annoncer le vainqueur"
     override val endDuelBtn = "Terminer le duel"
+    override val publishAction = "Publier"
+    override val finalizeAction = "Finaliser"
+    override val approveAction = "Valider"
+    override val rejectAction = "Rejeter"
+    override val setPerformerAction = "Faire performer"
     override val competitionCreated = "Compétition créée"
     override val createCompetitionTitle = "Créer une compétition"
     override val createCompetitionHint = "Organisez une compétition et gérez les candidats"
@@ -1291,6 +1301,11 @@ object EnStrings : Strings {
     override val stopAction = "Stop"
     override val announceWinner = "Announce winner"
     override val endDuelBtn = "End the duel"
+    override val publishAction = "Publish"
+    override val finalizeAction = "Finalize"
+    override val approveAction = "Approve"
+    override val rejectAction = "Reject"
+    override val setPerformerAction = "Set as performer"
     override val competitionCreated = "Competition created"
     override val createCompetitionTitle = "Create a competition"
     override val createCompetitionHint = "Organize a competition and manage candidates"

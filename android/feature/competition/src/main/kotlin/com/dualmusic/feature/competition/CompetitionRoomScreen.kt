@@ -31,6 +31,7 @@ import androidx.lifecycle.viewModelScope
 import com.dualmusic.core.realtime.NamespaceSession
 import com.dualmusic.core.realtime.RealtimeClient
 import com.dualmusic.core.ui.components.DMButton
+import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
@@ -82,11 +83,21 @@ class CompetitionRoomViewModel(
     val emojiFeed: StateFlow<List<Pair<Long, String>>> = _emojiFeed.asStateFlow()
     private var emojiCounter = 0L
 
+    /** Vrai si le caller est le manager (organisateur) → contrôles en direct. */
+    private val _isManager = MutableStateFlow(false)
+    val isManager: StateFlow<Boolean> = _isManager.asStateFlow()
+
     private var liveSession: NamespaceSession? = null
 
-    /** Démarre : charge le classement + écoute le temps réel. */
+    /** Démarre : charge le classement + détermine l'organisateur + écoute le temps réel. */
     fun start() {
         refresh()
+        viewModelScope.launch {
+            val comp = runCatching { repository.competition(competitionId) }.getOrNull()
+            _status.value = comp?.status
+            val myId = repository.myUserId()
+            _isManager.value = comp?.managerId != null && comp.managerId == myId
+        }
         val live = realtime.session(Realtime.Namespace.LIVE).also { liveSession = it }
         viewModelScope.launch {
             live.onConnect {
@@ -152,6 +163,40 @@ class CompetitionRoomViewModel(
         }
     }
 
+    // --- Contrôles MANAGER (organisateur) ---
+
+    /** Valide/rejette une candidature puis recharge la liste. */
+    fun reviewCandidate(candidateId: String, approve: Boolean) {
+        viewModelScope.launch {
+            runCatching { repository.reviewCandidate(candidateId, approve) }.onSuccess { refresh() }
+                .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
+
+    /** Publie la compétition (ouvre les votes). */
+    fun publish() {
+        viewModelScope.launch {
+            runCatching { repository.publish(competitionId) }.onSuccess { refresh() }
+                .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
+
+    /** Désigne le performeur courant (ou `null` pour arrêter). */
+    fun setPerformer(candidateId: String?, durationSec: Int) {
+        viewModelScope.launch {
+            runCatching { repository.setPerformer(competitionId, candidateId, durationSec) }
+                .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
+
+    /** Finalise le classement (clôture). */
+    fun finalize() {
+        viewModelScope.launch {
+            runCatching { repository.finalize(competitionId) }.onSuccess { refresh() }
+                .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
+
     /** Efface l'erreur affichée. */
     fun clearError() { _error.value = null }
 
@@ -177,6 +222,7 @@ fun CompetitionRoomScreen(
     val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
     val likes by viewModel.likes.collectAsStateWithLifecycle()
     val uiPrefs by UiPreferencesStore.state.collectAsStateWithLifecycle()
+    val isManager by viewModel.isManager.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
 
@@ -194,6 +240,13 @@ fun CompetitionRoomScreen(
         ) {
             Text(strings.ranking, color = colors.foreground, fontWeight = FontWeight.Bold)
             error?.let { Text(it, color = colors.destructive) }
+            // Contrôles de l'organisateur (manager) : publier + finaliser.
+            if (isManager) {
+                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    DMButton(strings.publishAction, modifier = Modifier.weight(1f), onClick = { viewModel.publish() })
+                    DMButton(strings.finalizeAction, style = DMButtonStyle.OUTLINE, modifier = Modifier.weight(1f), onClick = { viewModel.finalize() })
+                }
+            }
             if (candidates.isEmpty()) {
                 DMEmptyState(
                     title = strings.noCandidates,
@@ -209,7 +262,11 @@ fun CompetitionRoomScreen(
                         rank = index + 1,
                         candidate = candidate,
                         voteCredits = voteCredits,
+                        isManager = isManager,
                         onVote = { viewModel.vote(candidate.id, voteCredits) },
+                        onApprove = { viewModel.reviewCandidate(candidate.id, true) },
+                        onReject = { viewModel.reviewCandidate(candidate.id, false) },
+                        onPerformer = { viewModel.setPerformer(candidate.id, 120) },
                     )
                 }
             }
@@ -241,31 +298,49 @@ fun CompetitionRoomScreen(
 /** Emojis de réaction (identiques au live/duel/web). */
 private val CompetitionReactionEmojis = listOf("🔥", "😍", "👏", "🎵", "💎", "🎶", "⚡", "🌟", "😂")
 
-/** Ligne de classement : rang, artiste, score, bouton de vote. */
+/** Ligne de classement : rang, artiste, score, vote — + actions manager (valider/rejeter/performeur). */
 @Composable
 private fun CandidateRow(
     rank: Int,
     candidate: CompetitionCandidate,
     voteCredits: Int,
+    isManager: Boolean,
     onVote: () -> Unit,
+    onApprove: () -> Unit,
+    onReject: () -> Unit,
+    onPerformer: () -> Unit,
 ) {
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     DMCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
-                Text(
-                    "${medal(rank)} ${candidate.artist?.displayName ?: strings.artistSingular}",
-                    color = colors.foreground,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text("${candidate.score.toInt()} pts", color = colors.mutedForeground)
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text(
+                        "${medal(rank)} ${candidate.artist?.displayName ?: strings.artistSingular}",
+                        color = colors.foreground,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text("${candidate.score.toInt()} pts · ${candidate.status}", color = colors.mutedForeground)
+                }
+                DMButton("${strings.vote} ($voteCredits)", onClick = onVote)
             }
-            DMButton("${strings.vote} ($voteCredits)", onClick = onVote)
+            // Actions de l'organisateur : valider/rejeter (candidat en attente) ou désigner le performeur.
+            if (isManager) {
+                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm), modifier = Modifier.padding(top = DualMusicTheme.spacing.sm)) {
+                    when (candidate.status) {
+                        "pending" -> {
+                            DMButton(strings.approveAction, modifier = Modifier.weight(1f), onClick = onApprove)
+                            DMButton(strings.rejectAction, style = DMButtonStyle.OUTLINE, modifier = Modifier.weight(1f), onClick = onReject)
+                        }
+                        "approved" -> DMButton(strings.setPerformerAction, style = DMButtonStyle.SECONDARY, modifier = Modifier.fillMaxWidth(), onClick = onPerformer)
+                    }
+                }
+            }
         }
     }
 }
