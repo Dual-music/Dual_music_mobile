@@ -23,9 +23,9 @@ data class AppNotification(
     @SerialName("created_at") val createdAt: String? = null,
 )
 
-/** Réponse de `GET /notifications/unread-count`. */
+/** Réponse de `GET /notifications/unread-count`. Le backend renvoie `{ unread }`. */
 @Serializable
-data class UnreadCount(val count: Int = 0)
+data class UnreadCount(@SerialName("unread") val count: Int = 0)
 
 /** Corps de `POST/DELETE /notifications/devices` — jeton d'appareil FCM (push mobile). */
 @Serializable

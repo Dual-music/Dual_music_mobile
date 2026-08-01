@@ -66,7 +66,7 @@ private val BrandGradient = Brush.linearGradient(listOf(Color(0xFFB07CFF), Color
  * @param onOpenProfile ouvre la section profil.
  */
 @Composable
-fun TopBar(onOpenNotifications: () -> Unit, onOpenProfile: () -> Unit) {
+fun TopBar(onOpenNotifications: () -> Unit, onOpenProfile: () -> Unit, unreadCount: Int = 0) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -79,8 +79,28 @@ fun TopBar(onOpenNotifications: () -> Unit, onOpenProfile: () -> Unit) {
     ) {
         DMLogo(height = 32.dp)
         Box(modifier = Modifier.weight(1f))
-        IconButton(onClick = onOpenNotifications) {
-            Icon(Icons.Filled.Notifications, contentDescription = "Notifications", tint = Color.White)
+        // Cloche + badge du nombre de non-lus (comme le web).
+        Box {
+            IconButton(onClick = onOpenNotifications) {
+                Icon(Icons.Filled.Notifications, contentDescription = "Notifications", tint = Color.White)
+            }
+            if (unreadCount > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 4.dp, end = 2.dp)
+                        .size(18.dp)
+                        .background(Color(0xFFE11D48), androidx.compose.foundation.shape.CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.Text(
+                        if (unreadCount > 9) "9+" else unreadCount.toString(),
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    )
+                }
+            }
         }
         IconButton(onClick = onOpenProfile) {
             Icon(Icons.Filled.Person, contentDescription = "Profil", tint = Color.White)

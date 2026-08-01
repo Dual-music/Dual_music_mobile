@@ -312,6 +312,10 @@ class AppContainer(context: Context) {
     fun makeNotificationsViewModel(): NotificationsViewModel =
         NotificationsViewModel(notificationRepository, realtimeClient)
 
+    /** Nombre de notifications non lues (pour le badge de la cloche). */
+    suspend fun unreadNotifications(): Int =
+        runCatching { notificationRepository.unreadCount() }.getOrDefault(0)
+
     /** Nouveau ViewModel du flux de retrait (PIN + méthodes + demande). */
     fun makeWithdrawalViewModel(): WithdrawalViewModel = WithdrawalViewModel(withdrawalRepository)
 
@@ -527,6 +531,9 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
     var homeOpen by remember { mutableIntStateOf(0) }
     // Superposition « messages de notifications » (icône cloche de la barre du haut).
     var notifOpen by remember { mutableStateOf(false) }
+    // Badge de la cloche : nombre de non-lus, rafraîchi à chaque ouverture/fermeture des notifs.
+    var notifUnread by remember { mutableIntStateOf(0) }
+    LaunchedEffect(notifOpen) { notifUnread = container.unreadNotifications() }
     var openDuel by remember { mutableStateOf<Duel?>(null) }
     var openCompetition by remember { mutableStateOf<Competition?>(null) }
     var openConcert by remember { mutableStateOf<com.dualmusic.domain.model.Concert?>(null) }
@@ -558,6 +565,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                 TopBar(
                     onOpenNotifications = { notifOpen = true },
                     onOpenProfile = { showProfile = true; profileSub = 0 },
+                    unreadCount = notifUnread,
                 )
             }
         },
