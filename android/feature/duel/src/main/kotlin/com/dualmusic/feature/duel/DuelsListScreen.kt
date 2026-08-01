@@ -22,6 +22,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import androidx.compose.ui.unit.sp
+import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMCard
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -104,28 +106,36 @@ fun DuelsListScreen(
     }
 }
 
-/** Carte d'un duel : les deux artistes + son statut. */
+/** Case d'un duel : statut + les deux artistes + bouton « Regarder ». */
 @Composable
 private fun DuelRow(duel: Duel, onClick: () -> Unit) {
     val colors = DualMusicTheme.colors
-    DMCard(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
+    val s = com.dualmusic.core.ui.i18n.LocalStrings.current
+    DMCard(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
-                    "${duel.artist1?.displayName ?: com.dualmusic.core.ui.i18n.LocalStrings.current.artist1}  vs  ${duel.artist2?.displayName ?: com.dualmusic.core.ui.i18n.LocalStrings.current.artist2}",
-                    color = colors.foreground,
+                    statusLabel(duel.status),
+                    color = if (duel.status == EventStatus.LIVE) colors.accent else colors.mutedForeground,
                     fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
                 )
-                duel.scheduledTime?.let { Text(com.dualmusic.core.ui.datetime.formatTz(it), color = colors.mutedForeground) }
+                duel.scheduledTime?.let { Text(com.dualmusic.core.ui.datetime.formatTz(it), color = colors.mutedForeground, fontSize = 12.sp) }
             }
             Text(
-                statusLabel(duel.status),
-                color = if (duel.status == EventStatus.LIVE) colors.accent else colors.mutedForeground,
+                "${duel.artist1?.displayName ?: s.artist1}  🆚  ${duel.artist2?.displayName ?: s.artist2}",
+                color = colors.foreground,
                 fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+            )
+            DMButton(
+                if (duel.status == EventStatus.LIVE) "👁  ${s.watchAction}" else s.watchAction,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onClick,
             )
         }
     }
