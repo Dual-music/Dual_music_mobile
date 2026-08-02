@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -102,6 +103,9 @@ fun ConcertRoomScreen(
     val uiPrefs by UiPreferencesStore.state.collectAsStateWithLifecycle()
 
     val isHost by viewModel.isHost.collectAsStateWithLifecycle()
+    val recMode by viewModel.recordingCtl.mode.collectAsStateWithLifecycle()
+    val recActive by viewModel.recordingCtl.active.collectAsStateWithLifecycle()
+    val recBusy by viewModel.recordingCtl.busy.collectAsStateWithLifecycle()
     val sponsorAd by viewModel.sponsor.activeAd.collectAsStateWithLifecycle()
     val sponsorAds by viewModel.sponsor.ads.collectAsStateWithLifecycle()
     val sponsorBusy by viewModel.sponsor.busy.collectAsStateWithLifecycle()
@@ -251,6 +255,19 @@ fun ConcertRoomScreen(
                 CircleBtn(if (micOn) Icons.Filled.Mic else Icons.Filled.MicOff, Color.Black.copy(alpha = 0.4f)) { viewModel.toggleMic() }
                 CircleBtn(Icons.Filled.Cameraswitch, Color.Black.copy(alpha = 0.4f)) { viewModel.flipCamera() }
                 CircleBtn(Icons.Filled.Close, colors.destructive) { viewModel.endConcert(onLeave) }
+            }
+        }
+
+        // Enregistrement serveur (bouton en mode manual, indicateur REC en mode auto) — hôte.
+        if (isHost && broadcasting) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(DualMusicTheme.spacing.md)
+                    .width(170.dp),
+            ) {
+                com.dualmusic.feature.sponsor.RecordingHostButton(mode = recMode, active = recActive, busy = recBusy, onToggle = { viewModel.recordingCtl.toggle() })
             }
         }
 

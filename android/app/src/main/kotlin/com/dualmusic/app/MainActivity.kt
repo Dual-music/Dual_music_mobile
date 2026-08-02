@@ -233,6 +233,9 @@ class AppContainer(context: Context) {
     // --- Lot pub sponsor (diffusion en direct dans les rooms) ---
     private val sponsorAdRepository = com.dualmusic.feature.sponsor.SponsorAdRepository(api)
 
+    // --- Enregistrement serveur des directs (bouton hôte en mode manual) ---
+    private val recordingRepository = com.dualmusic.feature.sponsor.RecordingRepository(api)
+
     /** Nouveau ViewModel de feed (liste des lives + prefetch des tokens LiveKit). */
     fun makeFeedViewModel(): FeedViewModel = FeedViewModel(feedRepository, tokenService)
 
@@ -387,7 +390,7 @@ class AppContainer(context: Context) {
 
     /** Nouveau ViewModel de room de compétition (classement + votes). */
     fun makeCompetitionRoomViewModel(competitionId: String): CompetitionRoomViewModel =
-        CompetitionRoomViewModel(competitionId, competitionRepository, realtimeClient, sponsorAdRepository)
+        CompetitionRoomViewModel(competitionId, competitionRepository, realtimeClient, sponsorAdRepository, recordingRepository)
 
     /**
      * Fabrique un ViewModel de room de concert (viewer + hôte artiste). L'hôte est déterminé
@@ -403,6 +406,7 @@ class AppContainer(context: Context) {
             hostUserId = concert.artistId,
             ticketPrice = concert.ticketPrice,
             sponsorAds = sponsorAdRepository,
+            recording = recordingRepository,
         )
     }
 
@@ -420,6 +424,7 @@ class AppContainer(context: Context) {
             repository = duelRepository,
             wallet = walletRepository,
             sponsorAds = sponsorAdRepository,
+            recording = recordingRepository,
         )
     }
 
@@ -436,6 +441,7 @@ class AppContainer(context: Context) {
             realtime = realtimeClient,
             repository = liveRepository,
             sponsorAds = sponsorAdRepository,
+            recording = recordingRepository,
         )
     }
 
@@ -452,6 +458,7 @@ class AppContainer(context: Context) {
             realtime = realtimeClient,
             repository = liveRepository,
             sponsorAds = sponsorAdRepository,
+            recording = recordingRepository,
             isHost = true,
         )
     }

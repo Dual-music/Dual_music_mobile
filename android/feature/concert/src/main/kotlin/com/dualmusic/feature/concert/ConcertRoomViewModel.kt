@@ -44,12 +44,16 @@ class ConcertRoomViewModel(
     val hostUserId: String,
     private val ticketPrice: Double,
     sponsorAds: com.dualmusic.feature.sponsor.SponsorAdRepository,
+    recording: com.dualmusic.feature.sponsor.RecordingRepository,
 ) : ViewModel() {
 
     val roomName: String = "concert-$concertId"
 
     /** État + actions de diffusion pub sponsor (overlay vidéo + contrôle hôte artiste). */
     val sponsor = com.dualmusic.feature.sponsor.SponsorAdHolder("concert", concertId, sponsorAds, viewModelScope)
+
+    /** État + action d'enregistrement serveur (bouton hôte en mode manual). */
+    val recordingCtl = com.dualmusic.feature.sponsor.RecordingHolder("concert", concertId, recording, viewModelScope)
 
     /** Vrai si l'utilisateur courant est l'artiste organisateur (déterminé au démarrage). */
     private val _isHost = MutableStateFlow(false)
@@ -117,6 +121,7 @@ class ConcertRoomViewModel(
             loadInventory()
             loadGiftLeaderboard()
         }
+        recordingCtl.refresh()
         connectRealtime()
     }
 

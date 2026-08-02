@@ -74,10 +74,14 @@ class CompetitionRoomViewModel(
     private val repository: CompetitionRepository,
     private val realtime: RealtimeClient,
     sponsorAds: com.dualmusic.feature.sponsor.SponsorAdRepository,
+    recording: com.dualmusic.feature.sponsor.RecordingRepository,
 ) : ViewModel() {
 
     /** État + actions de diffusion pub sponsor (overlay vidéo + contrôle organisateur). */
     val sponsor = com.dualmusic.feature.sponsor.SponsorAdHolder("competition", competitionId, sponsorAds, viewModelScope)
+
+    /** État + action d'enregistrement serveur (bouton hôte en mode manual). */
+    val recordingCtl = com.dualmusic.feature.sponsor.RecordingHolder("competition", competitionId, recording, viewModelScope)
 
     /** Candidats triés par score décroissant (= classement courant). */
     private val _candidates = MutableStateFlow<List<CompetitionCandidate>>(emptyList())
@@ -138,6 +142,7 @@ class CompetitionRoomViewModel(
     fun start() {
         refresh()
         loadInventory()
+        recordingCtl.refresh()
         viewModelScope.launch {
             val comp = runCatching { repository.competition(competitionId) }.getOrNull()
             _status.value = comp?.status
@@ -283,6 +288,9 @@ fun CompetitionRoomScreen(
     val sponsorAd by viewModel.sponsor.activeAd.collectAsStateWithLifecycle()
     val sponsorAds by viewModel.sponsor.ads.collectAsStateWithLifecycle()
     val sponsorBusy by viewModel.sponsor.busy.collectAsStateWithLifecycle()
+    val recMode by viewModel.recordingCtl.mode.collectAsStateWithLifecycle()
+    val recActive by viewModel.recordingCtl.active.collectAsStateWithLifecycle()
+    val recBusy by viewModel.recordingCtl.busy.collectAsStateWithLifecycle()
     val uiPrefs by UiPreferencesStore.state.collectAsStateWithLifecycle()
     val isManager by viewModel.isManager.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
@@ -304,12 +312,13 @@ fun CompetitionRoomScreen(
         ) {
             Text(strings.ranking, color = colors.foreground, fontWeight = FontWeight.Bold)
             error?.let { Text(it, color = colors.destructive) }
-            // Contrôles de l'organisateur (manager) : publier + finaliser.
+            // Contrôles de l'organisateur (manager) : publier + finaliser + enregistrement.
             if (isManager) {
                 Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
                     DMButton(strings.publishAction, modifier = Modifier.weight(1f), onClick = { viewModel.publish() })
                     DMButton(strings.finalizeAction, style = DMButtonStyle.OUTLINE, modifier = Modifier.weight(1f), onClick = { viewModel.finalize() })
                 }
+                com.dualmusic.feature.sponsor.RecordingHostButton(mode = recMode, active = recActive, busy = recBusy, onToggle = { viewModel.recordingCtl.toggle() })
             }
             if (candidates.isEmpty()) {
                 DMEmptyState(

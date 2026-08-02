@@ -82,12 +82,16 @@ class LiveViewModel(
     private val realtime: RealtimeClient,
     private val repository: LiveRepository,
     sponsorAds: com.dualmusic.feature.sponsor.SponsorAdRepository,
+    recording: com.dualmusic.feature.sponsor.RecordingRepository,
     /** Vrai pour l'artiste qui DIFFUSE (publie caméra/micro) ; faux pour un spectateur. */
     val isHost: Boolean = false,
 ) : ViewModel() {
 
     /** État + actions de diffusion pub sponsor (overlay vidéo + contrôle hôte). */
     val sponsor = com.dualmusic.feature.sponsor.SponsorAdHolder("live", liveId, sponsorAds, viewModelScope)
+
+    /** État + action d'enregistrement serveur (bouton hôte en mode manual). */
+    val recordingCtl = com.dualmusic.feature.sponsor.RecordingHolder("live", liveId, recording, viewModelScope)
 
     private val _messages = MutableStateFlow<List<LiveChatMessage>>(emptyList())
     val messages: StateFlow<List<LiveChatMessage>> = _messages.asStateFlow()
@@ -172,6 +176,7 @@ class LiveViewModel(
         }
         loadInventory()
         loadGiftLeaderboard() // amorce la bulle top-donateur
+        recordingCtl.refresh()
         if (isHost) loadJoinRequests()
         if (!isHost) viewModelScope.launch { myUserId = repository.myUserId() }
         connectRealtime()

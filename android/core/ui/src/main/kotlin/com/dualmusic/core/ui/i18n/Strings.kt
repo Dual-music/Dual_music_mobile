@@ -436,6 +436,9 @@ interface Strings {
     val sponsorStopAd: String
     val sponsorNoAds: String
     val sponsorAdBadge: String
+    val recordStart: String
+    val recordStop: String
+    val recording: String
     val publishAction: String
     val finalizeAction: String
     val approveAction: String
@@ -892,6 +895,9 @@ object FrStrings : Strings {
     override val sponsorStopAd = "Arrêter"
     override val sponsorNoAds = "Aucune pub disponible"
     override val sponsorAdBadge = "PUBLICITÉ"
+    override val recordStart = "Enregistrer"
+    override val recordStop = "Arrêter l'enreg."
+    override val recording = "REC"
     override val publishAction = "Publier"
     override val finalizeAction = "Finaliser"
     override val approveAction = "Valider"
@@ -1346,6 +1352,9 @@ object EnStrings : Strings {
     override val sponsorStopAd = "Stop"
     override val sponsorNoAds = "No ad available"
     override val sponsorAdBadge = "ADVERTISEMENT"
+    override val recordStart = "Record"
+    override val recordStop = "Stop recording"
+    override val recording = "REC"
     override val publishAction = "Publish"
     override val finalizeAction = "Finalize"
     override val approveAction = "Approve"

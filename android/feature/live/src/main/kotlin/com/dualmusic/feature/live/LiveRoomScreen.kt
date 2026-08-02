@@ -143,6 +143,9 @@ fun LiveRoomScreen(
     val joinRequests by viewModel.joinRequests.collectAsStateWithLifecycle()
     val acceptedGuests by viewModel.acceptedGuests.collectAsStateWithLifecycle()
     val guestTimers by viewModel.guestTimers.collectAsStateWithLifecycle()
+    val recMode by viewModel.recordingCtl.mode.collectAsStateWithLifecycle()
+    val recActive by viewModel.recordingCtl.active.collectAsStateWithLifecycle()
+    val recBusy by viewModel.recordingCtl.busy.collectAsStateWithLifecycle()
     val liveWaiting by viewModel.liveWaiting.collectAsStateWithLifecycle()
     val remoteVideos by viewModel.media.remoteVideos.collectAsStateWithLifecycle()
     val isGuestAccepted by viewModel.isGuestAccepted.collectAsStateWithLifecycle()
@@ -839,6 +842,10 @@ fun LiveRoomScreen(
                 Pill(color = Color(0xFFEAB308), modifier = Modifier.fillMaxWidth(), onClick = { viewModel.setPaused(!paused) }) {
                     Icon(Icons.Filled.Podcasts, contentDescription = null, tint = Color.White)
                     Text("  ${if (paused) s.resume else s.pause}", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+                // Enregistrement serveur (bouton en mode manual, indicateur REC en mode auto).
+                if (isHost) {
+                    com.dualmusic.feature.sponsor.RecordingHostButton(mode = recMode, active = recActive, busy = recBusy, onToggle = { viewModel.recordingCtl.toggle() }, modifier = Modifier.fillMaxWidth())
                 }
                 // « Terminer le live » : réservé à l'hôte (met fin au direct pour tout le monde).
                 if (isHost) {

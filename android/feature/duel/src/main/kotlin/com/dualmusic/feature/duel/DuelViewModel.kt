@@ -59,10 +59,14 @@ class DuelViewModel(
     private val repository: DuelRepository,
     private val wallet: WalletRepository,
     sponsorAds: com.dualmusic.feature.sponsor.SponsorAdRepository,
+    recording: com.dualmusic.feature.sponsor.RecordingRepository,
 ) : ViewModel() {
 
     /** État + actions de diffusion pub sponsor (overlay vidéo + contrôle hôte/manager). */
     val sponsor = com.dualmusic.feature.sponsor.SponsorAdHolder("duel", duelId, sponsorAds, viewModelScope)
+
+    /** État + action d'enregistrement serveur (bouton hôte en mode manual). */
+    val recordingCtl = com.dualmusic.feature.sponsor.RecordingHolder("duel", duelId, recording, viewModelScope)
 
     private val _duel = MutableStateFlow<Duel?>(null)
     val duel: StateFlow<Duel?> = _duel.asStateFlow()
@@ -133,6 +137,7 @@ class DuelViewModel(
             runCatching { repository.chatHistory(duelId) }.getOrNull()?.let { _messages.value = it }
         }
         loadTopDonor()
+        recordingCtl.refresh()
         connectRealtime()
     }
 

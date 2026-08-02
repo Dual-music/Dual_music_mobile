@@ -86,6 +86,9 @@ fun DuelRoomScreen(
     val uiPrefs by UiPreferencesStore.state.collectAsStateWithLifecycle()
     val topDonor by viewModel.topDonor.collectAsStateWithLifecycle()
     val isManager by viewModel.isManager.collectAsStateWithLifecycle()
+    val recMode by viewModel.recordingCtl.mode.collectAsStateWithLifecycle()
+    val recActive by viewModel.recordingCtl.active.collectAsStateWithLifecycle()
+    val recBusy by viewModel.recordingCtl.busy.collectAsStateWithLifecycle()
     val sponsorAd by viewModel.sponsor.activeAd.collectAsStateWithLifecycle()
     val sponsorAds by viewModel.sponsor.ads.collectAsStateWithLifecycle()
     val sponsorBusy by viewModel.sponsor.busy.collectAsStateWithLifecycle()
@@ -176,6 +179,7 @@ fun DuelRoomScreen(
                         onWinner = { id -> viewModel.announceWinner(id) },
                         onEnd = { viewModel.endDuel(onLeave) },
                     )
+                    com.dualmusic.feature.sponsor.RecordingHostButton(mode = recMode, active = recActive, busy = recBusy, onToggle = { viewModel.recordingCtl.toggle() })
                 }
             }
 
