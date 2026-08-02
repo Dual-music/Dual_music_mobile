@@ -62,13 +62,18 @@ import kotlinx.coroutines.launch
  * ViewModel de l'espace « Mes compétitions » du MANAGER (organisateur).
  * Parité web : le manager crée des compétitions (formulaire complet) et voit celles qu'il gère.
  */
-class ManagerCompetitionsViewModel(private val repository: CompetitionRepository) : ViewModel() {
+class ManagerCompetitionsViewModel(
+    private val repository: CompetitionRepository,
+    private val uploader: com.dualmusic.core.upload.MediaUploader,
+) : ViewModel() {
 
     data class UiState(
         val competitions: List<Competition> = emptyList(),
         val myId: String? = null,
         val creating: Boolean = false,
         val showForm: Boolean = false,
+        val coverUrl: String = "",
+        val coverUploading: Boolean = false,
         val message: String? = null,
     )
 
@@ -83,17 +88,30 @@ class ManagerCompetitionsViewModel(private val repository: CompetitionRepository
         }
     }
 
-    fun toggleForm() = _ui.update { it.copy(showForm = !it.showForm, message = null) }
+    fun toggleForm() = _ui.update { it.copy(showForm = !it.showForm, message = null, coverUrl = "") }
 
-    /** Crée la compétition (le managerId est injecté depuis l'état). */
+    /** URL de couverture (saisie manuelle ou upload). */
+    fun setCover(url: String) = _ui.update { it.copy(coverUrl = url) }
+
+    /** Upload l'image de couverture choisie (catégorie `image`), puis renseigne l'URL. */
+    fun uploadCover(media: com.dualmusic.core.upload.LocalMedia) {
+        viewModelScope.launch {
+            _ui.update { it.copy(coverUploading = true, message = null) }
+            runCatching { uploader.upload(media, com.dualmusic.domain.upload.UploadCategory.IMAGE) }
+                .onSuccess { url -> _ui.update { it.copy(coverUploading = false, coverUrl = url) } }
+                .onFailure { e -> _ui.update { it.copy(coverUploading = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.uploadFailed) } }
+        }
+    }
+
+    /** Crée la compétition (managerId + coverUrl injectés depuis l'état). */
     fun create(body: CreateCompetitionBody) {
         val myId = _ui.value.myId ?: return
         if (body.title.isBlank()) return
         viewModelScope.launch {
             _ui.update { it.copy(creating = true, message = null) }
-            runCatching { repository.createCompetition(body.copy(managerId = myId)) }
+            runCatching { repository.createCompetition(body.copy(managerId = myId, coverUrl = _ui.value.coverUrl.ifBlank { null })) }
                 .onSuccess {
-                    _ui.update { it.copy(creating = false, showForm = false, message = com.dualmusic.core.ui.i18n.appStrings.competitionCreated) }
+                    _ui.update { it.copy(creating = false, showForm = false, coverUrl = "", message = com.dualmusic.core.ui.i18n.appStrings.competitionCreated) }
                     load()
                 }
                 .onFailure { e -> _ui.update { it.copy(creating = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed) } }
@@ -156,7 +174,14 @@ fun ManagerCompetitionsScreen(viewModel: ManagerCompetitionsViewModel) {
 
         // Formulaire complet (révélé par le bouton).
         if (ui.showForm) {
-            CompetitionFormCard(creating = ui.creating, onSubmit = { viewModel.create(it) })
+            CompetitionFormCard(
+                creating = ui.creating,
+                coverUrl = ui.coverUrl,
+                coverUploading = ui.coverUploading,
+                onCoverChange = { viewModel.setCover(it) },
+                onUploadCover = { viewModel.uploadCover(it) },
+                onSubmit = { viewModel.create(it) },
+            )
         }
 
         // Onglets de filtre.
@@ -237,14 +262,33 @@ private fun statusLabel(status: String, s: com.dualmusic.core.ui.i18n.Strings): 
 /** Formulaire de création complet (parité web `CompetitionForm`). */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CompetitionFormCard(creating: Boolean, onSubmit: (CreateCompetitionBody) -> Unit) {
+private fun CompetitionFormCard(
+    creating: Boolean,
+    coverUrl: String,
+    coverUploading: Boolean,
+    onCoverChange: (String) -> Unit,
+    onUploadCover: (com.dualmusic.core.upload.LocalMedia) -> Unit,
+    onSubmit: (CreateCompetitionBody) -> Unit,
+) {
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     val tz = "GMT"
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // Sélecteur d'image système → lecture en LocalMedia → upload (catégorie image).
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                runCatching { com.dualmusic.core.upload.readLocalMedia(context, uri) }
+                    .onSuccess { onUploadCover(it) }
+            }
+        }
+    }
 
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var coverUrl by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf("online") }
     var maxCandidates by remember { mutableStateOf("10") }
     var rewardDesc by remember { mutableStateOf("") }
@@ -273,7 +317,24 @@ private fun CompetitionFormCard(creating: Boolean, onSubmit: (CreateCompetitionB
 
             OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text(s.titleLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text(s.descriptionLabel) }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = coverUrl, onValueChange = { coverUrl = it }, label = { Text(s.compCover) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            // Image de couverture : upload depuis la galerie OU saisie d'une URL (parité web).
+            Text(s.compCover, color = colors.foreground, fontSize = 12.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                DMButton(
+                    if (coverUploading) s.sending else s.compPickImage,
+                    style = DMButtonStyle.SECONDARY,
+                    enabled = !coverUploading,
+                    onClick = {
+                        picker.launch(
+                            androidx.activity.result.PickVisualMediaRequest(
+                                androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly,
+                            ),
+                        )
+                    },
+                )
+                if (coverUrl.isNotBlank()) Text("✓", color = colors.accent, fontWeight = FontWeight.Bold)
+            }
+            OutlinedTextField(value = coverUrl, onValueChange = onCoverChange, label = { Text(s.compCover) }, singleLine = true, modifier = Modifier.fillMaxWidth())
 
             SelectField(
                 label = s.compMode,

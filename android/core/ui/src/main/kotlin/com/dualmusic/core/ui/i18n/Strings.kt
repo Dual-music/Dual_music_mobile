@@ -504,6 +504,7 @@ interface Strings {
     val compVenueName: String
     val compVenueAddress: String
     val compVenueContact: String
+    val compPickImage: String
     val goOnStage: String
     val topDonors: String
     val shareLiveText: String
@@ -1000,6 +1001,7 @@ object FrStrings : Strings {
     override val compVenueName = "Nom du lieu"
     override val compVenueAddress = "Adresse"
     override val compVenueContact = "Coordonnées d'accès"
+    override val compPickImage = "Choisir une image"
     override val goOnStage = "Monter sur scène"
     override val topDonors = "Top donateurs"
     override val shareLiveText = "🔴 Je suis en live sur Dual Music ! Rejoins-moi."
@@ -1494,6 +1496,7 @@ object EnStrings : Strings {
     override val compVenueName = "Venue name"
     override val compVenueAddress = "Address"
     override val compVenueContact = "Access contact"
+    override val compPickImage = "Choose an image"
     override val goOnStage = "Go on stage"
     override val topDonors = "Top donors"
     override val shareLiveText = "🔴 I'm live on Dual Music! Join me."

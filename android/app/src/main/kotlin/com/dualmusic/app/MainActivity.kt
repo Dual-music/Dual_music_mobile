@@ -378,7 +378,7 @@ class AppContainer(context: Context) {
 
     /** Espace « Mes compétitions » du manager (créer/gérer des compétitions). */
     fun makeManagerCompetitionsViewModel(): com.dualmusic.feature.competition.ManagerCompetitionsViewModel =
-        com.dualmusic.feature.competition.ManagerCompetitionsViewModel(competitionRepository)
+        com.dualmusic.feature.competition.ManagerCompetitionsViewModel(competitionRepository, mediaUploader)
 
     /** Nouveau ViewModel « Mes Lives » (gestion + lancement de lives). */
     fun makeMyLivesViewModel(): com.dualmusic.feature.live.MyLivesViewModel =
