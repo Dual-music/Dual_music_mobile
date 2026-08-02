@@ -73,6 +73,8 @@ data class Duel(
     @SerialName("current_timer_ends_at") val currentTimerEndsAt: String? = null,
     @SerialName("current_timer_target_id") val currentTimerTargetId: String? = null,
     @SerialName("room_id") val roomId: String? = null,
+    /** L'organisateur autorise-t-il la diffusion de pubs sponsor sur ce duel (parité web). */
+    @SerialName("allows_sponsor_ads") val allowsSponsorAds: Boolean = true,
     /** Profils hydratés côté serveur (peuvent être absents selon l'endpoint). */
     val artist1: DisplayProfile? = null,
     val artist2: DisplayProfile? = null,

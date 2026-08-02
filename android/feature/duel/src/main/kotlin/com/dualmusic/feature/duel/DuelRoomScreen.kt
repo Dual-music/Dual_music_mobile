@@ -265,10 +265,11 @@ fun DuelRoomScreen(
             )
         }
 
-        // Diffusion pub sponsor : overlay vidéo pour tous + contrôle pour le manager.
+        // Diffusion pub sponsor : overlay vidéo pour tous + contrôle pour le manager
+        // (masqué si l'organisateur a désactivé les pubs sur ce duel — parité web).
         SponsorAdLayer(
             activeAd = sponsorAd,
-            canTrigger = isManager,
+            canTrigger = isManager && duel?.allowsSponsorAds != false,
             ads = sponsorAds,
             busy = sponsorBusy,
             onLoadAds = { viewModel.sponsor.loadAds() },
