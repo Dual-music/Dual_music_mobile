@@ -466,6 +466,44 @@ interface Strings {
     val maxCandidatesLabel: String
     val startDateLabel: String
     val endDateLabel: String
+    // Parité formulaire compétition web (CompetitionForm) + liste manager.
+    val compManagementSubtitle: String
+    val compNew: String
+    val compCancel: String
+    val compStatusPublished: String
+    val compStatusLive: String
+    val compStatusDraft: String
+    val compStatusFinished: String
+    val compTabAll: String
+    val compNoCompetitions: String
+    val compManagerEmptyDesc: String
+    val compCover: String
+    val compMode: String
+    val compOnline: String
+    val compOnsite: String
+    val compRewardDesc: String
+    val compRewardAmount: String
+    val compEntryFee: String
+    val compEntryFeeAmount: String
+    val compEligibility: String
+    val compEligibilityCountry: String
+    val compEligibilityAfrica: String
+    val compEligibilityWorld: String
+    val compEligibleCountriesPick: String
+    val compSearchCountry: String
+    val compTimezoneHint: String
+    val compApplicationOpensAt: String
+    val compApplicationOpensAtHint: String
+    val compApplicationDeadline: String
+    val compStartAtLabel: String
+    val compEndAtLabel: String
+    val compCountry: String
+    val compCity: String
+    val compCommune: String
+    val compDistrict: String
+    val compVenueName: String
+    val compVenueAddress: String
+    val compVenueContact: String
     val goOnStage: String
     val topDonors: String
     val shareLiveText: String
@@ -925,6 +963,43 @@ object FrStrings : Strings {
     override val maxCandidatesLabel = "Candidats max"
     override val startDateLabel = "Date de début"
     override val endDateLabel = "Date de fin"
+    override val compManagementSubtitle = "Créez, planifiez et pilotez vos compétitions en direct."
+    override val compNew = "Nouvelle compétition"
+    override val compCancel = "Annuler"
+    override val compStatusPublished = "Publiée"
+    override val compStatusLive = "En direct"
+    override val compStatusDraft = "Brouillon"
+    override val compStatusFinished = "Terminée"
+    override val compTabAll = "Tous"
+    override val compNoCompetitions = "Aucune compétition pour le moment"
+    override val compManagerEmptyDesc = "Vous n'avez encore lancé aucune compétition. Cliquez sur Nouvelle compétition pour commencer."
+    override val compCover = "Image de couverture (URL)"
+    override val compMode = "Mode"
+    override val compOnline = "En ligne"
+    override val compOnsite = "En présentiel"
+    override val compRewardDesc = "Récompense prévue"
+    override val compRewardAmount = "Valeur (crédits)"
+    override val compEntryFee = "Frais d'inscription requis"
+    override val compEntryFeeAmount = "Montant des frais (crédits)"
+    override val compEligibility = "Pays éligibles"
+    override val compEligibilityCountry = "Pays spécifiques"
+    override val compEligibilityAfrica = "Tous les pays d'Afrique"
+    override val compEligibilityWorld = "Ouvert au monde entier"
+    override val compEligibleCountriesPick = "Sélectionnez les pays"
+    override val compSearchCountry = "Rechercher un pays..."
+    override val compTimezoneHint = "Les heures saisies sont interprétées dans votre fuseau :"
+    override val compApplicationOpensAt = "Ouverture des candidatures"
+    override val compApplicationOpensAtHint = "Optionnel — les artistes ne pourront postuler qu'à partir de cette date."
+    override val compApplicationDeadline = "Date limite des candidatures"
+    override val compStartAtLabel = "Début de la compétition"
+    override val compEndAtLabel = "Fin de la compétition"
+    override val compCountry = "Pays"
+    override val compCity = "Ville"
+    override val compCommune = "Commune"
+    override val compDistrict = "Quartier"
+    override val compVenueName = "Nom du lieu"
+    override val compVenueAddress = "Adresse"
+    override val compVenueContact = "Coordonnées d'accès"
     override val goOnStage = "Monter sur scène"
     override val topDonors = "Top donateurs"
     override val shareLiveText = "🔴 Je suis en live sur Dual Music ! Rejoins-moi."
@@ -1382,6 +1457,43 @@ object EnStrings : Strings {
     override val maxCandidatesLabel = "Max candidates"
     override val startDateLabel = "Start date"
     override val endDateLabel = "End date"
+    override val compManagementSubtitle = "Create, schedule and run your live competitions."
+    override val compNew = "New competition"
+    override val compCancel = "Cancel"
+    override val compStatusPublished = "Published"
+    override val compStatusLive = "Live"
+    override val compStatusDraft = "Draft"
+    override val compStatusFinished = "Finished"
+    override val compTabAll = "All"
+    override val compNoCompetitions = "No competition yet"
+    override val compManagerEmptyDesc = "You haven't launched any competition yet. Tap New competition to start."
+    override val compCover = "Cover image (URL)"
+    override val compMode = "Mode"
+    override val compOnline = "Online"
+    override val compOnsite = "On-site"
+    override val compRewardDesc = "Planned reward"
+    override val compRewardAmount = "Value (credits)"
+    override val compEntryFee = "Entry fee required"
+    override val compEntryFeeAmount = "Fee amount (credits)"
+    override val compEligibility = "Eligible countries"
+    override val compEligibilityCountry = "Specific countries"
+    override val compEligibilityAfrica = "All African countries"
+    override val compEligibilityWorld = "Open worldwide"
+    override val compEligibleCountriesPick = "Select countries"
+    override val compSearchCountry = "Search a country..."
+    override val compTimezoneHint = "Times you enter are interpreted in your timezone:"
+    override val compApplicationOpensAt = "Applications open at"
+    override val compApplicationOpensAtHint = "Optional — artists can only apply from this date."
+    override val compApplicationDeadline = "Application deadline"
+    override val compStartAtLabel = "Competition start"
+    override val compEndAtLabel = "Competition end"
+    override val compCountry = "Country"
+    override val compCity = "City"
+    override val compCommune = "Municipality"
+    override val compDistrict = "District"
+    override val compVenueName = "Venue name"
+    override val compVenueAddress = "Address"
+    override val compVenueContact = "Access contact"
     override val goOnStage = "Go on stage"
     override val topDonors = "Top donors"
     override val shareLiveText = "🔴 I'm live on Dual Music! Join me."

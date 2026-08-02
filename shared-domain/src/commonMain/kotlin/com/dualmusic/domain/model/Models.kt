@@ -108,6 +108,8 @@ data class Competition(
     val title: String,
     val status: String,
     @SerialName("manager_id") val managerId: String? = null,
+    val mode: String? = null,
+    @SerialName("max_candidates") val maxCandidates: Int? = null,
     @SerialName("start_at") val startAt: String? = null,
     @SerialName("end_at") val endAt: String? = null,
     @SerialName("reward_amount") val rewardAmount: Double = 0.0,

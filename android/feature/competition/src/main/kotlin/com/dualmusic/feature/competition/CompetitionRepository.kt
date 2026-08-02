@@ -114,32 +114,13 @@ class CompetitionRepository(private val api: ApiClient) {
 
     /**
      * Crée une compétition (le manager s'assigne organisateur). `POST /competitions`.
-     * Champs essentiels ; le backend applique ses valeurs par défaut pour le reste.
+     * Parité stricte avec le formulaire web : tous les champs sont transmis ; les `null`
+     * sont omis (explicitNulls=false) → le backend applique ses défauts. Le backend force
+     * `status = 'draft'` à la création.
      */
-    suspend fun createCompetition(
-        managerId: String,
-        title: String,
-        description: String,
-        rewardAmount: Double,
-        maxCandidates: Int,
-        startAt: String?,
-        endAt: String?,
-    ) {
-        val start = startAt?.takeIf { it.isNotBlank() }?.let { """"$it"""" } ?: "null"
-        val end = endAt?.takeIf { it.isNotBlank() }?.let { """"$it"""" } ?: "null"
-        val body = json.encodeToString(
-            CreateCompetitionBody.serializer(),
-            CreateCompetitionBody(
-                managerId = managerId,
-                title = title,
-                description = description,
-                rewardAmount = rewardAmount,
-                maxCandidates = maxCandidates,
-                startAt = startAt?.takeIf { it.isNotBlank() },
-                endAt = endAt?.takeIf { it.isNotBlank() },
-            ),
-        )
-        api.request<Unit>(Endpoint.post("/competitions", body))
+    suspend fun createCompetition(body: CreateCompetitionBody) {
+        val payload = json.encodeToString(CreateCompetitionBody.serializer(), body)
+        api.request<Unit>(Endpoint.post("/competitions", payload))
     }
 
     // --- Contrôles MANAGER en direct ---
@@ -166,16 +147,35 @@ class CompetitionRepository(private val api: ApiClient) {
     }
 }
 
-/** Corps JSON de création d'une compétition (`POST /competitions`). */
+/**
+ * Corps JSON de création d'une compétition (`POST /competitions`) — parité stricte avec le
+ * formulaire web (`CompetitionForm`). Les champs `null` sont omis à la sérialisation.
+ */
 @kotlinx.serialization.Serializable
-private data class CreateCompetitionBody(
+data class CreateCompetitionBody(
     val managerId: String,
     val title: String,
-    val description: String,
-    val rewardAmount: Double,
-    val maxCandidates: Int,
+    val description: String? = null,
+    val coverUrl: String? = null,
     val mode: String = "online",
-    val eligibilityScope: String = "world",
+    val maxCandidates: Int = 10,
+    val rewardDescription: String? = null,
+    val rewardAmount: Double = 0.0,
+    val entryFeeRequired: Boolean = false,
+    val entryFeeAmount: Double = 0.0,
+    val eligibilityScope: String = "country",
+    val eligibleCountries: List<String> = emptyList(),
+    // Présentiel (onsite) — omis en ligne.
+    val country: String? = null,
+    val city: String? = null,
+    val commune: String? = null,
+    val district: String? = null,
+    val venueName: String? = null,
+    val venueAddress: String? = null,
+    val venueContact: String? = null,
+    // Dates (ISO). applicationOpensAt optionnel.
+    val applicationOpensAt: String? = null,
+    val applicationDeadline: String? = null,
     val startAt: String? = null,
     val endAt: String? = null,
     val status: String = "open",
