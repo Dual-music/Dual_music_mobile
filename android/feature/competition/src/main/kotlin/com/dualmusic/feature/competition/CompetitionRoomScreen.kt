@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,10 +16,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -94,15 +100,44 @@ class CompetitionRoomViewModel(
     private val _giftPulse = MutableStateFlow(0L)
     val giftPulse: StateFlow<Long> = _giftPulse.asStateFlow()
 
+    /** Inventaire de cadeaux du caller (pour l'offrande à un candidat). */
+    private val _inventory = MutableStateFlow<List<com.dualmusic.domain.gift.InventoryItem>>(emptyList())
+    val inventory: StateFlow<List<com.dualmusic.domain.gift.InventoryItem>> = _inventory.asStateFlow()
+
     /** Vrai si le caller est le manager (organisateur) → contrôles en direct. */
     private val _isManager = MutableStateFlow(false)
     val isManager: StateFlow<Boolean> = _isManager.asStateFlow()
 
     private var liveSession: NamespaceSession? = null
 
+    /** Charge l'inventaire de cadeaux du caller. */
+    fun loadInventory() {
+        viewModelScope.launch {
+            runCatching { repository.inventory() }.getOrNull()?.let { _inventory.value = it }
+        }
+    }
+
+    /**
+     * Offre un cadeau à un candidat (alimente son score). Débit atomique côté serveur ; on
+     * resynchronise le classement et on recharge l'inventaire (quantité restante).
+     */
+    fun sendGift(candidateId: String, giftId: String, credits: Int) {
+        viewModelScope.launch {
+            runCatching {
+                repository.sendGift(
+                    competitionId,
+                    com.dualmusic.domain.competition.CompetitionGiftRequest(candidateId = candidateId, giftId = giftId, credits = credits),
+                )
+            }
+                .onSuccess { refresh(); loadInventory() }
+                .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
+
     /** Démarre : charge le classement + détermine l'organisateur + écoute le temps réel. */
     fun start() {
         refresh()
+        loadInventory()
         viewModelScope.launch {
             val comp = runCatching { repository.competition(competitionId) }.getOrNull()
             _status.value = comp?.status
@@ -243,6 +278,7 @@ fun CompetitionRoomScreen(
     val error by viewModel.error.collectAsStateWithLifecycle()
     val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
     val giftPulse by viewModel.giftPulse.collectAsStateWithLifecycle()
+    val inventory by viewModel.inventory.collectAsStateWithLifecycle()
     val likes by viewModel.likes.collectAsStateWithLifecycle()
     val sponsorAd by viewModel.sponsor.activeAd.collectAsStateWithLifecycle()
     val sponsorAds by viewModel.sponsor.ads.collectAsStateWithLifecycle()
@@ -251,6 +287,8 @@ fun CompetitionRoomScreen(
     val isManager by viewModel.isManager.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
+    // Candidat ciblé par l'offrande de cadeau (ouvre le sélecteur d'inventaire).
+    var giftTargetCandidate by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(Unit) {
         viewModel.start()
@@ -290,6 +328,7 @@ fun CompetitionRoomScreen(
                         voteCredits = voteCredits,
                         isManager = isManager,
                         onVote = { viewModel.vote(candidate.id, voteCredits) },
+                        onGift = { giftTargetCandidate = candidate.id },
                         onApprove = { viewModel.reviewCandidate(candidate.id, true) },
                         onReject = { viewModel.reviewCandidate(candidate.id, false) },
                         onPerformer = { viewModel.setPerformer(candidate.id, 120) },
@@ -337,6 +376,47 @@ fun CompetitionRoomScreen(
             )
         }
 
+        // Sélecteur de cadeau : offrande à un candidat (alimente son score). Parité live/duel/web.
+        giftTargetCandidate?.let { candidateId ->
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { giftTargetCandidate = null })
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.5f)
+                    .background(colors.background)
+                    .padding(DualMusicTheme.spacing.md),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text(strings.myGifts, color = colors.foreground, fontWeight = FontWeight.Bold)
+                if (inventory.isEmpty()) {
+                    Text(strings.noGiftsBuyInShop, color = colors.mutedForeground, fontSize = 13.sp)
+                }
+                Column(
+                    modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+                ) {
+                    inventory.forEach { g ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                .clickable {
+                                    viewModel.sendGift(candidateId, g.giftId, g.price.toInt())
+                                    giftTargetCandidate = null
+                                }
+                                .padding(DualMusicTheme.spacing.md),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("${g.imageUrl ?: "🎁"}  ${g.name ?: "Cadeau"}", color = colors.foreground)
+                            Text("×${g.quantity}", color = colors.accent, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
         // Diffusion pub sponsor : overlay vidéo pour tous + contrôle pour l'organisateur.
         SponsorAdLayer(
             activeAd = sponsorAd,
@@ -361,6 +441,7 @@ private fun CandidateRow(
     voteCredits: Int,
     isManager: Boolean,
     onVote: () -> Unit,
+    onGift: () -> Unit,
     onApprove: () -> Unit,
     onReject: () -> Unit,
     onPerformer: () -> Unit,
@@ -382,7 +463,14 @@ private fun CandidateRow(
                     )
                     Text("${candidate.score.toInt()} pts · ${candidate.status}", color = colors.mutedForeground)
                 }
-                DMButton("${strings.vote} ($voteCredits)", onClick = onVote)
+                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+                    // Offrir un cadeau à ce candidat (bouton compact, alimente son score).
+                    Box(
+                        modifier = Modifier.size(40.dp).background(colors.primary.copy(alpha = 0.25f), CircleShape).clickable { onGift() },
+                        contentAlignment = Alignment.Center,
+                    ) { Text("🎁", fontSize = 18.sp) }
+                    DMButton("${strings.vote} ($voteCredits)", onClick = onVote)
+                }
             }
             // Actions de l'organisateur : valider/rejeter (candidat en attente) ou désigner le performeur.
             if (isManager) {

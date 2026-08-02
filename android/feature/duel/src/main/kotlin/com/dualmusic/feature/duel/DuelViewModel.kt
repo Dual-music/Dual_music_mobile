@@ -161,9 +161,20 @@ class DuelViewModel(
         viewModelScope.launch { runCatching { repository.postMessage(duelId, content) } }
     }
 
-    /** J'aime : incrémente le compteur local + fait flotter un cœur pour tous. */
+    /** J'aime : incrémente le compteur, fait flotter un cœur, et diffuse le compteur (parité web). */
     fun sendLike() {
         _likes.value += 1
+        // Compteur partagé sur le canal `duel-likes-<id>` (même mécanisme que le web).
+        liveSession?.emit(
+            "broadcast",
+            org.json.JSONObject(
+                mapOf(
+                    "channel" to "duel-likes-$duelId",
+                    "event" to "like",
+                    "payload" to org.json.JSONObject(mapOf("count" to _likes.value)),
+                ),
+            ),
+        )
         sendReaction("❤️")
     }
 
@@ -232,6 +243,7 @@ class DuelViewModel(
             live.onConnect {
                 live.join(Realtime.RoomType.DUEL, duelId)
                 live.emit("broadcast:join", "duel-emojis-$duelId")
+                live.emit("broadcast:join", "duel-likes-$duelId")
             }
             chat.onConnect { chat.join(Realtime.RoomType.DUEL, duelId) }
 
@@ -258,9 +270,12 @@ class DuelViewModel(
             chat.on(Realtime.RealtimeEvent.CHAT_MESSAGE, ChatMessagePayload.serializer()) { p ->
                 _messages.update { it + DuelChatMessage(id = p.id, userId = p.userId, content = p.content, user = p.user) }
             }
-            // Réactions emojis relayées (canal duel-emojis-<id>) — l'émetteur est exclu.
+            // Réactions emojis (duel-emojis-<id>) + compteur de likes partagé (duel-likes-<id>).
             live.on("broadcast", com.dualmusic.domain.realtime.BroadcastEnvelope.serializer()) { env ->
-                if (env.event == "emoji_reaction") env.payload?.emoji?.let { pushEmoji(it) }
+                when (env.event) {
+                    "emoji_reaction" -> env.payload?.emoji?.let { pushEmoji(it) }
+                    "like" -> env.payload?.count?.let { if (it > _likes.value) _likes.value = it }
+                }
             }
             // Présence (spectateurs).
             live.on(Realtime.RealtimeEvent.PRESENCE, PresencePayload.serializer()) { p ->

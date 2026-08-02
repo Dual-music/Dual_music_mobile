@@ -14,8 +14,9 @@ data class BroadcastEnvelope(
     val payload: BroadcastPayload? = null,
 )
 
-/** Charge utile du relais broadcast — `emoji_reaction` → emoji. */
+/** Charge utile du relais broadcast — `emoji_reaction` → emoji ; `like` → compteur partagé. */
 @Serializable
 data class BroadcastPayload(
     val emoji: String? = null,
+    val count: Int? = null,
 )

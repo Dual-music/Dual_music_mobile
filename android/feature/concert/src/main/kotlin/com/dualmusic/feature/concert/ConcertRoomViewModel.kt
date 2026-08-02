@@ -179,9 +179,20 @@ class ConcertRoomViewModel(
         viewModelScope.launch { runCatching { repository.postMessage(concertId, content) } }
     }
 
-    /** J'aime : compteur + persistance + cœur flottant pour tous. */
+    /** J'aime : compteur + persistance + cœur flottant + compteur partagé (parité web). */
     fun sendLike() {
         _likes.value += 1
+        // Compteur partagé sur le canal `concert-likes-<id>` (même mécanisme que le web).
+        liveSession?.emit(
+            "broadcast",
+            org.json.JSONObject(
+                mapOf(
+                    "channel" to "concert-likes-$concertId",
+                    "event" to "like",
+                    "payload" to org.json.JSONObject(mapOf("count" to _likes.value)),
+                ),
+            ),
+        )
         sendReaction("❤️")
         viewModelScope.launch { runCatching { repository.likeConcert(concertId) } }
     }
@@ -233,6 +244,7 @@ class ConcertRoomViewModel(
             live.onConnect {
                 live.join(Realtime.RoomType.CONCERT, concertId)
                 live.emit("broadcast:join", "concert-emojis-$concertId")
+                live.emit("broadcast:join", "concert-likes-$concertId")
             }
             chat.onConnect { chat.join(Realtime.RoomType.CONCERT, concertId) }
 
@@ -247,7 +259,10 @@ class ConcertRoomViewModel(
                 _viewerCount.value = p.count
             }
             live.on("broadcast", BroadcastEnvelope.serializer()) { env ->
-                if (env.event == "emoji_reaction") env.payload?.emoji?.let { pushEmoji(it) }
+                when (env.event) {
+                    "emoji_reaction" -> env.payload?.emoji?.let { pushEmoji(it) }
+                    "like" -> env.payload?.count?.let { if (it > _likes.value) _likes.value = it }
+                }
             }
             // Statut : fin du concert → on pourrait fermer, mais on laisse l'UI décider.
             live.on(Realtime.RealtimeEvent.STATUS, StatusPayload.serializer()) { /* statut concert */ }

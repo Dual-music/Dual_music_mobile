@@ -6,6 +6,8 @@ import com.dualmusic.domain.competition.CompetitionCandidate
 import com.dualmusic.domain.competition.CompetitionEndpoints
 import com.dualmusic.domain.competition.CompetitionGiftRequest
 import com.dualmusic.domain.competition.CompetitionVoteRequest
+import com.dualmusic.domain.gift.GiftEndpoints
+import com.dualmusic.domain.gift.InventoryItem
 import com.dualmusic.domain.model.Competition
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -80,6 +82,10 @@ class CompetitionRepository(private val api: ApiClient) {
             Endpoint.post(CompetitionEndpoints.gifts(competitionId), body, idempotencyKey = idempotencyKey),
         )
     }
+
+    /** Inventaire de cadeaux du caller (partagé avec le live/boutique). */
+    suspend fun inventory(): List<InventoryItem> =
+        api.request(Endpoint.get(GiftEndpoints.INVENTORY), ListSerializer(InventoryItem.serializer()))
 
     /** Achète le billet spectateur de la compétition. */
     suspend fun buyTicket(
