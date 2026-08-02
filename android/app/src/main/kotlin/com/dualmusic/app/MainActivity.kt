@@ -819,8 +819,9 @@ private fun ProfileSection(
             )
         }
         25 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuMyCompetitions, onBack = { onSub(PROFILE_MENU) }) {
-            // Manager (non-artiste) : gestion (créer/gérer). Artiste/fan : ses candidatures.
-            if (isManager && !isArtist) {
+            // Manager (même s'il est aussi artiste) : gestion (créer/gérer), comme le web.
+            // Fan/artiste sans rôle manager : ses candidatures.
+            if (isManager) {
                 com.dualmusic.feature.competition.ManagerCompetitionsScreen(
                     viewModel = viewModel { container.makeManagerCompetitionsViewModel() },
                 )
