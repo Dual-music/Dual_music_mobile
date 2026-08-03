@@ -325,6 +325,11 @@ class AppContainer(context: Context) {
     /** Nouveau ViewModel du flux de retrait (PIN + méthodes + demande). */
     fun makeWithdrawalViewModel(): WithdrawalViewModel = WithdrawalViewModel(withdrawalRepository)
 
+    /** ViewModel des revenus (onglet « Mes revenus » de l'Espace Manager/Artiste). */
+    private val revenueRepository = com.dualmusic.feature.withdrawal.RevenueRepository(api)
+    fun makeRevenueViewModel(): com.dualmusic.feature.withdrawal.RevenueViewModel =
+        com.dualmusic.feature.withdrawal.RevenueViewModel(revenueRepository)
+
     /** Nouveau ViewModel du catalogue de replays. */
     fun makeReplaysViewModel(): ReplaysViewModel = ReplaysViewModel(replayRepository)
 
@@ -759,9 +764,10 @@ private fun ProfileSection(
                 viewModel = viewModel { container.makeNotificationPrefsViewModel() },
             )
         }
-        3 -> SubScreen(title = "Retrait des crédits", onBack = { onSub(PROFILE_MENU) }) {
+        3 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.managerSpace, onBack = { onSub(PROFILE_MENU) }) {
             val wdVm: WithdrawalViewModel = viewModel { container.makeWithdrawalViewModel() }
-            WithdrawalScreen(viewModel = wdVm)
+            val revVm = viewModel { container.makeRevenueViewModel() }
+            com.dualmusic.feature.withdrawal.ManagerSpaceScreen(revenueVm = revVm, withdrawalVm = wdVm)
         }
         4 -> SubScreen(title = "Replays", onBack = { onSub(PROFILE_MENU) }) {
             // Sous-navigation replays : liste → lecteur.

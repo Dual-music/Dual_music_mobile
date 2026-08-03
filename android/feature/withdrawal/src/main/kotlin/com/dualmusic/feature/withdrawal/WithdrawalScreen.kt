@@ -90,7 +90,7 @@ fun WithdrawalScreen(viewModel: WithdrawalViewModel) {
 
 /** Carte de création du PIN de retrait (première configuration). */
 @Composable
-private fun CreatePinCard(onCreate: (String) -> Unit) {
+internal fun CreatePinCard(onCreate: (String) -> Unit) {
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     var pin by remember { mutableStateOf("") }
@@ -105,7 +105,7 @@ private fun CreatePinCard(onCreate: (String) -> Unit) {
 
 /** Formulaire de retrait : méthode + montant + net + PIN. */
 @Composable
-private fun WithdrawForm(
+internal fun WithdrawForm(
     methods: List<PayoutMethodData>,
     selectedMethodId: String?,
     onSelectMethod: (String) -> Unit,
@@ -195,7 +195,7 @@ private fun PinField(value: String, onChange: (String) -> Unit) {
 
 /** Ligne d'historique d'une demande de retrait. */
 @Composable
-private fun RequestRow(request: WithdrawalRequest) {
+internal fun RequestRow(request: WithdrawalRequest) {
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     DMCard(modifier = Modifier.fillMaxWidth()) {

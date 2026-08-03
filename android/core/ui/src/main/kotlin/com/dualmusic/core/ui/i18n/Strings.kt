@@ -505,6 +505,35 @@ interface Strings {
     val compVenueAddress: String
     val compVenueContact: String
     val compPickImage: String
+    // Espace Manager / Artiste — revenus + retrait (parité web).
+    val managerSpace: String
+    val revTabRevenues: String
+    val revTabWithdraw: String
+    val revTabHistory: String
+    val revByEventTitle: String
+    val revByEventSubtitle: String
+    val revTotalPeriod: String
+    val revExportCsv: String
+    val revExportPdf: String
+    val revNoRevenue: String
+    val revNoRevenueHint: String
+    val revVersements: String
+    val revShowMore: String
+    val revTotalPaid: String
+    val revReceivedYou: String
+    val revPeriodToday: String
+    val revPeriod7d: String
+    val revPeriod30d: String
+    val revPeriodAll: String
+    val wdNoWithdrawals: String
+    val srcDuelTicket: String
+    val srcDuelReplay: String
+    val srcConcertTicket: String
+    val srcConcertReplay: String
+    val srcGiftConcert: String
+    val srcGiftDuel: String
+    val srcGiftLive: String
+    val srcVote: String
     val goOnStage: String
     val topDonors: String
     val shareLiveText: String
@@ -1002,6 +1031,34 @@ object FrStrings : Strings {
     override val compVenueAddress = "Adresse"
     override val compVenueContact = "Coordonnées d'accès"
     override val compPickImage = "Choisir une image"
+    override val managerSpace = "Espace Manager"
+    override val revTabRevenues = "Mes revenus"
+    override val revTabWithdraw = "Retrait"
+    override val revTabHistory = "Historique"
+    override val revByEventTitle = "Mes revenus par événement"
+    override val revByEventSubtitle = "Tous tes versements regroupés par événement. Touche un événement pour voir le détail."
+    override val revTotalPeriod = "Total reçu sur la période"
+    override val revExportCsv = "Export CSV"
+    override val revExportPdf = "Export PDF"
+    override val revNoRevenue = "Aucun revenu sur la période"
+    override val revNoRevenueHint = "Tes versements apparaîtront ici dès que tu recevras des paiements."
+    override val revVersements = "versements"
+    override val revShowMore = "Voir plus"
+    override val revTotalPaid = "Total payé"
+    override val revReceivedYou = "Reçu (toi)"
+    override val revPeriodToday = "Aujourd'hui"
+    override val revPeriod7d = "7 derniers jours"
+    override val revPeriod30d = "30 derniers jours"
+    override val revPeriodAll = "Tout"
+    override val wdNoWithdrawals = "Aucun retrait pour l'instant."
+    override val srcDuelTicket = "Ticket de duel"
+    override val srcDuelReplay = "Replay de duel"
+    override val srcConcertTicket = "Ticket de concert"
+    override val srcConcertReplay = "Replay de concert"
+    override val srcGiftConcert = "Cadeau (concert)"
+    override val srcGiftDuel = "Cadeau (duel)"
+    override val srcGiftLive = "Cadeau (live)"
+    override val srcVote = "Vote"
     override val goOnStage = "Monter sur scène"
     override val topDonors = "Top donateurs"
     override val shareLiveText = "🔴 Je suis en live sur Dual Music ! Rejoins-moi."
@@ -1497,6 +1554,34 @@ object EnStrings : Strings {
     override val compVenueAddress = "Address"
     override val compVenueContact = "Access contact"
     override val compPickImage = "Choose an image"
+    override val managerSpace = "Manager Space"
+    override val revTabRevenues = "My revenues"
+    override val revTabWithdraw = "Withdraw"
+    override val revTabHistory = "History"
+    override val revByEventTitle = "My revenues by event"
+    override val revByEventSubtitle = "All your payouts grouped by event. Tap an event to see the detail."
+    override val revTotalPeriod = "Total received in period"
+    override val revExportCsv = "Export CSV"
+    override val revExportPdf = "Export PDF"
+    override val revNoRevenue = "No revenue in this period"
+    override val revNoRevenueHint = "Your payouts will appear here as soon as you receive payments."
+    override val revVersements = "payouts"
+    override val revShowMore = "Show more"
+    override val revTotalPaid = "Total paid"
+    override val revReceivedYou = "Received (you)"
+    override val revPeriodToday = "Today"
+    override val revPeriod7d = "Last 7 days"
+    override val revPeriod30d = "Last 30 days"
+    override val revPeriodAll = "All"
+    override val wdNoWithdrawals = "No withdrawal yet."
+    override val srcDuelTicket = "Duel ticket"
+    override val srcDuelReplay = "Duel replay"
+    override val srcConcertTicket = "Concert ticket"
+    override val srcConcertReplay = "Concert replay"
+    override val srcGiftConcert = "Gift (concert)"
+    override val srcGiftDuel = "Gift (duel)"
+    override val srcGiftLive = "Gift (live)"
+    override val srcVote = "Vote"
     override val goOnStage = "Go on stage"
     override val topDonors = "Top donors"
     override val shareLiveText = "🔴 I'm live on Dual Music! Join me."

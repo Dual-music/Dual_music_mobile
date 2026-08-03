@@ -55,6 +55,23 @@ data class RevenueBreakdown(
     val total: Double = 0.0,
 )
 
+/**
+ * Transaction détaillée de `GET /wallet/transactions?sourceId=&limit=&offset=` — une ligne de
+ * répartition (parité web `EventTransactionsDrillDown`). `my_credits` = part du caller.
+ */
+@Serializable
+data class EventTransaction(
+    val id: String,
+    @SerialName("source_type") val sourceType: String,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("total_credits") val totalCredits: Double = 0.0,
+    @SerialName("platform_credits") val platformCredits: Double = 0.0,
+    @SerialName("manager_credits") val managerCredits: Double = 0.0,
+    @SerialName("artists_credits") val artistsCredits: Double = 0.0,
+    @SerialName("my_credits") val myCredits: Double = 0.0,
+    @SerialName("payer_id") val payerId: String? = null,
+)
+
 /** Corps de `POST /wallet/vote` — vote payant pour un artiste dans un duel. */
 @Serializable
 data class VoteRequest(
