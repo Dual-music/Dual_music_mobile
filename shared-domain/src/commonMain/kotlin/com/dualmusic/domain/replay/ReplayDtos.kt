@@ -22,6 +22,7 @@ data class ReplayVideo(
     val duration: Int? = null,
     @SerialName("views_count") val viewsCount: Int = 0,
     @SerialName("source_type") val sourceType: String? = null,
+    @SerialName("recorded_date") val recordedDate: String? = null,
 ) {
     /** Vrai si un déblocage payant est nécessaire (premium + prix > 0). */
     val requiresUnlock: Boolean get() = isPremium && replayPrice > 0

@@ -300,6 +300,24 @@ interface Strings {
     val watchLive: String
     val noLivesActive: String
     val noLivesHint: String
+    // Page Duels Musicaux (3 onglets) — parité web /duels.
+    val duelsPageTitle: String
+    val duelsSubtitle: String
+    val duelTabLive: String
+    val duelTabUpcoming: String
+    val duelTabReplays: String
+    val liveBadge: String
+    val upcomingBadge: String
+    val duelPaid: String
+    val duelFree: String
+    val creditUnit: String
+    val votesWord: String
+    val voteBtn: String
+    val viewDuelBtn: String
+    val viewsWord: String
+    val noDuelsLive: String
+    val noDuelsUpcoming: String
+    val noDuelReplays: String
     // Messages d'erreur / succès (ViewModels).
     val errInvalidAmount: String
     val errChooseMethod: String
@@ -877,6 +895,23 @@ object FrStrings : Strings {
     override val watchLive = "Regarder"
     override val noLivesActive = "Aucun live en cours"
     override val noLivesHint = "Revenez plus tard pour suivre un live."
+    override val duelsPageTitle = "Duels Musicaux"
+    override val duelsSubtitle = "Affrontements en direct et à venir"
+    override val duelTabLive = "En direct"
+    override val duelTabUpcoming = "À venir"
+    override val duelTabReplays = "Replays"
+    override val liveBadge = "EN DIRECT"
+    override val upcomingBadge = "À VENIR"
+    override val duelPaid = "Payant"
+    override val duelFree = "Gratuit"
+    override val creditUnit = "crédit"
+    override val votesWord = "votes"
+    override val voteBtn = "Voter"
+    override val viewDuelBtn = "Voir le Duel"
+    override val viewsWord = "vues"
+    override val noDuelsLive = "Aucun duel en direct pour le moment"
+    override val noDuelsUpcoming = "Aucun duel à venir pour le moment"
+    override val noDuelReplays = "Aucun replay de duel disponible"
     override val errInvalidAmount = "Montant invalide"
     override val errChooseMethod = "Choisis une méthode de retrait"
     override val errPin6 = "Le code PIN doit contenir 6 chiffres"
@@ -1439,6 +1474,23 @@ object EnStrings : Strings {
     override val watchLive = "Watch"
     override val noLivesActive = "No live streams active"
     override val noLivesHint = "Come back later to catch a live."
+    override val duelsPageTitle = "Musical Duels"
+    override val duelsSubtitle = "Live and upcoming battles"
+    override val duelTabLive = "Live"
+    override val duelTabUpcoming = "Upcoming"
+    override val duelTabReplays = "Replays"
+    override val liveBadge = "LIVE"
+    override val upcomingBadge = "UPCOMING"
+    override val duelPaid = "Paid"
+    override val duelFree = "Free"
+    override val creditUnit = "credit"
+    override val votesWord = "votes"
+    override val voteBtn = "Vote"
+    override val viewDuelBtn = "View Duel"
+    override val viewsWord = "views"
+    override val noDuelsLive = "No live duel at the moment"
+    override val noDuelsUpcoming = "No upcoming duel at the moment"
+    override val noDuelReplays = "No duel replay available"
     override val errInvalidAmount = "Invalid amount"
     override val errChooseMethod = "Choose a withdrawal method"
     override val errPin6 = "The PIN must be 6 digits"

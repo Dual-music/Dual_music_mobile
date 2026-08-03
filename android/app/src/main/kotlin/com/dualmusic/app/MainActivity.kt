@@ -365,7 +365,7 @@ class AppContainer(context: Context) {
     fun makeAdminViewModel(): AdminViewModel = AdminViewModel(profileRepository)
 
     /** Nouveau ViewModel du catalogue de duels. */
-    fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository)
+    fun makeDuelsListViewModel(): DuelsListViewModel = DuelsListViewModel(duelRepository, realtimeClient)
 
     /** Espace « Mes Duels » du manager (créer/organiser des duels). */
     fun makeManagerDuelsViewModel(): com.dualmusic.feature.duel.ManagerDuelsViewModel =
@@ -554,6 +554,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
     var notifUnread by remember { mutableIntStateOf(0) }
     LaunchedEffect(notifOpen) { notifUnread = container.unreadNotifications() }
     var openDuel by remember { mutableStateOf<Duel?>(null) }
+    var openDuelReplay by remember { mutableStateOf<ReplayVideo?>(null) }
     var openCompetition by remember { mutableStateOf<Competition?>(null) }
     var openConcert by remember { mutableStateOf<com.dualmusic.domain.model.Concert?>(null) }
     // Diffusion live (hôte) en plein écran, au-dessus du Scaffold → SANS la barre du bas.
@@ -620,7 +621,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                     )
                     NavigationBarItem(
                         selected = !showProfile && tab == 2,
-                        onClick = { goTab(2); openDuel = null },
+                        onClick = { goTab(2); openDuel = null; openDuelReplay = null },
                         icon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) },
                         label = { Text(navS.navDuels) },
                         colors = navItemColors,
@@ -694,13 +695,22 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                 }
                 2 -> {
                     val duel = openDuel
-                    if (duel == null) {
-                        val listVm: DuelsListViewModel = viewModel { container.makeDuelsListViewModel() }
-                        DuelsListScreen(viewModel = listVm, onOpen = { openDuel = it })
-                    } else {
-                        // Clé = id du duel → un ViewModel (et une room SFU) par duel ouvert.
-                        val duelVm: DuelViewModel = viewModel(key = duel.id) { container.makeDuelViewModel(duel) }
-                        DuelRoomScreen(viewModel = duelVm, onLeave = { openDuel = null })
+                    val duelReplay = openDuelReplay
+                    when {
+                        duel != null -> {
+                            // Clé = id du duel → un ViewModel (et une room SFU) par duel ouvert.
+                            val duelVm: DuelViewModel = viewModel(key = duel.id) { container.makeDuelViewModel(duel) }
+                            DuelRoomScreen(viewModel = duelVm, onLeave = { openDuel = null })
+                        }
+                        duelReplay != null -> {
+                            androidx.activity.compose.BackHandler { openDuelReplay = null }
+                            val playerVm: ReplayPlayerViewModel = viewModel(key = duelReplay.id) { container.makeReplayPlayerViewModel(duelReplay) }
+                            ReplayPlayerScreen(viewModel = playerVm)
+                        }
+                        else -> {
+                            val listVm: DuelsListViewModel = viewModel { container.makeDuelsListViewModel() }
+                            DuelsListScreen(viewModel = listVm, onOpen = { openDuel = it }, onOpenReplay = { openDuelReplay = it })
+                        }
                     }
                 }
                 3 -> {

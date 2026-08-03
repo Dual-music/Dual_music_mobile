@@ -56,6 +56,25 @@ class DuelRepository(private val api: ApiClient) {
     suspend fun voteTotals(id: String): List<DuelVoteTotal> =
         api.request(Endpoint.get(DuelEndpoints.votes(id)), ListSerializer(DuelVoteTotal.serializer()))
 
+    /** Tallies de votes en masse pour plusieurs duels (`GET /duels/votes/batch?ids=a,b,c`). */
+    suspend fun votesBatch(ids: List<String>): List<DuelVoteTotal> {
+        if (ids.isEmpty()) return emptyList()
+        return api.request(
+            Endpoint.get(DuelEndpoints.VOTES_BATCH, query = mapOf("ids" to ids.joinToString(","))),
+            ListSerializer(DuelVoteTotal.serializer()),
+        )
+    }
+
+    /** Replays publics de duels (onglet Replays) — `GET /replays?sourceType=duel&isPublic=true`. */
+    suspend fun duelReplays(): List<com.dualmusic.domain.replay.ReplayVideo> =
+        api.request(
+            Endpoint.get(
+                com.dualmusic.domain.replay.ReplayEndpoints.LIST,
+                query = mapOf("sourceType" to "duel", "isPublic" to "true", "limit" to "100"),
+            ),
+            ListSerializer(com.dualmusic.domain.replay.ReplayVideo.serializer()),
+        )
+
     /** Historique de chat (dernière page) pour amorcer l'overlay. */
     suspend fun chatHistory(duelId: String): List<DuelChatMessage> =
         api.request(
