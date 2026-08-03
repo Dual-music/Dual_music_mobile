@@ -32,6 +32,23 @@ data class PayoutMethodData(
         }
 }
 
+/**
+ * Corps de `POST /withdrawals/methods` (ajout d'une méthode). Champs `null` omis à la
+ * sérialisation. `method` ∈ `mobile_money | bank | paypal`.
+ */
+@Serializable
+data class PayoutMethodInput(
+    val method: String,
+    val label: String? = null,
+    @SerialName("phone_number") val phoneNumber: String? = null,
+    @SerialName("mobile_operator") val mobileOperator: String? = null,
+    val iban: String? = null,
+    @SerialName("bank_name") val bankName: String? = null,
+    @SerialName("account_holder") val accountHolder: String? = null,
+    @SerialName("paypal_email") val paypalEmail: String? = null,
+    @SerialName("is_default") val isDefault: Boolean = false,
+)
+
 /** Réponse de `GET /withdrawals/pin` — l'utilisateur a-t-il déjà un PIN de retrait. */
 @Serializable
 data class PinStatus(val hasPin: Boolean = false)

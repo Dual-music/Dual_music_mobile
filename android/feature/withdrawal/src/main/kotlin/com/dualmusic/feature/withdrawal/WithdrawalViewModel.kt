@@ -83,6 +83,44 @@ class WithdrawalViewModel(private val repository: WithdrawalRepository) : ViewMo
     /** Sélectionne une méthode de retrait. */
     fun selectMethod(id: String) = _uiState.update { it.copy(selectedMethodId = id) }
 
+    /** Ajoute une méthode de paiement puis recharge la liste. */
+    fun addMethod(input: com.dualmusic.domain.withdrawal.PayoutMethodInput) {
+        viewModelScope.launch {
+            runCatching { repository.addMethod(input) }
+                .onSuccess { reloadMethods() }
+                .onFailure { t -> _uiState.update { it.copy(error = friendly(t)) } }
+        }
+    }
+
+    /** Supprime une méthode de paiement. */
+    fun removeMethod(id: String) {
+        viewModelScope.launch {
+            runCatching { repository.removeMethod(id) }
+                .onSuccess { reloadMethods() }
+                .onFailure { t -> _uiState.update { it.copy(error = friendly(t)) } }
+        }
+    }
+
+    /** Définit une méthode par défaut. */
+    fun setDefaultMethod(id: String) {
+        viewModelScope.launch {
+            runCatching { repository.setDefaultMethod(id) }
+                .onSuccess { reloadMethods() }
+                .onFailure { t -> _uiState.update { it.copy(error = friendly(t)) } }
+        }
+    }
+
+    private suspend fun reloadMethods() {
+        val methods = runCatching { repository.methods() }.getOrDefault(emptyList())
+        _uiState.update {
+            it.copy(
+                methods = methods,
+                selectedMethodId = it.selectedMethodId?.takeIf { id -> methods.any { m -> m.id == id } }
+                    ?: methods.firstOrNull { m -> m.isDefault }?.id ?: methods.firstOrNull()?.id,
+            )
+        }
+    }
+
     /** Crée le PIN (première configuration). */
     fun createPin(pin: String) {
         viewModelScope.launch {

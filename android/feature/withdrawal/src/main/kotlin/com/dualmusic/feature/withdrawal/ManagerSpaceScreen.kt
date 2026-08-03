@@ -278,17 +278,25 @@ private fun WithdrawTab(vm: WithdrawalViewModel) {
 
     when (ui.hasPin) {
         false -> CreatePinCard(onCreate = vm::createPin)
-        true -> WithdrawForm(
-            methods = ui.methods,
-            selectedMethodId = ui.selectedMethodId,
-            onSelectMethod = vm::selectMethod,
-            amount = ui.amount,
-            onAmountChange = vm::onAmountChange,
-            feePct = ui.net?.feePct,
-            net = ui.net?.net,
-            submitting = ui.submitting,
-            onSubmit = vm::submit,
-        )
+        true -> {
+            PayoutMethodsSection(
+                methods = ui.methods,
+                onAdd = vm::addMethod,
+                onDelete = vm::removeMethod,
+                onSetDefault = vm::setDefaultMethod,
+            )
+            WithdrawForm(
+                methods = ui.methods,
+                selectedMethodId = ui.selectedMethodId,
+                onSelectMethod = vm::selectMethod,
+                amount = ui.amount,
+                onAmountChange = vm::onAmountChange,
+                feePct = ui.net?.feePct,
+                net = ui.net?.net,
+                submitting = ui.submitting,
+                onSubmit = vm::submit,
+            )
+        }
         null -> Unit
     }
 }

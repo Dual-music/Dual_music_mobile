@@ -38,6 +38,22 @@ class WithdrawalRepository(private val api: ApiClient) {
     suspend fun methods(): List<PayoutMethodData> =
         api.request(Endpoint.get(WithdrawalEndpoints.METHODS), ListSerializer(PayoutMethodData.serializer()))
 
+    /** Ajoute une méthode de paiement. Le backend efface l'ancien défaut si `isDefault=true`. */
+    suspend fun addMethod(input: com.dualmusic.domain.withdrawal.PayoutMethodInput) {
+        val body = json.encodeToString(com.dualmusic.domain.withdrawal.PayoutMethodInput.serializer(), input)
+        api.request<Unit>(Endpoint.post(WithdrawalEndpoints.METHODS, body))
+    }
+
+    /** Supprime une méthode de paiement. */
+    suspend fun removeMethod(id: String) {
+        api.request<Unit>(Endpoint.delete("${WithdrawalEndpoints.METHODS}/$id"))
+    }
+
+    /** Définit une méthode par défaut (le backend efface le défaut des autres). */
+    suspend fun setDefaultMethod(id: String) {
+        api.request<Unit>(Endpoint.patch("${WithdrawalEndpoints.METHODS}/$id", """{"is_default":true}"""))
+    }
+
     /** Aperçu du net après frais pour un montant brut (le net réel fait foi côté serveur). */
     suspend fun net(amount: Double): WithdrawalNet {
         val body = json.encodeToString(NetRequest.serializer(), NetRequest(amount))

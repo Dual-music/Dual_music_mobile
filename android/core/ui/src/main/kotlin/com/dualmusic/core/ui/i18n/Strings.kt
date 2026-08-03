@@ -534,6 +534,24 @@ interface Strings {
     val srcGiftDuel: String
     val srcGiftLive: String
     val srcVote: String
+    // Méthodes de paiement (parité web PayoutMethodsManager).
+    val payoutTitle: String
+    val payoutDesc: String
+    val payoutAdd: String
+    val payoutMobileMoney: String
+    val payoutBankTransfer: String
+    val payoutPaypal: String
+    val payoutLabelOptional: String
+    val payoutOperator: String
+    val payoutPhone: String
+    val payoutBank: String
+    val payoutIban: String
+    val payoutHolder: String
+    val payoutPaypalEmail: String
+    val payoutSetDefault: String
+    val payoutDefault: String
+    val payoutSave: String
+    val payoutEmpty: String
     val goOnStage: String
     val topDonors: String
     val shareLiveText: String
@@ -1059,6 +1077,23 @@ object FrStrings : Strings {
     override val srcGiftDuel = "Cadeau (duel)"
     override val srcGiftLive = "Cadeau (live)"
     override val srcVote = "Vote"
+    override val payoutTitle = "Méthodes de paiement"
+    override val payoutDesc = "Ajoute et gère tes moyens de recevoir tes retraits."
+    override val payoutAdd = "Ajouter"
+    override val payoutMobileMoney = "Mobile Money"
+    override val payoutBankTransfer = "Virement bancaire"
+    override val payoutPaypal = "PayPal"
+    override val payoutLabelOptional = "Libellé (optionnel)"
+    override val payoutOperator = "Opérateur"
+    override val payoutPhone = "Téléphone"
+    override val payoutBank = "Banque"
+    override val payoutIban = "IBAN"
+    override val payoutHolder = "Titulaire du compte"
+    override val payoutPaypalEmail = "Email PayPal"
+    override val payoutSetDefault = "Définir par défaut"
+    override val payoutDefault = "Par défaut"
+    override val payoutSave = "Enregistrer"
+    override val payoutEmpty = "Aucune méthode enregistrée."
     override val goOnStage = "Monter sur scène"
     override val topDonors = "Top donateurs"
     override val shareLiveText = "🔴 Je suis en live sur Dual Music ! Rejoins-moi."
@@ -1582,6 +1617,23 @@ object EnStrings : Strings {
     override val srcGiftDuel = "Gift (duel)"
     override val srcGiftLive = "Gift (live)"
     override val srcVote = "Vote"
+    override val payoutTitle = "Payout methods"
+    override val payoutDesc = "Add and manage how you receive your withdrawals."
+    override val payoutAdd = "Add"
+    override val payoutMobileMoney = "Mobile Money"
+    override val payoutBankTransfer = "Bank transfer"
+    override val payoutPaypal = "PayPal"
+    override val payoutLabelOptional = "Label (optional)"
+    override val payoutOperator = "Operator"
+    override val payoutPhone = "Phone"
+    override val payoutBank = "Bank"
+    override val payoutIban = "IBAN"
+    override val payoutHolder = "Account holder"
+    override val payoutPaypalEmail = "PayPal email"
+    override val payoutSetDefault = "Set as default"
+    override val payoutDefault = "Default"
+    override val payoutSave = "Save"
+    override val payoutEmpty = "No method saved yet."
     override val goOnStage = "Go on stage"
     override val topDonors = "Top donors"
     override val shareLiveText = "🔴 I'm live on Dual Music! Join me."
