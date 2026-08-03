@@ -175,10 +175,12 @@ data class TimerPayload(
     @SerialName("target_id") val targetId: String? = null,
 )
 
-/** `presence` — compteur de spectateurs d'un live. */
+/** `presence` — compteur de spectateurs d'un live. Le backend émet `{ room: "<type>:<id>", count }`. */
 @Serializable
 data class PresencePayload(
     @SerialName("live_id") val liveId: String? = null,
+    /** Nom de room (`live:<id>`) — sert à identifier le live en écoute multi-room. */
+    val room: String? = null,
     val count: Int,
 )
 

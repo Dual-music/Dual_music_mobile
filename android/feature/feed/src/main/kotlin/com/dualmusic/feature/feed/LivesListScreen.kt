@@ -50,10 +50,11 @@ import com.dualmusic.domain.model.Live
 @Composable
 fun LivesListScreen(viewModel: FeedViewModel, onOpen: (Live) -> Unit) {
     val items by viewModel.items.collectAsStateWithLifecycle()
+    val presence by viewModel.presence.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    LaunchedEffect(Unit) { viewModel.refreshPresence() }
 
     var search by remember { mutableStateOf("") }
     val q = search.trim().lowercase()
@@ -87,14 +88,14 @@ fun LivesListScreen(viewModel: FeedViewModel, onOpen: (Live) -> Unit) {
                 modifier = Modifier.fillMaxWidth().padding(top = DualMusicTheme.spacing.lg),
             )
         } else {
-            filtered.forEach { live -> LiveCard(live, onOpen) }
+            filtered.forEach { live -> LiveCard(live, presence[live.id] ?: live.viewerCount, onOpen) }
         }
     }
 }
 
 /** Carte d'un live : bandeau dégradé (badge LIVE + spectateurs + avatar) puis infos + « Regarder ». */
 @Composable
-private fun LiveCard(live: Live, onOpen: (Live) -> Unit) {
+private fun LiveCard(live: Live, viewers: Int, onOpen: (Live) -> Unit) {
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     DMCard(
@@ -122,7 +123,7 @@ private fun LiveCard(live: Live, onOpen: (Live) -> Unit) {
                     .padding(DualMusicTheme.spacing.sm)
                     .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(999.dp))
                     .padding(horizontal = 10.dp, vertical = 4.dp),
-            ) { Text("👥 ${live.viewerCount} ${s.spectators}", color = Color.White, fontSize = 11.sp) }
+            ) { Text("👥 $viewers ${s.spectators}", color = Color.White, fontSize = 11.sp) }
             DMRemoteImage(
                 url = live.artist?.avatarUrl,
                 contentDescription = null,

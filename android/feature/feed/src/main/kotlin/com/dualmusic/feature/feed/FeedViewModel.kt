@@ -3,8 +3,12 @@ package com.dualmusic.feature.feed
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dualmusic.core.media.LiveKitTokenService
+import com.dualmusic.core.realtime.NamespaceSession
+import com.dualmusic.core.realtime.RealtimeClient
 import com.dualmusic.domain.media.LiveKitToken
 import com.dualmusic.domain.model.Live
+import com.dualmusic.domain.realtime.PresencePayload
+import com.dualmusic.domain.realtime.Realtime
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,10 +24,15 @@ import kotlinx.coroutines.launch
 class FeedViewModel(
     private val repository: FeedRepository,
     private val tokenService: LiveKitTokenService,
+    private val realtime: RealtimeClient,
 ) : ViewModel() {
 
     private val _items = MutableStateFlow<List<Live>>(emptyList())
     val items: StateFlow<List<Live>> = _items.asStateFlow()
+
+    /** Nombre de spectateurs en temps réel par live (via présence Socket.IO `/live`). */
+    private val _presence = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val presence: StateFlow<Map<String, Int>> = _presence.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -31,19 +40,52 @@ class FeedViewModel(
     private var page = 1
     private var hasMore = true
     private val prewarmed = mutableMapOf<String, LiveKitToken>()
+    private var liveSession: NamespaceSession? = null
 
-    /** Charge la première page. */
+    /**
+     * Charge la première page (SANS présence : utilisé par le feed vertical, qui ne doit pas
+     * voler le socket `/live` au live actif). No-op si déjà chargé.
+     */
     fun load() {
-        if (_isLoading.value) return
+        if (_isLoading.value || _items.value.isNotEmpty()) return
+        viewModelScope.launch { fetchFirstPage() }
+    }
+
+    /**
+     * Utilisé par la LISTE : charge si besoin PUIS (re)connecte la présence temps réel. Sûr car
+     * sur la liste aucun live n'est actif — reconnecter le socket `/live` ne casse rien.
+     */
+    fun refreshPresence() {
         viewModelScope.launch {
-            _isLoading.value = true
-            runCatching { repository.lives(page = 1) }.getOrNull()?.let {
-                _items.value = it
-                hasMore = it.isNotEmpty()
-                page = 1
-                prewarmAround(0)
+            if (_items.value.isEmpty()) fetchFirstPage()
+            connectPresence(_items.value)
+        }
+    }
+
+    private suspend fun fetchFirstPage() {
+        _isLoading.value = true
+        runCatching { repository.lives(page = 1) }.getOrNull()?.let {
+            _items.value = it
+            hasMore = it.isNotEmpty()
+            page = 1
+            prewarmAround(0)
+        }
+        _isLoading.value = false
+    }
+
+    /**
+     * Rejoint les rooms `/live` de tous les lives affichés (un seul socket partagé) et écoute
+     * l'event `presence` → compteur de spectateurs temps réel par carte, comme le web.
+     */
+    private fun connectPresence(lives: List<Live>) {
+        val live = realtime.session(Realtime.Namespace.LIVE).also { liveSession = it }
+        viewModelScope.launch {
+            live.onConnect { lives.forEach { live.join(Realtime.RoomType.LIVE, it.id) } }
+            live.on(Realtime.RealtimeEvent.PRESENCE, PresencePayload.serializer()) { p ->
+                val id = p.room?.substringAfter("live:", "")?.takeIf { it.isNotBlank() } ?: p.liveId
+                if (id != null) _presence.update { it + (id to p.count) }
             }
-            _isLoading.value = false
+            live.connect()
         }
     }
 
@@ -77,5 +119,10 @@ class FeedViewModel(
                     .getOrNull()?.let { prewarmed[item.id] = it }
             }
         }
+    }
+
+    override fun onCleared() {
+        liveSession?.disconnect()
+        super.onCleared()
     }
 }

@@ -37,12 +37,13 @@ import com.dualmusic.feature.live.LiveViewModel
 fun FeedScreen(
     viewModel: FeedViewModel,
     makeLiveViewModel: (Live) -> LiveViewModel,
+    initialPage: Int = 0,
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { viewModel.load() }
 
-    val pagerState = rememberPagerState(pageCount = { items.size })
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { items.size })
 
     // Prewarm + pagination quand la page active change.
     LaunchedEffect(pagerState.currentPage, items.size) {

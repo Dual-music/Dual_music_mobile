@@ -237,7 +237,7 @@ class AppContainer(context: Context) {
     private val recordingRepository = com.dualmusic.feature.sponsor.RecordingRepository(api)
 
     /** Nouveau ViewModel de feed (liste des lives + prefetch des tokens LiveKit). */
-    fun makeFeedViewModel(): FeedViewModel = FeedViewModel(feedRepository, tokenService)
+    fun makeFeedViewModel(): FeedViewModel = FeedViewModel(feedRepository, tokenService, realtimeClient)
 
     /** Nouveau ViewModel de portefeuille (solde + historiques). */
     fun makeWalletViewModel(): WalletViewModel = WalletViewModel(walletRepository)
@@ -682,14 +682,13 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                     if (live == null) {
                         com.dualmusic.feature.feed.LivesListScreen(viewModel = feedVm, onOpen = { openLive = it })
                     } else {
+                        // Ouvre le feed vertical (swipe TikTok) positionné sur le live choisi.
                         androidx.activity.compose.BackHandler { openLive = null }
-                        com.dualmusic.feature.live.LiveRoomScreen(
-                            viewModel = remember(live.id) { container.makeLiveViewModel(live) },
-                            hostUserId = live.artistId,
-                            quickGiftId = "",
-                            prewarmedToken = feedVm.prewarmedToken(live.id),
-                            liveTitle = live.title,
-                            artistName = live.artist?.displayName,
+                        val startIndex = feedVm.items.value.indexOfFirst { it.id == live.id }.coerceAtLeast(0)
+                        com.dualmusic.feature.feed.FeedScreen(
+                            viewModel = feedVm,
+                            makeLiveViewModel = container::makeLiveViewModel,
+                            initialPage = startIndex,
                         )
                     }
                 }
