@@ -149,26 +149,18 @@ fun ManagerCompetitionsScreen(viewModel: ManagerCompetitionsViewModel) {
             .padding(DualMusicTheme.spacing.md),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        // En-tête + bouton nouvelle compétition.
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("🏆 ${s.menuMyCompetitions}", color = colors.foreground, fontWeight = FontWeight.Bold)
-                Text(s.compManagementSubtitle, color = colors.mutedForeground, fontSize = 12.sp)
-            }
-            DMButton(
-                if (ui.showForm) s.compCancel else s.compNew,
-                style = if (ui.showForm) DMButtonStyle.OUTLINE else DMButtonStyle.PRIMARY,
-                onClick = { viewModel.toggleForm() },
-            )
+        // En-tête (titre + sous-titre).
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text("🏆 ${s.menuMyCompetitions}", color = colors.foreground, fontWeight = FontWeight.Bold)
+            Text(s.compManagementSubtitle, color = colors.mutedForeground, fontSize = 12.sp)
         }
-
-        // Cartes de statistiques.
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-            StatCard(published, s.compStatusPublished, Modifier.weight(1f))
-            StatCard(live, s.compStatusLive, Modifier.weight(1f))
-            StatCard(draft, s.compStatusDraft, Modifier.weight(1f))
-            StatCard(finished, s.compStatusFinished, Modifier.weight(1f))
-        }
+        // Bouton nouvelle compétition (pleine largeur).
+        DMButton(
+            if (ui.showForm) s.compCancel else s.compNew,
+            style = if (ui.showForm) DMButtonStyle.OUTLINE else DMButtonStyle.PRIMARY,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = { viewModel.toggleForm() },
+        )
 
         ui.message?.let { Text(it, color = colors.accent) }
 
@@ -207,16 +199,6 @@ fun ManagerCompetitionsScreen(viewModel: ManagerCompetitionsViewModel) {
         } else {
             filtered.forEach { comp -> ManagedCompetitionRow(comp) }
         }
-    }
-}
-
-/** Carte de statistique (nombre + libellé de statut). */
-@Composable
-private fun StatCard(count: Int, label: String, modifier: Modifier = Modifier) {
-    val colors = DualMusicTheme.colors
-    DMCard(modifier = modifier) {
-        Text("$count", color = colors.foreground, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-        Text(label, color = colors.mutedForeground, fontSize = 11.sp)
     }
 }
 
