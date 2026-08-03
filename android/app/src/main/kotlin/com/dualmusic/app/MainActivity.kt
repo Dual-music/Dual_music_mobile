@@ -675,8 +675,23 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                     )
                 }
                 1 -> {
+                    // Footer « Lives » : liste (grille de cartes, parité web /lives) → lecteur.
                     val feedVm: FeedViewModel = viewModel { container.makeFeedViewModel() }
-                    FeedScreen(viewModel = feedVm, makeLiveViewModel = container::makeLiveViewModel)
+                    var openLive by remember { mutableStateOf<com.dualmusic.domain.model.Live?>(null) }
+                    val live = openLive
+                    if (live == null) {
+                        com.dualmusic.feature.feed.LivesListScreen(viewModel = feedVm, onOpen = { openLive = it })
+                    } else {
+                        androidx.activity.compose.BackHandler { openLive = null }
+                        com.dualmusic.feature.live.LiveRoomScreen(
+                            viewModel = remember(live.id) { container.makeLiveViewModel(live) },
+                            hostUserId = live.artistId,
+                            quickGiftId = "",
+                            prewarmedToken = feedVm.prewarmedToken(live.id),
+                            liveTitle = live.title,
+                            artistName = live.artist?.displayName,
+                        )
+                    }
                 }
                 2 -> {
                     val duel = openDuel

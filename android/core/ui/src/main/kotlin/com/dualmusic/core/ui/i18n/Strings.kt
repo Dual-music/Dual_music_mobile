@@ -292,6 +292,14 @@ interface Strings {
     val noCandidatesHint: String
     val timerRunning: String
     val artistSingular: String
+    // Page Lives (liste de tous les lives en cours) — parité web /lives.
+    val livesSubtitle: String
+    val searchPlaceholder: String
+    val spectators: String
+    val liveInProgress: String
+    val watchLive: String
+    val noLivesActive: String
+    val noLivesHint: String
     // Messages d'erreur / succès (ViewModels).
     val errInvalidAmount: String
     val errChooseMethod: String
@@ -862,6 +870,13 @@ object FrStrings : Strings {
     override val noCandidatesHint = "Le classement s'affichera dès les premières candidatures."
     override val timerRunning = "⏱ Minuteur en cours"
     override val artistSingular = "Artiste"
+    override val livesSubtitle = "Regardez vos artistes préférés en direct"
+    override val searchPlaceholder = "Rechercher..."
+    override val spectators = "spectateurs"
+    override val liveInProgress = "Live en cours"
+    override val watchLive = "Regarder"
+    override val noLivesActive = "Aucun live en cours"
+    override val noLivesHint = "Revenez plus tard pour suivre un live."
     override val errInvalidAmount = "Montant invalide"
     override val errChooseMethod = "Choisis une méthode de retrait"
     override val errPin6 = "Le code PIN doit contenir 6 chiffres"
@@ -1417,6 +1432,13 @@ object EnStrings : Strings {
     override val noCandidatesHint = "The ranking will appear once candidacies start."
     override val timerRunning = "⏱ Timer running"
     override val artistSingular = "Artist"
+    override val livesSubtitle = "Watch your favorite artists live"
+    override val searchPlaceholder = "Search..."
+    override val spectators = "viewers"
+    override val liveInProgress = "Live in progress"
+    override val watchLive = "Watch"
+    override val noLivesActive = "No live streams active"
+    override val noLivesHint = "Come back later to catch a live."
     override val errInvalidAmount = "Invalid amount"
     override val errChooseMethod = "Choose a withdrawal method"
     override val errPin6 = "The PIN must be 6 digits"
