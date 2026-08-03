@@ -183,7 +183,7 @@ internal fun WithdrawForm(
 
 /** Champ PIN 6 chiffres (clavier numérique, masqué). */
 @Composable
-private fun PinField(value: String, onChange: (String) -> Unit) {
+internal fun PinField(value: String, onChange: (String) -> Unit) {
     OutlinedTextField(
         value = value,
         onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) onChange(it) },

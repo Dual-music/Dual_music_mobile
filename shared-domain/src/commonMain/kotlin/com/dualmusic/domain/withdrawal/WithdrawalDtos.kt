@@ -65,6 +65,10 @@ data class SetPinRequest(val newPin: String, val currentPin: String? = null)
 @Serializable
 data class NetRequest(val amount: Double)
 
+/** Corps de `POST /withdrawals/pin/reset/confirm` — réinitialisation du PIN via OTP email. */
+@Serializable
+data class ConfirmPinResetRequest(val otp: String, val newPin: String)
+
 /**
  * Corps de `POST /withdrawals` — demande de retrait.
  * Le [pin] (6 chiffres) est re-vérifié côté serveur avec verrouillage après échecs.
@@ -81,6 +85,8 @@ data class CreateWithdrawalRequest(
 object WithdrawalEndpoints {
     const val PIN = "/withdrawals/pin"
     const val PIN_VERIFY = "/withdrawals/pin/verify"
+    const val PIN_RESET_REQUEST = "/withdrawals/pin/reset/request"
+    const val PIN_RESET_CONFIRM = "/withdrawals/pin/reset/confirm"
     const val NET = "/withdrawals/net"
     const val METHODS = "/withdrawals/methods"
     const val MINE = "/withdrawals/me"

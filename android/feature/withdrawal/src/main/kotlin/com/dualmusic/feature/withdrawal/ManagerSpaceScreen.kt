@@ -276,9 +276,20 @@ private fun WithdrawTab(vm: WithdrawalViewModel) {
     ui.error?.let { Text(it, color = colors.destructive) }
     if (ui.submitted) Text(s.withdrawSubmitted, color = colors.primary)
 
-    when (ui.hasPin) {
-        false -> CreatePinCard(onCreate = vm::createPin)
-        true -> {
+    when {
+        ui.hasPin == null -> Unit // chargement
+        // Zone verrouillée : saisie/création du PIN (+ réinitialisation par OTP email).
+        !ui.unlocked -> PinLockCard(
+            hasPin = ui.hasPin == true,
+            resetSent = ui.resetSent,
+            onVerify = vm::verifyPin,
+            onCreate = vm::createPin,
+            onRequestReset = vm::requestPinReset,
+            onConfirmReset = vm::confirmPinReset,
+        )
+        // Zone déverrouillée (cache de session).
+        else -> {
+            UnlockedControls(onChangePin = vm::changePin, onLock = vm::lock)
             PayoutMethodsSection(
                 methods = ui.methods,
                 onAdd = vm::addMethod,
@@ -297,7 +308,6 @@ private fun WithdrawTab(vm: WithdrawalViewModel) {
                 onSubmit = vm::submit,
             )
         }
-        null -> Unit
     }
 }
 

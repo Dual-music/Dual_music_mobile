@@ -22,6 +22,10 @@ import kotlinx.coroutines.launch
  */
 data class WithdrawalUiState(
     val hasPin: Boolean? = null,
+    /** Zone déverrouillée pour cette session (cache process). */
+    val unlocked: Boolean = PinSession.unlocked,
+    /** Un code de réinitialisation vient d'être envoyé par email. */
+    val resetSent: Boolean = false,
     val methods: List<PayoutMethodData> = emptyList(),
     val selectedMethodId: String? = null,
     val amount: String = "",
@@ -32,6 +36,14 @@ data class WithdrawalUiState(
     val submitted: Boolean = false,
     val error: String? = null,
 )
+
+/**
+ * Cache de session du déverrouillage PIN (équivalent du `sessionStorage` web). Persiste au
+ * niveau du process : rester déverrouillé en re-navigant, re-verrouiller au redémarrage de l'app.
+ */
+object PinSession {
+    var unlocked: Boolean = false
+}
 
 /**
  * ViewModel du retrait.
@@ -121,11 +133,62 @@ class WithdrawalViewModel(private val repository: WithdrawalRepository) : ViewMo
         }
     }
 
-    /** Crée le PIN (première configuration). */
+    /** Crée le PIN (première configuration) → déverrouille la zone. */
     fun createPin(pin: String) {
         viewModelScope.launch {
             runCatching { repository.setPin(pin) }
-                .onSuccess { _uiState.update { it.copy(hasPin = true) } }
+                .onSuccess {
+                    PinSession.unlocked = true
+                    _uiState.update { it.copy(hasPin = true, unlocked = true, error = null) }
+                }
+                .onFailure { t -> _uiState.update { it.copy(error = friendly(t)) } }
+        }
+    }
+
+    /** Vérifie le PIN pour déverrouiller la zone (cache de session). */
+    fun verifyPin(pin: String) {
+        viewModelScope.launch {
+            runCatching { repository.verifyPin(pin) }
+                .onSuccess {
+                    PinSession.unlocked = true
+                    _uiState.update { it.copy(unlocked = true, error = null) }
+                }
+                .onFailure { t -> _uiState.update { it.copy(error = friendly(t)) } }
+        }
+    }
+
+    /** Verrouille la zone (invalide le cache de session). */
+    fun lock() {
+        PinSession.unlocked = false
+        _uiState.update { it.copy(unlocked = false) }
+    }
+
+    /** Change le PIN (ancien PIN requis). */
+    fun changePin(newPin: String, currentPin: String) {
+        viewModelScope.launch {
+            runCatching { repository.setPin(newPin, currentPin) }
+                .onSuccess { _uiState.update { it.copy(error = null) } }
+                .onFailure { t -> _uiState.update { it.copy(error = friendly(t)) } }
+        }
+    }
+
+    /** Demande un code de réinitialisation par email. */
+    fun requestPinReset() {
+        viewModelScope.launch {
+            runCatching { repository.requestPinReset() }
+                .onSuccess { _uiState.update { it.copy(resetSent = true, error = null) } }
+                .onFailure { t -> _uiState.update { it.copy(error = friendly(t)) } }
+        }
+    }
+
+    /** Réinitialise le PIN avec l'OTP → déverrouille la zone. */
+    fun confirmPinReset(otp: String, newPin: String) {
+        viewModelScope.launch {
+            runCatching { repository.confirmPinReset(otp, newPin) }
+                .onSuccess {
+                    PinSession.unlocked = true
+                    _uiState.update { it.copy(hasPin = true, unlocked = true, resetSent = false, error = null) }
+                }
                 .onFailure { t -> _uiState.update { it.copy(error = friendly(t)) } }
         }
     }

@@ -552,6 +552,22 @@ interface Strings {
     val payoutDefault: String
     val payoutSave: String
     val payoutEmpty: String
+    // Verrouillage / réinitialisation du PIN retrait (parité web WithdrawalPinGate).
+    val pinEnterTitle: String
+    val pinEnterDesc: String
+    val pinUnlock: String
+    val pinForgot: String
+    val pinResetSent: String
+    val pinResetOtp: String
+    val pinResetNewPin: String
+    val pinResetConfirmBtn: String
+    val pinResetRequestBtn: String
+    val pinUnlocked: String
+    val pinChange: String
+    val pinLock: String
+    val pinCurrent: String
+    val pinNew: String
+    val pinChangeBtn: String
     val goOnStage: String
     val topDonors: String
     val shareLiveText: String
@@ -1094,6 +1110,21 @@ object FrStrings : Strings {
     override val payoutDefault = "Par défaut"
     override val payoutSave = "Enregistrer"
     override val payoutEmpty = "Aucune méthode enregistrée."
+    override val pinEnterTitle = "Déverrouiller la zone retrait"
+    override val pinEnterDesc = "Saisis ton PIN à 6 chiffres pour accéder à cette zone."
+    override val pinUnlock = "Déverrouiller"
+    override val pinForgot = "PIN oublié ?"
+    override val pinResetSent = "Un code t'a été envoyé par email."
+    override val pinResetOtp = "Code reçu par email"
+    override val pinResetNewPin = "Nouveau PIN (6 chiffres)"
+    override val pinResetConfirmBtn = "Réinitialiser le PIN"
+    override val pinResetRequestBtn = "Renvoyer un code"
+    override val pinUnlocked = "Zone déverrouillée"
+    override val pinChange = "Changer le PIN"
+    override val pinLock = "Verrouiller"
+    override val pinCurrent = "PIN actuel"
+    override val pinNew = "Nouveau PIN"
+    override val pinChangeBtn = "Changer"
     override val goOnStage = "Monter sur scène"
     override val topDonors = "Top donateurs"
     override val shareLiveText = "🔴 Je suis en live sur Dual Music ! Rejoins-moi."
@@ -1634,6 +1665,21 @@ object EnStrings : Strings {
     override val payoutDefault = "Default"
     override val payoutSave = "Save"
     override val payoutEmpty = "No method saved yet."
+    override val pinEnterTitle = "Unlock the withdrawal area"
+    override val pinEnterDesc = "Enter your 6-digit PIN to access this area."
+    override val pinUnlock = "Unlock"
+    override val pinForgot = "Forgot PIN?"
+    override val pinResetSent = "A code was sent to your email."
+    override val pinResetOtp = "Code received by email"
+    override val pinResetNewPin = "New PIN (6 digits)"
+    override val pinResetConfirmBtn = "Reset PIN"
+    override val pinResetRequestBtn = "Resend a code"
+    override val pinUnlocked = "Area unlocked"
+    override val pinChange = "Change PIN"
+    override val pinLock = "Lock"
+    override val pinCurrent = "Current PIN"
+    override val pinNew = "New PIN"
+    override val pinChangeBtn = "Change"
     override val goOnStage = "Go on stage"
     override val topDonors = "Top donors"
     override val shareLiveText = "🔴 I'm live on Dual Music! Join me."

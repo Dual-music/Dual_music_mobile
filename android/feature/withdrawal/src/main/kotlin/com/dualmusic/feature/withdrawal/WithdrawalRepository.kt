@@ -34,6 +34,25 @@ class WithdrawalRepository(private val api: ApiClient) {
         api.request<Unit>(Endpoint.post(WithdrawalEndpoints.PIN, body))
     }
 
+    /** Vérifie le PIN (déverrouillage). Lève `PIN_WRONG`/`PIN_LOCKED` si invalide/bloqué. */
+    suspend fun verifyPin(pin: String) {
+        api.request<Unit>(Endpoint.post(WithdrawalEndpoints.PIN_VERIFY, """{"pin":"$pin"}"""))
+    }
+
+    /** Demande un code de réinitialisation du PIN par email (OTP). */
+    suspend fun requestPinReset() {
+        api.request<Unit>(Endpoint.post(WithdrawalEndpoints.PIN_RESET_REQUEST, "{}"))
+    }
+
+    /** Réinitialise le PIN avec l'OTP reçu par email. */
+    suspend fun confirmPinReset(otp: String, newPin: String) {
+        val body = json.encodeToString(
+            com.dualmusic.domain.withdrawal.ConfirmPinResetRequest.serializer(),
+            com.dualmusic.domain.withdrawal.ConfirmPinResetRequest(otp, newPin),
+        )
+        api.request<Unit>(Endpoint.post(WithdrawalEndpoints.PIN_RESET_CONFIRM, body))
+    }
+
     /** Méthodes de retrait enregistrées (défaut en premier). */
     suspend fun methods(): List<PayoutMethodData> =
         api.request(Endpoint.get(WithdrawalEndpoints.METHODS), ListSerializer(PayoutMethodData.serializer()))
