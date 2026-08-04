@@ -72,6 +72,36 @@ class ConcertRepository(private val api: ApiClient) {
             ListSerializer(Concert.serializer()),
         )
 
+    /** Concerts admin (`GET /concerts`) — fusionnés avec le catalogue artiste (comme le web). */
+    suspend fun adminConcerts(limit: Int = 100): List<Concert> =
+        runCatching {
+            api.request(
+                Endpoint.get("/concerts", query = mapOf("limit" to limit.toString())),
+                ListSerializer(Concert.serializer()),
+            )
+        }.getOrDefault(emptyList())
+
+    /** Replays publics de concerts (`GET /replays?sourceType=concert&isPublic=true`). */
+    suspend fun concertReplays(): List<com.dualmusic.domain.replay.ReplayVideo> =
+        runCatching {
+            api.request(
+                Endpoint.get(
+                    com.dualmusic.domain.replay.ReplayEndpoints.LIST,
+                    query = mapOf("sourceType" to "concert", "isPublic" to "true", "limit" to "100"),
+                ),
+                ListSerializer(com.dualmusic.domain.replay.ReplayVideo.serializer()),
+            )
+        }.getOrDefault(emptyList())
+
+    /** Taux €/crédit dérivé du solde (aperçu fiat « ≈ »). */
+    suspend fun perCreditEur(): Double = runCatching {
+        val b = api.request(
+            Endpoint.get(com.dualmusic.domain.wallet.WalletEndpoints.BALANCE),
+            com.dualmusic.domain.wallet.WalletBalance.serializer(),
+        )
+        if (b.balance > 0) b.eurValue / b.balance else 0.0
+    }.getOrDefault(0.0)
+
     /** Détail d'un concert. */
     suspend fun concert(id: String): Concert =
         api.request(Endpoint.get(ConcertEndpoints.artistDetail(id)), Concert.serializer())

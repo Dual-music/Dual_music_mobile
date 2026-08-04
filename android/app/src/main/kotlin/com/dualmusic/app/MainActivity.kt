@@ -372,7 +372,7 @@ class AppContainer(context: Context) {
         com.dualmusic.feature.duel.ManagerDuelsViewModel(duelRepository)
 
     /** Nouveau ViewModel du catalogue de concerts. */
-    fun makeConcertsViewModel(): ConcertsViewModel = ConcertsViewModel(concertRepository)
+    fun makeConcertsViewModel(): ConcertsViewModel = ConcertsViewModel(concertRepository, realtimeClient)
 
     /** Nouveau ViewModel du catalogue de compétitions. */
     fun makeCompetitionsViewModel(): CompetitionsViewModel = CompetitionsViewModel(competitionRepository)
@@ -557,6 +557,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
     var openDuelReplay by remember { mutableStateOf<ReplayVideo?>(null) }
     var openCompetition by remember { mutableStateOf<Competition?>(null) }
     var openConcert by remember { mutableStateOf<com.dualmusic.domain.model.Concert?>(null) }
+    var openConcertReplay by remember { mutableStateOf<ReplayVideo?>(null) }
     // Diffusion live (hôte) en plein écran, au-dessus du Scaffold → SANS la barre du bas.
     var broadcastLive by remember { mutableStateOf<Live?>(null) }
 
@@ -715,18 +716,33 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                 }
                 3 -> {
                     val concert = openConcert
-                    if (concert == null) {
-                        val concertsVm: ConcertsViewModel = viewModel { container.makeConcertsViewModel() }
-                        ConcertsListScreen(viewModel = concertsVm, onOpen = { openConcert = it })
-                    } else {
-                        // Clé = id du concert → un ViewModel (et une room SFU) par concert ouvert.
-                        val roomVm: com.dualmusic.feature.concert.ConcertRoomViewModel =
-                            viewModel(key = concert.id) { container.makeConcertRoomViewModel(concert) }
-                        com.dualmusic.feature.concert.ConcertRoomScreen(
-                            viewModel = roomVm,
-                            concertTitle = concert.title,
-                            onLeave = { openConcert = null },
-                        )
+                    val concertReplay = openConcertReplay
+                    when {
+                        // Lecteur de replay de concert (parité web /replay/:id).
+                        concertReplay != null -> {
+                            androidx.activity.compose.BackHandler { openConcertReplay = null }
+                            val playerVm: ReplayPlayerViewModel =
+                                viewModel(key = concertReplay.id) { container.makeReplayPlayerViewModel(concertReplay) }
+                            ReplayPlayerScreen(viewModel = playerVm)
+                        }
+                        concert == null -> {
+                            val concertsVm: ConcertsViewModel = viewModel { container.makeConcertsViewModel() }
+                            ConcertsListScreen(
+                                viewModel = concertsVm,
+                                onOpen = { openConcert = it },
+                                onOpenReplay = { openConcertReplay = it },
+                            )
+                        }
+                        else -> {
+                            // Clé = id du concert → un ViewModel (et une room SFU) par concert ouvert.
+                            val roomVm: com.dualmusic.feature.concert.ConcertRoomViewModel =
+                                viewModel(key = concert.id) { container.makeConcertRoomViewModel(concert) }
+                            com.dualmusic.feature.concert.ConcertRoomScreen(
+                                viewModel = roomVm,
+                                concertTitle = concert.title,
+                                onLeave = { openConcert = null },
+                            )
+                        }
                     }
                 }
                 4 -> {

@@ -300,6 +300,15 @@ interface Strings {
     val watchLive: String
     val noLivesActive: String
     val noLivesHint: String
+    // Page Concerts (3 onglets) — parité web /concerts.
+    val concertsSubtitle: String
+    val onlineLoc: String
+    val watchLiveConcert: String
+    val buyTicket: String
+    val replayAvailable: String
+    val noConcertsLive: String
+    val noConcertsUpcoming: String
+    val noConcertReplays: String
     // Page Duels Musicaux (3 onglets) — parité web /duels.
     val duelsPageTitle: String
     val duelsSubtitle: String
@@ -895,6 +904,14 @@ object FrStrings : Strings {
     override val watchLive = "Regarder"
     override val noLivesActive = "Aucun live en cours"
     override val noLivesHint = "Revenez plus tard pour suivre un live."
+    override val concertsSubtitle = "Concerts virtuels planifiés avec billetterie"
+    override val onlineLoc = "En ligne"
+    override val watchLiveConcert = "Regarder le direct"
+    override val buyTicket = "Acheter un Ticket"
+    override val replayAvailable = "Replay disponible"
+    override val noConcertsLive = "Aucun concert en direct"
+    override val noConcertsUpcoming = "Aucun concert à venir"
+    override val noConcertReplays = "Aucun replay disponible"
     override val duelsPageTitle = "Duels Musicaux"
     override val duelsSubtitle = "Affrontements en direct et à venir"
     override val duelTabLive = "En direct"
@@ -1474,6 +1491,14 @@ object EnStrings : Strings {
     override val watchLive = "Watch"
     override val noLivesActive = "No live streams active"
     override val noLivesHint = "Come back later to catch a live."
+    override val concertsSubtitle = "Scheduled virtual concerts with ticketing"
+    override val onlineLoc = "Online"
+    override val watchLiveConcert = "Watch Live"
+    override val buyTicket = "Buy Ticket"
+    override val replayAvailable = "Replay available"
+    override val noConcertsLive = "No live concerts"
+    override val noConcertsUpcoming = "No upcoming concerts"
+    override val noConcertReplays = "No replays available"
     override val duelsPageTitle = "Musical Duels"
     override val duelsSubtitle = "Live and upcoming battles"
     override val duelTabLive = "Live"

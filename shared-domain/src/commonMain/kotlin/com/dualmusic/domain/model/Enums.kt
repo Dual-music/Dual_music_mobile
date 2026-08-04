@@ -20,6 +20,8 @@ enum class UserRole {
 @Serializable
 enum class EventStatus {
     @SerialName("upcoming") UPCOMING,
+    /** Concert admin planifié (équivalent d'`upcoming` pour la billetterie). */
+    @SerialName("scheduled") SCHEDULED,
     @SerialName("live") LIVE,
     @SerialName("ended") ENDED,
     @SerialName("cancelled") CANCELLED,
@@ -65,11 +67,23 @@ enum class RechargeProvider {
     @SerialName("stripe") STRIPE,
 }
 
-/** Statut d'une demande de retrait. */
+/**
+ * Statut d'une demande de retrait.
+ *
+ * Cycle de vie : [PENDING] → [APPROVED] → [PROCESSING] → [COMPLETED] | [FAILED],
+ * ou [REJECTED] si un administrateur refuse la demande (crédits recrédités).
+ *
+ * - [PROCESSING] : l'ordre de transfert est parti chez l'opérateur Mobile Money.
+ *   Les crédits sont déjà débités mais l'argent n'est pas encore versé — cet état
+ *   empêche qu'un même retrait soit soumis deux fois.
+ * - [FAILED] : le transfert a définitivement échoué ; les crédits ont été rendus.
+ */
 @Serializable
 enum class WithdrawalStatus {
     @SerialName("pending") PENDING,
     @SerialName("approved") APPROVED,
+    @SerialName("processing") PROCESSING,
     @SerialName("completed") COMPLETED,
     @SerialName("rejected") REJECTED,
+    @SerialName("failed") FAILED,
 }

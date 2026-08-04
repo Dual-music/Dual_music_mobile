@@ -1,70 +1,104 @@
 package com.dualmusic.feature.concert
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import androidx.compose.material3.HorizontalDivider
+import com.dualmusic.core.realtime.NamespaceSession
+import com.dualmusic.core.realtime.RealtimeClient
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DateRange
 import com.dualmusic.core.ui.components.DMEmptyState
-import com.dualmusic.core.ui.components.DMLoadingBox
+import com.dualmusic.core.ui.components.DMRemoteImage
+import com.dualmusic.core.ui.components.formatCredits
+import com.dualmusic.core.ui.currency.LocalCurrency
+import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.model.Concert
 import com.dualmusic.domain.model.EventStatus
+import com.dualmusic.domain.realtime.PresencePayload
+import com.dualmusic.domain.realtime.Realtime
+import com.dualmusic.domain.replay.ReplayVideo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel du catalogue de concerts.
- *
- * @param repository lectures REST des concerts d'artistes.
+ * ViewModel de la page « Concerts » (3 onglets) — parité web :
+ *  - En direct / À venir : fusion `GET /concerts` (admin) + `GET /artist-concerts`, filtrée par statut.
+ *  - Replays : `GET /replays?sourceType=concert&isPublic=true`.
+ *  - Spectateurs temps réel par carte : présence Socket.IO `/live` (rooms `concert:<id>`).
+ *  - File d'approbation admin conservée (en haut, si admin).
  */
-class ConcertsViewModel(private val repository: ConcertRepository) : ViewModel() {
+class ConcertsViewModel(
+    private val repository: ConcertRepository,
+    private val realtime: RealtimeClient,
+) : ViewModel() {
 
-    private val _concerts = MutableStateFlow<List<Concert>>(emptyList())
-    val concerts: StateFlow<List<Concert>> = _concerts.asStateFlow()
+    data class UiState(
+        val live: List<Concert> = emptyList(),
+        val upcoming: List<Concert> = emptyList(),
+        val replays: List<ReplayVideo> = emptyList(),
+        val presence: Map<String, Int> = emptyMap(),
+        val perCreditEur: Double = 0.0,
+        val loading: Boolean = false,
+        val pending: List<Concert> = emptyList(),
+        val isAdmin: Boolean = false,
+    )
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    private val _ui = MutableStateFlow(UiState())
+    val ui: StateFlow<UiState> = _ui.asStateFlow()
+    private var liveSession: NamespaceSession? = null
 
-    /** File d'approbation (admin) : concerts en attente de validation. */
-    private val _pending = MutableStateFlow<List<Concert>>(emptyList())
-    val pending: StateFlow<List<Concert>> = _pending.asStateFlow()
-    private val _isAdmin = MutableStateFlow(false)
-    val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
-
-    /** Charge le catalogue (+ la file d'approbation si le caller est admin). */
     fun load() {
-        if (_isLoading.value) return
+        if (_ui.value.loading) return
         viewModelScope.launch {
-            _isLoading.value = true
-            _concerts.value = runCatching { repository.concerts() }.getOrDefault(emptyList())
-            _isLoading.value = false
+            _ui.update { it.copy(loading = true) }
+            val admin = runCatching { repository.adminConcerts() }.getOrDefault(emptyList())
+            val artist = runCatching { repository.concerts(limit = 100) }.getOrDefault(emptyList())
+            val all = (admin + artist).distinctBy { it.id }
+            val live = all.filter { it.status == EventStatus.LIVE }
+            val upcoming = all.filter { it.status == EventStatus.UPCOMING || it.status == EventStatus.SCHEDULED }
+            val replays = runCatching { repository.concertReplays() }.getOrDefault(emptyList())
+            val rate = runCatching { repository.perCreditEur() }.getOrDefault(0.0)
+            _ui.update { it.copy(live = live, upcoming = upcoming, replays = replays, perCreditEur = rate, loading = false) }
+            connectPresence(live)
+            // File d'approbation (admin).
             if (runCatching { repository.amIAdmin() }.getOrDefault(false)) {
-                _isAdmin.value = true
+                _ui.update { it.copy(isAdmin = true) }
                 loadPending()
             }
         }
@@ -72,84 +106,211 @@ class ConcertsViewModel(private val repository: ConcertRepository) : ViewModel()
 
     private fun loadPending() {
         viewModelScope.launch {
-            _pending.value = runCatching { repository.pendingConcerts() }.getOrDefault(emptyList())
+            _ui.update { it.copy(pending = runCatching { repository.pendingConcerts() }.getOrDefault(emptyList())) }
         }
     }
 
-    /** Approuve/rejette un concert (admin) puis recharge la file + le catalogue. */
+    /** Approuve/rejette un concert (admin) puis recharge. */
     fun review(id: String, approve: Boolean) {
         viewModelScope.launch {
             runCatching { repository.reviewConcert(id, approve) }.onSuccess {
                 loadPending()
-                _concerts.value = runCatching { repository.concerts() }.getOrDefault(_concerts.value)
+                load()
             }
         }
+    }
+
+    private fun connectPresence(concerts: List<Concert>) {
+        if (concerts.isEmpty()) return
+        val session = realtime.session(Realtime.Namespace.LIVE).also { liveSession = it }
+        viewModelScope.launch {
+            session.onConnect { concerts.forEach { session.join(Realtime.RoomType.CONCERT, it.id) } }
+            session.on(Realtime.RealtimeEvent.PRESENCE, PresencePayload.serializer()) { p ->
+                val id = p.room?.substringAfter("concert:", "")?.takeIf { it.isNotBlank() }
+                if (id != null) _ui.update { it.copy(presence = it.presence + (id to p.count)) }
+            }
+            session.connect()
+        }
+    }
+
+    override fun onCleared() {
+        liveSession?.disconnect()
+        super.onCleared()
     }
 }
 
 /**
- * Catalogue des concerts d'artistes.
+ * Page « Concerts » : titre + recherche + 3 onglets (En direct / À venir / Replays).
  *
- * @param viewModel source du catalogue.
- * @param onOpen callback à l'ouverture d'un concert (détail/billetterie).
+ * @param onOpen ouvre la room d'un concert (live) ou son détail/billetterie (à venir).
+ * @param onOpenReplay ouvre le lecteur d'un replay de concert.
  */
 @Composable
 fun ConcertsListScreen(
     viewModel: ConcertsViewModel,
     onOpen: (Concert) -> Unit = {},
+    onOpenReplay: (ReplayVideo) -> Unit = {},
 ) {
-    val concerts by viewModel.concerts.collectAsStateWithLifecycle()
-    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    val pending by viewModel.pending.collectAsStateWithLifecycle()
-    val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
+    val ui by viewModel.ui.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
+    val s = LocalStrings.current
 
     LaunchedEffect(Unit) { viewModel.load() }
+
+    var tab by remember { mutableStateOf(0) }
+    var search by remember { mutableStateOf("") }
+    val q = search.trim().lowercase()
+
+    fun matchConcert(c: Concert) = q.isEmpty() ||
+        c.title.lowercase().contains(q) ||
+        (c.artist?.displayName?.lowercase()?.contains(q) == true) ||
+        (c.artistName?.lowercase()?.contains(q) == true)
+    fun matchReplay(r: ReplayVideo) = q.isEmpty() || (r.title?.lowercase()?.contains(q) == true)
+
+    val live = ui.live.filter(::matchConcert)
+    val upcoming = ui.upcoming.filter(::matchConcert)
+    val replays = ui.replays.filter(::matchReplay)
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(DualMusicTheme.gradients.hero)
-            .padding(DualMusicTheme.spacing.lg),
+            .verticalScroll(rememberScrollState())
+            .padding(DualMusicTheme.spacing.md),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        Text(com.dualmusic.core.ui.i18n.LocalStrings.current.screenConcerts, color = colors.foreground, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Text(s.screenConcerts, color = colors.primary, fontWeight = FontWeight.Bold, fontSize = 28.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Text(s.concertsSubtitle, color = colors.mutedForeground, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
 
-        if (isLoading) DMLoadingBox(Modifier.fillMaxWidth().weight(1f))
-        if (!isLoading && concerts.isEmpty()) {
-            DMEmptyState(
-                title = "Aucun concert programmé",
-                subtitle = "Les concerts à venir apparaîtront ici.",
-                icon = Icons.Filled.DateRange,
-                modifier = Modifier.weight(1f),
-            )
+        OutlinedTextField(
+            value = search,
+            onValueChange = { search = it },
+            label = { Text(s.searchPlaceholder) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        // File d'approbation (admin).
+        if (ui.isAdmin && ui.pending.isNotEmpty()) {
+            Text("⏳ ${s.pendingApproval}", color = colors.accent, fontWeight = FontWeight.Bold)
+            ui.pending.forEach { c -> PendingConcertRow(c, onApprove = { viewModel.review(c.id, true) }, onReject = { viewModel.review(c.id, false) }) }
         }
 
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-            // Admin : file d'approbation des concerts programmés (approuver/rejeter).
-            if (isAdmin && pending.isNotEmpty()) {
-                item {
-                    Text("⏳ ${com.dualmusic.core.ui.i18n.LocalStrings.current.pendingApproval}", color = colors.accent, fontWeight = FontWeight.Bold)
-                }
-                items(pending) { concert ->
-                    PendingConcertRow(
-                        concert = concert,
-                        onApprove = { viewModel.review(concert.id, true) },
-                        onReject = { viewModel.review(concert.id, false) },
-                    )
-                }
-                item { HorizontalDivider(color = colors.mutedForeground.copy(alpha = 0.3f)) }
-            }
-            items(concerts) { concert -> ConcertRow(concert) { onOpen(concert) } }
+        // Onglets.
+        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
+            TabPill("${s.duelTabLive} (${ui.live.size})", tab == 0) { tab = 0 }
+            TabPill("${s.duelTabUpcoming} (${ui.upcoming.size})", tab == 1) { tab = 1 }
+            TabPill("${s.duelTabReplays} (${ui.replays.size})", tab == 2) { tab = 2 }
+        }
+
+        when (tab) {
+            0 -> if (live.isEmpty()) EmptyConcerts(s.noConcertsLive) else live.forEach { ConcertCard(it, ui.presence[it.id], ui.perCreditEur, isLive = true, onOpen = onOpen) }
+            1 -> if (upcoming.isEmpty()) EmptyConcerts(s.noConcertsUpcoming) else upcoming.forEach { ConcertCard(it, null, ui.perCreditEur, isLive = false, onOpen = onOpen) }
+            else -> if (replays.isEmpty()) EmptyConcerts(s.noConcertReplays) else replays.forEach { ConcertReplayCard(it, onOpenReplay) }
         }
     }
 }
 
-/** Carte d'un concert en attente d'approbation (admin) : titre, artiste, date + Valider/Rejeter. */
+@Composable
+private fun EmptyConcerts(title: String) {
+    DMEmptyState(title = title, icon = Icons.Filled.DateRange, modifier = Modifier.fillMaxWidth().padding(top = DualMusicTheme.spacing.lg))
+}
+
+@Composable
+private fun TabPill(label: String, selected: Boolean, onClick: () -> Unit) {
+    val colors = DualMusicTheme.colors
+    Box(
+        modifier = Modifier
+            .background(if (selected) colors.primary else Color.Black.copy(alpha = 0.3f), RoundedCornerShape(999.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+    ) { Text(label, color = if (selected) Color.White else colors.mutedForeground, fontSize = 13.sp) }
+}
+
+/** Carte d'un concert (En direct / À venir) : couverture + badge + infos + bouton. */
+@Composable
+private fun ConcertCard(concert: Concert, viewers: Int?, perCreditEur: Double, isLive: Boolean, onOpen: (Concert) -> Unit) {
+    val colors = DualMusicTheme.colors
+    val s = LocalStrings.current
+    val currency = LocalCurrency.current
+    val artistName = concert.artist?.displayName ?: concert.artistName ?: s.artistSingular
+    val location = concert.location?.takeIf { it.isNotBlank() } ?: s.onlineLoc
+
+    DMCard(modifier = Modifier.fillMaxWidth().clickable { onOpen(concert) }, padded = false) {
+        // Couverture.
+        Box(modifier = Modifier.fillMaxWidth().height(180.dp).background(DualMusicTheme.gradients.hero), contentAlignment = Alignment.Center) {
+            DMRemoteImage(url = concert.cover, contentDescription = null, modifier = Modifier.fillMaxWidth().height(180.dp), fallbackEmoji = "🎵")
+            if (isLive) {
+                Text("▶", color = Color.White, fontSize = 40.sp)
+                Box(modifier = Modifier.align(Alignment.TopStart).padding(DualMusicTheme.spacing.sm).background(Color(0xFFEF4444), RoundedCornerShape(999.dp)).padding(horizontal = 10.dp, vertical = 4.dp)) {
+                    Text("🔴 ${s.liveBadge}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                }
+            }
+        }
+        Column(modifier = Modifier.fillMaxWidth().padding(DualMusicTheme.spacing.md), verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+            // Badge prix (à venir) : crédits + équivalent fiat, ou Gratuit.
+            if (!isLive) {
+                if (concert.ticketPrice > 0) {
+                    Box(modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(999.dp)).padding(horizontal = 10.dp, vertical = 4.dp)) {
+                        Text("🪙 ${formatCredits(concert.ticketPrice)} ≈ ${currency.format(concert.ticketPrice * perCreditEur)}", color = colors.foreground, fontSize = 11.sp)
+                    }
+                } else {
+                    Box(modifier = Modifier.background(Color(0x3310B981), RoundedCornerShape(999.dp)).padding(horizontal = 10.dp, vertical = 4.dp)) {
+                        Text("🎁 ${s.duelFree}", color = Color(0xFF10B981), fontSize = 11.sp)
+                    }
+                }
+            }
+            Text(artistName, color = colors.foreground, fontWeight = FontWeight.Bold)
+            Text(concert.title, color = colors.mutedForeground, fontSize = 13.sp)
+            concert.scheduledDate?.let {
+                Text("📅 ${com.dualmusic.core.ui.datetime.formatTz(it, "dd MMMM yyyy '•' HH:mm")}", color = colors.mutedForeground, fontSize = 12.sp)
+            }
+            Text("📍 $location", color = colors.mutedForeground, fontSize = 12.sp)
+            if (isLive && viewers != null) {
+                Text("👥 $viewers ${s.spectators}", color = colors.mutedForeground, fontSize = 12.sp)
+            }
+            DMButton(
+                if (isLive) s.watchLiveConcert else s.buyTicket,
+                style = if (isLive) DMButtonStyle.DESTRUCTIVE else DMButtonStyle.PRIMARY,
+                modifier = Modifier.fillMaxWidth(),
+            ) { onOpen(concert) }
+        }
+    }
+}
+
+/** Carte d'un replay de concert : couverture + badges Gratuit/Replay disponible + Regarder. */
+@Composable
+private fun ConcertReplayCard(replay: ReplayVideo, onOpen: (ReplayVideo) -> Unit) {
+    val colors = DualMusicTheme.colors
+    val s = LocalStrings.current
+    DMCard(modifier = Modifier.fillMaxWidth().clickable { onOpen(replay) }, padded = false) {
+        Box(modifier = Modifier.fillMaxWidth().height(180.dp).background(DualMusicTheme.gradients.hero), contentAlignment = Alignment.Center) {
+            DMRemoteImage(url = replay.thumbnailUrl, contentDescription = null, modifier = Modifier.fillMaxWidth().height(180.dp), fallbackEmoji = "🎬")
+            Text("▶", color = Color.White, fontSize = 40.sp)
+            if (!replay.requiresUnlock) {
+                Box(modifier = Modifier.align(Alignment.TopStart).padding(DualMusicTheme.spacing.sm).background(Color(0xCC10B981), RoundedCornerShape(999.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    Text("🎁 ${s.duelFree}", color = Color.White, fontSize = 11.sp)
+                }
+            }
+            if (replay.videoUrl != null) {
+                Box(modifier = Modifier.align(Alignment.TopEnd).padding(DualMusicTheme.spacing.sm).background(Color(0xCC10B981), RoundedCornerShape(999.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    Text("▶ ${s.replayAvailable}", color = Color.White, fontSize = 11.sp)
+                }
+            }
+        }
+        Column(modifier = Modifier.fillMaxWidth().padding(DualMusicTheme.spacing.md), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(replay.title ?: s.screenConcerts, color = colors.foreground, fontWeight = FontWeight.Bold)
+            replay.recordedDate?.let { Text("📅 ${com.dualmusic.core.ui.datetime.formatTz(it, "dd MMMM yyyy")}", color = colors.mutedForeground, fontSize = 12.sp) }
+            DMButton(s.watchLive, modifier = Modifier.fillMaxWidth()) { onOpen(replay) }
+        }
+    }
+}
+
+/** Carte d'un concert en attente d'approbation (admin) : titre, date + Valider/Rejeter. */
 @Composable
 private fun PendingConcertRow(concert: Concert, onApprove: () -> Unit, onReject: () -> Unit) {
     val colors = DualMusicTheme.colors
-    val s = com.dualmusic.core.ui.i18n.LocalStrings.current
+    val s = LocalStrings.current
     DMCard(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
             Text(concert.title, color = colors.foreground, fontWeight = FontWeight.Bold)
@@ -160,45 +321,4 @@ private fun PendingConcertRow(concert: Concert, onApprove: () -> Unit, onReject:
             }
         }
     }
-}
-
-/** Carte d'un concert : titre, date, statut et prix du billet. */
-@Composable
-private fun ConcertRow(concert: Concert, onClick: () -> Unit) {
-    val colors = DualMusicTheme.colors
-    DMCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
-                Text(concert.title, color = colors.foreground, fontWeight = FontWeight.Bold)
-                concert.scheduledDate?.let { Text(com.dualmusic.core.ui.datetime.formatTz(it), color = colors.mutedForeground) }
-                if (concert.allowsDedications) {
-                    Text("💌 Dédicaces ouvertes", color = colors.accent)
-                }
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    if (concert.status == EventStatus.LIVE) "🔴 EN DIRECT" else statusLabel(concert.status),
-                    color = if (concert.status == EventStatus.LIVE) colors.accent else colors.mutedForeground,
-                    fontWeight = FontWeight.Bold,
-                )
-                if (concert.ticketPrice > 0) {
-                    Text("${concert.ticketPrice.toInt()} crédits", color = colors.foreground)
-                } else {
-                    Text("Gratuit", color = colors.mutedForeground)
-                }
-            }
-        }
-    }
-}
-
-/** Libellé lisible du statut d'un concert. */
-private fun statusLabel(status: EventStatus): String = when (status) {
-    EventStatus.UPCOMING -> "À venir"
-    EventStatus.ENDED -> "Terminé"
-    EventStatus.CANCELLED -> "Annulé"
-    else -> status.name.lowercase().replaceFirstChar { it.uppercase() }
 }

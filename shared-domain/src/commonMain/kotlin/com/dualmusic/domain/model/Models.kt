@@ -88,18 +88,35 @@ data class DuelVoteTotal(
     val total: Double,
 )
 
-/** Concert d'artiste (billetterie + dédicaces). */
+/**
+ * Concert (billetterie + dédicaces). Modèle unifié pour les deux catalogues du backend —
+ * `/artist-concerts` (concerts d'artistes : `cover_image_url`, `artist` hydraté) ET
+ * `/concerts` (concerts admin : `image_url`, `artist_name`, `location`, `scheduled_time`,
+ * statut `scheduled`). Tous les champs additionnels sont optionnels → un seul DTO désérialise
+ * les deux.
+ */
 @Serializable
 data class Concert(
     val id: String,
-    @SerialName("artist_id") val artistId: String,
+    @SerialName("artist_id") val artistId: String = "",
     val title: String,
+    val description: String? = null,
     val status: EventStatus = EventStatus.UPCOMING,
     @SerialName("scheduled_date") val scheduledDate: String? = null,
+    @SerialName("scheduled_time") val scheduledTime: String? = null,
     @SerialName("ticket_price") val ticketPrice: Double = 0.0,
     @SerialName("allows_dedications") val allowsDedications: Boolean = false,
     @SerialName("cover_image_url") val coverImageUrl: String? = null,
-)
+    @SerialName("image_url") val imageUrl: String? = null,
+    val location: String? = null,
+    @SerialName("artist_name") val artistName: String? = null,
+    val artist: DisplayProfile? = null,
+    @SerialName("is_artist_concert") val isArtistConcert: Boolean = false,
+    @SerialName("recording_url") val recordingUrl: String? = null,
+) {
+    /** Image de couverture effective (`cover_image_url` artiste OU `image_url` admin). */
+    val cover: String? get() = coverImageUrl ?: imageUrl
+}
 
 /** Compétition (candidats, votes, cadeaux, classement). */
 @Serializable
