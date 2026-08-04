@@ -27,6 +27,7 @@ dependencies {
     implementation(project(":shared-domain"))
     implementation(project(":core:network"))
     implementation(project(":core:media"))
+    implementation(project(":core:realtime"))
     implementation(project(":core:ui"))
     implementation(project(":feature:live"))
 
