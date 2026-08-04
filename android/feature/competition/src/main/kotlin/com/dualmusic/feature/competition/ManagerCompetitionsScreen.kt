@@ -148,14 +148,15 @@ class ManagerCompetitionsViewModel(
         }
     }
 
-    /** Traduit une erreur technique en message clair pour l'utilisateur. */
+    /** Traduit une erreur technique en message clair pour l'utilisateur (sans exception brute). */
     private fun friendlyCreateError(t: Throwable): String {
         val s = com.dualmusic.core.ui.i18n.appStrings
-        val de = t as? com.dualmusic.domain.api.DomainError
+        val de = t as? com.dualmusic.domain.api.DomainError ?: return s.networkSlow
         return when {
-            de?.code == "VALIDATION_ERROR" -> s.competitionCheckFields
-            de != null -> s.competitionCreateFailed
-            else -> s.networkSlow
+            de.code == "VALIDATION_ERROR" -> s.competitionCheckFields
+            // Message serveur court et lisible → on l'affiche tel quel (diagnostic utile).
+            de.message.isNotBlank() && de.message.length <= 140 -> de.message
+            else -> s.competitionCreateFailed
         }
     }
 }
