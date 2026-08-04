@@ -128,7 +128,8 @@ class ManagerCompetitionsViewModel(
             _ui.update { it.copy(coverUploading = true, message = null) }
             runCatching { uploader.upload(media, com.dualmusic.domain.upload.UploadCategory.IMAGE) }
                 .onSuccess { url -> _ui.update { it.copy(coverUploading = false, coverUrl = url) } }
-                .onFailure { e -> _ui.update { it.copy(coverUploading = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.uploadFailed) } }
+                // Message clair : on ne montre jamais l'exception brute (timeout, IO…) à l'utilisateur.
+                .onFailure { _ui.update { it.copy(coverUploading = false, message = com.dualmusic.core.ui.i18n.appStrings.imageUploadFriendly) } }
         }
     }
 
@@ -143,7 +144,18 @@ class ManagerCompetitionsViewModel(
                     _ui.update { it.copy(creating = false, showForm = false, coverUrl = "", message = com.dualmusic.core.ui.i18n.appStrings.competitionCreated) }
                     load()
                 }
-                .onFailure { e -> _ui.update { it.copy(creating = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed) } }
+                .onFailure { e -> _ui.update { it.copy(creating = false, message = friendlyCreateError(e)) } }
+        }
+    }
+
+    /** Traduit une erreur technique en message clair pour l'utilisateur. */
+    private fun friendlyCreateError(t: Throwable): String {
+        val s = com.dualmusic.core.ui.i18n.appStrings
+        val de = t as? com.dualmusic.domain.api.DomainError
+        return when {
+            de?.code == "VALIDATION_ERROR" -> s.competitionCheckFields
+            de != null -> s.competitionCreateFailed
+            else -> s.networkSlow
         }
     }
 }

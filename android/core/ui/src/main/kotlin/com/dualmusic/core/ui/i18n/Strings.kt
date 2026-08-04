@@ -510,6 +510,10 @@ interface Strings {
     val artistRequestPending: String
     val managerRequestPending: String
     val competitionCreated: String
+    val competitionCreateFailed: String
+    val competitionCheckFields: String
+    val imageUploadFriendly: String
+    val networkSlow: String
     val createCompetitionTitle: String
     val createCompetitionHint: String
     val createCompetitionAction: String
@@ -1122,6 +1126,10 @@ object FrStrings : Strings {
     override val artistRequestPending = "Vous avez une demande pour devenir artiste en cours de validation."
     override val managerRequestPending = "Vous avez une demande pour devenir manager en cours de validation."
     override val competitionCreated = "Compétition créée"
+    override val competitionCreateFailed = "La compétition n'a pas pu être créée. Réessaie dans un instant."
+    override val competitionCheckFields = "Vérifie les informations du formulaire (titre, dates…)."
+    override val imageUploadFriendly = "L'image n'a pas pu être envoyée (connexion lente ou fichier trop lourd). Réessaie."
+    override val networkSlow = "Connexion lente ou interrompue. Vérifie ta connexion et réessaie."
     override val createCompetitionTitle = "Créer une compétition"
     override val createCompetitionHint = "Organisez une compétition et gérez les candidats"
     override val createCompetitionAction = "Créer la compétition"
@@ -1728,6 +1736,10 @@ object EnStrings : Strings {
     override val artistRequestPending = "You have a pending request to become an artist."
     override val managerRequestPending = "You have a pending request to become a manager."
     override val competitionCreated = "Competition created"
+    override val competitionCreateFailed = "The competition could not be created. Please try again in a moment."
+    override val competitionCheckFields = "Check the form fields (title, dates…)."
+    override val imageUploadFriendly = "The image could not be uploaded (slow connection or file too large). Please try again."
+    override val networkSlow = "Slow or interrupted connection. Check your connection and try again."
     override val createCompetitionTitle = "Create a competition"
     override val createCompetitionHint = "Organize a competition and manage candidates"
     override val createCompetitionAction = "Create the competition"
