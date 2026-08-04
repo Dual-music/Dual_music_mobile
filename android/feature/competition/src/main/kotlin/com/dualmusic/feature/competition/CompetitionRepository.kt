@@ -24,12 +24,33 @@ class CompetitionRepository(private val api: ApiClient) {
 
     private val json = Json { explicitNulls = false }
 
-    /** Catalogue public des compétitions. */
-    suspend fun competitions(limit: Int = 50): List<Competition> =
-        api.request(
-            Endpoint.get(CompetitionEndpoints.LIST, query = mapOf("limit" to limit.toString())),
-            ListSerializer(Competition.serializer()),
+    /** Catalogue public des compétitions (filtre `status` optionnel : `published` / `live`). */
+    suspend fun competitions(limit: Int = 50, status: String? = null): List<Competition> {
+        val query = if (status != null) mapOf("limit" to limit.toString(), "status" to status)
+        else mapOf("limit" to limit.toString())
+        return api.request(Endpoint.get(CompetitionEndpoints.LIST, query = query), ListSerializer(Competition.serializer()))
+    }
+
+    /** Replays publics de compétitions (`GET /replays?sourceType=competition&isPublic=true`). */
+    suspend fun competitionReplays(): List<com.dualmusic.domain.replay.ReplayVideo> =
+        runCatching {
+            api.request(
+                Endpoint.get(
+                    com.dualmusic.domain.replay.ReplayEndpoints.LIST,
+                    query = mapOf("sourceType" to "competition", "isPublic" to "true", "limit" to "100"),
+                ),
+                ListSerializer(com.dualmusic.domain.replay.ReplayVideo.serializer()),
+            )
+        }.getOrDefault(emptyList())
+
+    /** Taux €/crédit dérivé du solde (aperçu fiat « ≈ »). */
+    suspend fun perCreditEur(): Double = runCatching {
+        val b = api.request(
+            Endpoint.get(com.dualmusic.domain.wallet.WalletEndpoints.BALANCE),
+            com.dualmusic.domain.wallet.WalletBalance.serializer(),
         )
+        if (b.balance > 0) b.eurValue / b.balance else 0.0
+    }.getOrDefault(0.0)
 
     /** Candidatures du caller (artiste), enrichies de leur compétition. */
     suspend fun myCandidacies(): List<com.dualmusic.domain.competition.MyCandidacy> =

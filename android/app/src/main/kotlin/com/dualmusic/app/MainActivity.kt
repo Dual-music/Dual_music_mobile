@@ -556,6 +556,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
     var openDuel by remember { mutableStateOf<Duel?>(null) }
     var openDuelReplay by remember { mutableStateOf<ReplayVideo?>(null) }
     var openCompetition by remember { mutableStateOf<Competition?>(null) }
+    var openCompetitionReplay by remember { mutableStateOf<ReplayVideo?>(null) }
     var openConcert by remember { mutableStateOf<com.dualmusic.domain.model.Concert?>(null) }
     var openConcertReplay by remember { mutableStateOf<ReplayVideo?>(null) }
     // Diffusion live (hôte) en plein écran, au-dessus du Scaffold → SANS la barre du bas.
@@ -747,13 +748,28 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                 }
                 4 -> {
                     val competition = openCompetition
-                    if (competition == null) {
-                        val listVm: CompetitionsViewModel = viewModel { container.makeCompetitionsViewModel() }
-                        CompetitionsListScreen(viewModel = listVm, onOpen = { openCompetition = it })
-                    } else {
-                        val roomVm: CompetitionRoomViewModel =
-                            viewModel(key = competition.id) { container.makeCompetitionRoomViewModel(competition.id) }
-                        CompetitionRoomScreen(viewModel = roomVm)
+                    val competitionReplay = openCompetitionReplay
+                    when {
+                        // Lecteur de replay de compétition.
+                        competitionReplay != null -> {
+                            androidx.activity.compose.BackHandler { openCompetitionReplay = null }
+                            val playerVm: ReplayPlayerViewModel =
+                                viewModel(key = competitionReplay.id) { container.makeReplayPlayerViewModel(competitionReplay) }
+                            ReplayPlayerScreen(viewModel = playerVm)
+                        }
+                        competition == null -> {
+                            val listVm: CompetitionsViewModel = viewModel { container.makeCompetitionsViewModel() }
+                            CompetitionsListScreen(
+                                viewModel = listVm,
+                                onOpen = { openCompetition = it },
+                                onOpenReplay = { openCompetitionReplay = it },
+                            )
+                        }
+                        else -> {
+                            val roomVm: CompetitionRoomViewModel =
+                                viewModel(key = competition.id) { container.makeCompetitionRoomViewModel(competition.id) }
+                            CompetitionRoomScreen(viewModel = roomVm)
+                        }
                     }
                 }
             }

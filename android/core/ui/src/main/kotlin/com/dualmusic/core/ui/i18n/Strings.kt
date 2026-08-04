@@ -309,6 +309,8 @@ interface Strings {
     val noConcertsLive: String
     val noConcertsUpcoming: String
     val noConcertReplays: String
+    val noCompetitionsLive: String
+    val noCompetitionsUpcoming: String
     // Page Duels Musicaux (3 onglets) — parité web /duels.
     val duelsPageTitle: String
     val duelsSubtitle: String
@@ -912,6 +914,8 @@ object FrStrings : Strings {
     override val noConcertsLive = "Aucun concert en direct"
     override val noConcertsUpcoming = "Aucun concert à venir"
     override val noConcertReplays = "Aucun replay disponible"
+    override val noCompetitionsLive = "Aucune compétition en direct"
+    override val noCompetitionsUpcoming = "Aucune compétition à venir"
     override val duelsPageTitle = "Duels Musicaux"
     override val duelsSubtitle = "Affrontements en direct et à venir"
     override val duelTabLive = "En direct"
@@ -1499,6 +1503,8 @@ object EnStrings : Strings {
     override val noConcertsLive = "No live concerts"
     override val noConcertsUpcoming = "No upcoming concerts"
     override val noConcertReplays = "No replays available"
+    override val noCompetitionsLive = "No live competitions"
+    override val noCompetitionsUpcoming = "No upcoming competitions"
     override val duelsPageTitle = "Musical Duels"
     override val duelsSubtitle = "Live and upcoming battles"
     override val duelTabLive = "Live"

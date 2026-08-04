@@ -123,6 +123,7 @@ data class Concert(
 data class Competition(
     val id: String,
     val title: String,
+    val description: String? = null,
     val status: String,
     @SerialName("manager_id") val managerId: String? = null,
     val mode: String? = null,
@@ -130,6 +131,7 @@ data class Competition(
     @SerialName("start_at") val startAt: String? = null,
     @SerialName("end_at") val endAt: String? = null,
     @SerialName("reward_amount") val rewardAmount: Double = 0.0,
+    @SerialName("viewer_ticket_price") val viewerTicketPrice: Double = 0.0,
     @SerialName("cover_url") val coverUrl: String? = null,
 )
 
