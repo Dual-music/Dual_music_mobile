@@ -6,6 +6,7 @@ import com.dualmusic.domain.content.BlogPost
 import com.dualmusic.domain.content.ContentEndpoints
 import com.dualmusic.domain.content.LifestyleVideo
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 
 /**
  * Accès REST au contenu : vidéos lifestyle + articles de blog.
@@ -36,7 +37,7 @@ class ContentRepository(private val api: ApiClient) {
         runCatching {
             api.request(
                 Endpoint.get("/lifestyle/liked/mine"),
-                ListSerializer(kotlinx.serialization.builtins.serializer<String>()),
+                ListSerializer(String.serializer()),
             )
         }.getOrDefault(emptyList())
 
