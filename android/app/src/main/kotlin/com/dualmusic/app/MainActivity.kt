@@ -520,6 +520,13 @@ class MainActivity : ComponentActivity() {
                     is AuthState.SignedIn -> MainShell(container, onSignOut = vm::signOut)
                     is AuthState.PendingEmailVerification -> EmailVerifyScreen(viewModel = vm, email = st.email)
                     is AuthState.PendingProfileCompletion -> ProfileCompletionScreen(viewModel = vm)
+                    // Réhydratation de session au démarrage : splash tant qu'on ne sait pas si
+                    // l'utilisateur est connecté → évite le flash de l'écran d'inscription avant
+                    // la redirection vers le profil.
+                    is AuthState.Loading -> Box(
+                        modifier = Modifier.fillMaxSize().background(DualMusicTheme.gradients.hero),
+                        contentAlignment = androidx.compose.ui.Alignment.Center,
+                    ) { androidx.compose.material3.CircularProgressIndicator(color = DualMusicTheme.colors.primary) }
                     else -> SignInScreen(viewModel = vm, onGoogle = { /* TODO(lot suivant): OAuth Google + deeplink */ })
                 }
             }
