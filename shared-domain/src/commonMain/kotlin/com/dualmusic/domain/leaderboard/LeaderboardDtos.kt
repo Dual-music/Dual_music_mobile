@@ -13,17 +13,33 @@ import kotlinx.serialization.Serializable
 data class LeaderboardEntry(
     val id: String? = null,
     @SerialName("user_id") val userId: String? = null,
+    /** All-time artists/donors renvoient `name` + `score` (≠ saisons live qui ont full/stage_name). */
+    val name: String? = null,
     @SerialName("full_name") val fullName: String? = null,
     @SerialName("stage_name") val stageName: String? = null,
     @SerialName("avatar_url") val avatarUrl: String? = null,
     val total: Double = 0.0,
+    val score: Double = 0.0,
 ) {
-    /** Nom à afficher : nom de scène sinon nom complet sinon repli. */
+    /** Nom à afficher : nom de scène sinon nom complet sinon `name` sinon repli. */
     val displayName: String
         get() = stageName?.takeIf { it.isNotBlank() }
             ?: fullName?.takeIf { it.isNotBlank() }
+            ?: name?.takeIf { it.isNotBlank() }
             ?: "Utilisateur"
+
+    /** Valeur agrégée (points/crédits) : `total` sinon `score`. */
+    val value: Double get() = if (total != 0.0) total else score
 }
+
+/** Récompense d'une saison, par rang. */
+@Serializable
+data class SeasonReward(
+    @SerialName("rank_position") val rankPosition: Int = 0,
+    @SerialName("reward_type") val rewardType: String? = null,
+    @SerialName("credits_amount") val creditsAmount: Double? = null,
+    @SerialName("physical_description") val physicalDescription: String? = null,
+)
 
 /**
  * Saison de classement (onglet « Périodique » du web) — `GET /leaderboards/seasons`.
@@ -37,6 +53,7 @@ data class LeaderboardSeason(
     @SerialName("end_date") val endDate: String? = null,
     @SerialName("is_active") val isActive: Boolean = false,
     @SerialName("is_mystery_reward") val isMysteryReward: Boolean = false,
+    val rewards: List<SeasonReward> = emptyList(),
 )
 
 /** Chemins REST des classements (source unique, partagée). */

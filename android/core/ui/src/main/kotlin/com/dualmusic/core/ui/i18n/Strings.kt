@@ -317,6 +317,20 @@ interface Strings {
     val searchArtist: String
     val lifestyleSubtitle: String
     val noLifestyleVideos: String
+    // Page Classements (parité web /leaderboard).
+    val leaderboardTitle: String
+    val leaderboardSubtitle: String
+    val allArtists: String
+    val pointsWord: String
+    val giftsWord: String
+    val winsWord: String
+    val creditsWord: String
+    val topDonors: String
+    val anonymousDonor: String
+    val rewardsByRank: String
+    val seasonTypeArtist: String
+    val seasonTypeDonor: String
+    val noParticipants: String
     // Page Duels Musicaux (3 onglets) — parité web /duels.
     val duelsPageTitle: String
     val duelsSubtitle: String
@@ -927,6 +941,19 @@ object FrStrings : Strings {
     override val searchArtist = "Rechercher un artiste..."
     override val lifestyleSubtitle = "Découvrez la vie de vos artistes"
     override val noLifestyleVideos = "Aucune vidéo lifestyle"
+    override val leaderboardTitle = "Classement des Artistes"
+    override val leaderboardSubtitle = "Les meilleurs artistes basés sur les votes, cadeaux et victoires"
+    override val allArtists = "Tous les artistes"
+    override val pointsWord = "points"
+    override val giftsWord = "cadeaux"
+    override val winsWord = "victoires"
+    override val creditsWord = "crédits"
+    override val topDonors = "Meilleurs Donateurs"
+    override val anonymousDonor = "Donateur anonyme"
+    override val rewardsByRank = "Récompenses par rang"
+    override val seasonTypeArtist = "🎤 Artistes"
+    override val seasonTypeDonor = "💝 Donateurs"
+    override val noParticipants = "Aucun participant trouvé pour cette saison"
     override val duelsPageTitle = "Duels Musicaux"
     override val duelsSubtitle = "Affrontements en direct et à venir"
     override val duelTabLive = "En direct"
@@ -1521,6 +1548,19 @@ object EnStrings : Strings {
     override val searchArtist = "Search an artist..."
     override val lifestyleSubtitle = "Discover your artists' life"
     override val noLifestyleVideos = "No lifestyle videos"
+    override val leaderboardTitle = "Artist Leaderboard"
+    override val leaderboardSubtitle = "Top artists based on votes, gifts and wins"
+    override val allArtists = "All artists"
+    override val pointsWord = "points"
+    override val giftsWord = "gifts"
+    override val winsWord = "wins"
+    override val creditsWord = "credits"
+    override val topDonors = "Top Donors"
+    override val anonymousDonor = "Anonymous donor"
+    override val rewardsByRank = "Rewards by rank"
+    override val seasonTypeArtist = "🎤 Artists"
+    override val seasonTypeDonor = "💝 Donors"
+    override val noParticipants = "No participants found for this season"
     override val duelsPageTitle = "Musical Duels"
     override val duelsSubtitle = "Live and upcoming battles"
     override val duelTabLive = "Live"
