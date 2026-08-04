@@ -2,21 +2,31 @@ package com.dualmusic.feature.artists
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -25,10 +35,9 @@ import com.dualmusic.core.network.Endpoint
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
 import com.dualmusic.core.ui.components.DMEmptyState
 import com.dualmusic.core.ui.components.DMLoadingBox
+import com.dualmusic.core.ui.components.DMRemoteImage
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.domain.artist.ArtistEndpoints
@@ -51,7 +60,7 @@ class ArtistsViewModel(private val api: ApiClient) : ViewModel() {
     private val _artists = MutableStateFlow<List<ArtistSummary>>(emptyList())
     val artists: StateFlow<List<ArtistSummary>> = _artists.asStateFlow()
 
-    /** Ids des artistes suivis (pour l'état des boutons). */
+    /** Ids UTILISATEUR des artistes suivis (clé de suivi = `/users/:userId/follow`). */
     private val _following = MutableStateFlow<Set<String>>(emptySet())
     val following: StateFlow<Set<String>> = _following.asStateFlow()
 
@@ -72,31 +81,24 @@ class ArtistsViewModel(private val api: ApiClient) : ViewModel() {
         }
     }
 
-    /** Suit / ne suit plus un artiste (optimiste + serveur). */
-    fun toggleFollow(artistId: String) {
-        val isFollowing = artistId in _following.value
-        // Optimiste.
-        _following.update { if (isFollowing) it - artistId else it + artistId }
+    /** Suit / ne suit plus un artiste (optimiste + serveur). Clé = id UTILISATEUR. */
+    fun toggleFollow(userId: String) {
+        val isFollowing = userId in _following.value
+        _following.update { if (isFollowing) it - userId else it + userId }
         viewModelScope.launch {
             runCatching {
-                if (isFollowing) {
-                    // DELETE avec corps vide (Endpoint accepte le body null).
-                    api.request<Unit>(Endpoint.delete(ArtistEndpoints.follow(artistId)))
-                } else {
-                    api.request<Unit>(Endpoint.post(ArtistEndpoints.follow(artistId)))
-                }
+                if (isFollowing) api.request<Unit>(Endpoint.delete(ArtistEndpoints.follow(userId)))
+                else api.request<Unit>(Endpoint.post(ArtistEndpoints.follow(userId)))
             }.onFailure {
-                // Rollback si échec.
-                _following.update { if (isFollowing) it + artistId else it - artistId }
+                _following.update { if (isFollowing) it + userId else it - userId }
             }
         }
     }
 }
 
 /**
- * Annuaire des artistes avec bouton suivre/ne plus suivre.
- *
- * @param viewModel source d'état.
+ * Page publique « Découvrez nos artistes » — parité web : titre + sous-titre + recherche +
+ * cartes (avatar, nom, bio, abonnés) avec bouton Suivre / Suivi.
  */
 @Composable
 fun ArtistsScreen(viewModel: ArtistsViewModel) {
@@ -104,9 +106,13 @@ fun ArtistsScreen(viewModel: ArtistsViewModel) {
     val following by viewModel.following.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
-    val strings = LocalStrings.current
+    val s = LocalStrings.current
 
     LaunchedEffect(Unit) { viewModel.load() }
+
+    var search by remember { mutableStateOf("") }
+    val q = search.trim().lowercase()
+    val filtered = if (q.isEmpty()) artists else artists.filter { it.displayName.lowercase().contains(q) }
 
     Column(
         modifier = Modifier
@@ -115,48 +121,57 @@ fun ArtistsScreen(viewModel: ArtistsViewModel) {
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
-        if (isLoading) DMLoadingBox(Modifier.fillMaxWidth().weight(1f))
-        if (!isLoading && artists.isEmpty()) {
-            DMEmptyState(
-                title = strings.noArtists,
-                subtitle = strings.noArtistsHint,
-                icon = Icons.Filled.Person,
-                modifier = Modifier.weight(1f),
-            )
-        }
+        Text(s.discoverArtists, color = colors.primary, fontWeight = FontWeight.Bold, fontSize = 26.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Text(s.discoverArtistsDesc, color = colors.mutedForeground, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
 
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-            items(artists) { artist ->
-                ArtistRow(
-                    artist = artist,
-                    isFollowing = artist.id in following,
-                    onToggle = { viewModel.toggleFollow(artist.id) },
-                )
+        OutlinedTextField(
+            value = search,
+            onValueChange = { search = it },
+            label = { Text(s.searchArtist) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        if (isLoading) DMLoadingBox(Modifier.fillMaxWidth().weight(1f))
+        if (!isLoading && filtered.isEmpty()) {
+            DMEmptyState(title = s.noArtists, subtitle = s.noArtistsHint, icon = Icons.Filled.Person, modifier = Modifier.weight(1f))
+        } else if (!isLoading) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md), modifier = Modifier.weight(1f)) {
+                items(filtered) { artist ->
+                    ArtistCard(
+                        artist = artist,
+                        isFollowing = artist.opponentUserId in following,
+                        onToggle = { viewModel.toggleFollow(artist.opponentUserId) },
+                    )
+                }
             }
         }
     }
 }
 
-/** Ligne d'un artiste : nom, followers, bouton suivre. */
+/** Carte d'un artiste : grande image + nom + bio + abonnés + bouton Suivre. */
 @Composable
-private fun ArtistRow(artist: ArtistSummary, isFollowing: Boolean, onToggle: () -> Unit) {
+private fun ArtistCard(artist: ArtistSummary, isFollowing: Boolean, onToggle: () -> Unit) {
     val colors = DualMusicTheme.colors
-    val strings = LocalStrings.current
-    DMCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
-                Text("🎤  ${artist.displayName}", color = colors.foreground, fontWeight = FontWeight.Bold)
-                Text("${artist.followersCount} ${strings.followers}", color = colors.mutedForeground)
+    val s = LocalStrings.current
+    DMCard(modifier = Modifier.fillMaxWidth(), padded = false) {
+        DMRemoteImage(
+            url = artist.avatarUrl,
+            contentDescription = null,
+            modifier = Modifier.fillMaxWidth().height(200.dp),
+            fallbackEmoji = "🎤",
+        )
+        Column(modifier = Modifier.fillMaxWidth().padding(DualMusicTheme.spacing.md), verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+            Text(artist.displayName, color = colors.foreground, fontWeight = FontWeight.Bold)
+            artist.bio?.takeIf { it.isNotBlank() }?.let { Text(it, color = colors.mutedForeground, fontSize = 13.sp, maxLines = 2) }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("👥 ${artist.followersCount} ${s.followers}", color = colors.mutedForeground, fontSize = 12.sp)
+                DMButton(
+                    if (isFollowing) s.followed else s.follow,
+                    style = if (isFollowing) DMButtonStyle.OUTLINE else DMButtonStyle.PRIMARY,
+                    onClick = onToggle,
+                )
             }
-            DMButton(
-                if (isFollowing) strings.followed else strings.follow,
-                style = if (isFollowing) DMButtonStyle.OUTLINE else DMButtonStyle.PRIMARY,
-                onClick = onToggle,
-            )
         }
     }
 }

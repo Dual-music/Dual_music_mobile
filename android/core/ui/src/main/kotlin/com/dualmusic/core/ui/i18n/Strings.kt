@@ -311,6 +311,10 @@ interface Strings {
     val noConcertReplays: String
     val noCompetitionsLive: String
     val noCompetitionsUpcoming: String
+    // Page Artistes (parité web /artists).
+    val discoverArtists: String
+    val discoverArtistsDesc: String
+    val searchArtist: String
     // Page Duels Musicaux (3 onglets) — parité web /duels.
     val duelsPageTitle: String
     val duelsSubtitle: String
@@ -916,6 +920,9 @@ object FrStrings : Strings {
     override val noConcertReplays = "Aucun replay disponible"
     override val noCompetitionsLive = "Aucune compétition en direct"
     override val noCompetitionsUpcoming = "Aucune compétition à venir"
+    override val discoverArtists = "Découvrez nos artistes"
+    override val discoverArtistsDesc = "Explorez les profils de nos artistes talentueux, suivez-les et ne manquez aucun de leurs duels"
+    override val searchArtist = "Rechercher un artiste..."
     override val duelsPageTitle = "Duels Musicaux"
     override val duelsSubtitle = "Affrontements en direct et à venir"
     override val duelTabLive = "En direct"
@@ -1505,6 +1512,9 @@ object EnStrings : Strings {
     override val noConcertReplays = "No replays available"
     override val noCompetitionsLive = "No live competitions"
     override val noCompetitionsUpcoming = "No upcoming competitions"
+    override val discoverArtists = "Discover Our Artists"
+    override val discoverArtistsDesc = "Explore our talented artists' profiles, follow them and never miss their duels"
+    override val searchArtist = "Search an artist..."
     override val duelsPageTitle = "Musical Duels"
     override val duelsSubtitle = "Live and upcoming battles"
     override val duelTabLive = "Live"

@@ -12,6 +12,7 @@ data class ArtistSummary(
     @SerialName("full_name") val fullName: String? = null,
     @SerialName("stage_name") val stageName: String? = null,
     @SerialName("avatar_url") val avatarUrl: String? = null,
+    val bio: String? = null,
     @SerialName("followers_count") val followersCount: Int = 0,
 ) {
     /** Nom à afficher : nom de scène sinon nom complet. */
