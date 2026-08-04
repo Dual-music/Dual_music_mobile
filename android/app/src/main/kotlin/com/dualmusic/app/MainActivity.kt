@@ -550,6 +550,8 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
     var homeOpen by remember { mutableIntStateOf(0) }
     // Superposition « messages de notifications » (icône cloche de la barre du haut).
     var notifOpen by remember { mutableStateOf(false) }
+    // Superposition « recharge de crédits » (icône portefeuille de la barre du haut).
+    var rechargeOpen by remember { mutableStateOf(false) }
     // Badge de la cloche : nombre de non-lus, rafraîchi à chaque ouverture/fermeture des notifs.
     var notifUnread by remember { mutableIntStateOf(0) }
     LaunchedEffect(notifOpen) { notifUnread = container.unreadNotifications() }
@@ -563,7 +565,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
     var broadcastLive by remember { mutableStateOf<Live?>(null) }
 
     // Quitte le profil et sélectionne un onglet bas (réinitialise les superpositions).
-    fun goTab(t: Int) { tab = t; showProfile = false; homeOpen = 0; notifOpen = false }
+    fun goTab(t: Int) { tab = t; showProfile = false; homeOpen = 0; notifOpen = false; rechargeOpen = false }
 
     // Écran de diffusion plein écran (prioritaire sur tout le reste, pas de nav basse).
     broadcastLive?.let { live ->
@@ -582,11 +584,12 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
 
     Scaffold(
         topBar = {
-            // Barre du haut masquée dans le profil et sur l'écran de notifications (en-tête propre).
-            if (!showProfile && !notifOpen) {
+            // Barre du haut masquée dans le profil, les notifications et la recharge (en-tête propre).
+            if (!showProfile && !notifOpen && !rechargeOpen) {
                 TopBar(
                     onOpenNotifications = { notifOpen = true },
                     onOpenProfile = { showProfile = true; profileSub = 0 },
+                    onOpenRecharge = { rechargeOpen = true },
                     unreadCount = notifUnread,
                 )
             }
@@ -647,7 +650,13 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
         },
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
-            if (notifOpen) {
+            if (rechargeOpen) {
+                // Recharge de crédits (icône portefeuille de la barre du haut) — parité web.
+                SubScreen(title = "Recharger des crédits", onBack = { rechargeOpen = false }) {
+                    val rechargeVm: RechargeViewModel = viewModel { container.makeRechargeViewModel() }
+                    RechargeScreen(viewModel = rechargeVm)
+                }
+            } else if (notifOpen) {
                 // Messages de notifications (icône cloche de l'accueil) — retour vers l'écran courant.
                 SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.notifications, onBack = { notifOpen = false }) {
                     NotificationsScreen(viewModel = viewModel { container.makeNotificationsViewModel() })

@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Movie
@@ -66,7 +67,12 @@ private val BrandGradient = Brush.linearGradient(listOf(Color(0xFFB07CFF), Color
  * @param onOpenProfile ouvre la section profil.
  */
 @Composable
-fun TopBar(onOpenNotifications: () -> Unit, onOpenProfile: () -> Unit, unreadCount: Int = 0) {
+fun TopBar(
+    onOpenNotifications: () -> Unit,
+    onOpenProfile: () -> Unit,
+    onOpenRecharge: () -> Unit = {},
+    unreadCount: Int = 0,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -79,6 +85,10 @@ fun TopBar(onOpenNotifications: () -> Unit, onOpenProfile: () -> Unit, unreadCou
     ) {
         DMLogo(height = 32.dp)
         Box(modifier = Modifier.weight(1f))
+        // Recharge (crédits) — ouvre la page de recharge (parité web).
+        IconButton(onClick = onOpenRecharge) {
+            Icon(Icons.Filled.AccountBalanceWallet, contentDescription = "Recharge", tint = Color.White)
+        }
         // Cloche + badge du nombre de non-lus (comme le web).
         Box {
             IconButton(onClick = onOpenNotifications) {
