@@ -21,7 +21,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.ui.draw.clip
 import androidx.compose.material3.DropdownMenu
@@ -279,7 +279,7 @@ private fun ManagedCompetitionRow(comp: Competition, onOpen: () -> Unit) {
                 }
             }
             Text(statusLabel(comp.status, s), color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = colors.mutedForeground)
+            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.mutedForeground)
         }
     }
 }
