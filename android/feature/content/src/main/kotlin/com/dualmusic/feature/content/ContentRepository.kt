@@ -31,6 +31,15 @@ class ContentRepository(private val api: ApiClient) {
     suspend fun blog(id: String): BlogPost =
         api.request(Endpoint.get(ContentEndpoints.blog(id)), BlogPost.serializer())
 
+    /** Ids des vidéos déjà likées par le caller (`GET /lifestyle/liked/mine`). */
+    suspend fun likedMine(): List<String> =
+        runCatching {
+            api.request(
+                Endpoint.get("/lifestyle/liked/mine"),
+                ListSerializer(kotlinx.serialization.builtins.serializer<String>()),
+            )
+        }.getOrDefault(emptyList())
+
     /** Bascule le like d'une vidéo (best-effort). */
     suspend fun toggleLike(videoId: String) {
         api.request<Unit>(Endpoint.post(ContentEndpoints.lifestyleLikes(videoId)))

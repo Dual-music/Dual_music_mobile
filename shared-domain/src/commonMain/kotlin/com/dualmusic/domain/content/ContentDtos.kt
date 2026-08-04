@@ -13,6 +13,8 @@ data class LifestyleVideo(
     @SerialName("artist_name") val artistName: String? = null,
     @SerialName("video_url") val videoUrl: String? = null,
     @SerialName("thumbnail_url") val thumbnailUrl: String? = null,
+    /** Durée préformatée (ex. `0:11`). */
+    val duration: String? = null,
     @SerialName("likes_count") val likesCount: Int = 0,
     @SerialName("comments_count") val commentsCount: Int = 0,
     @SerialName("views_count") val viewsCount: Int = 0,
