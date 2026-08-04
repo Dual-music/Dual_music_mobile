@@ -299,12 +299,10 @@ interface Strings {
     val liveInProgress: String
     val watchLive: String
     val noLivesActive: String
-    val noLivesHint: String
     // Page Concerts (3 onglets) — parité web /concerts.
     val concertsSubtitle: String
     val onlineLoc: String
     val watchLiveConcert: String
-    val buyTicket: String
     val replayAvailable: String
     val noConcertsLive: String
     val noConcertsUpcoming: String
@@ -314,7 +312,6 @@ interface Strings {
     // Page Artistes (parité web /artists).
     val discoverArtists: String
     val discoverArtistsDesc: String
-    val searchArtist: String
     val lifestyleSubtitle: String
     val noLifestyleVideos: String
     // Page Classements (parité web /leaderboard).
@@ -325,7 +322,6 @@ interface Strings {
     val giftsWord: String
     val winsWord: String
     val creditsWord: String
-    val topDonors: String
     val anonymousDonor: String
     val rewardsByRank: String
     val seasonTypeArtist: String
@@ -925,11 +921,9 @@ object FrStrings : Strings {
     override val liveInProgress = "Live en cours"
     override val watchLive = "Regarder"
     override val noLivesActive = "Aucun live en cours"
-    override val noLivesHint = "Revenez plus tard pour suivre un live."
     override val concertsSubtitle = "Concerts virtuels planifiés avec billetterie"
     override val onlineLoc = "En ligne"
     override val watchLiveConcert = "Regarder le direct"
-    override val buyTicket = "Acheter un Ticket"
     override val replayAvailable = "Replay disponible"
     override val noConcertsLive = "Aucun concert en direct"
     override val noConcertsUpcoming = "Aucun concert à venir"
@@ -938,7 +932,6 @@ object FrStrings : Strings {
     override val noCompetitionsUpcoming = "Aucune compétition à venir"
     override val discoverArtists = "Découvrez nos artistes"
     override val discoverArtistsDesc = "Explorez les profils de nos artistes talentueux, suivez-les et ne manquez aucun de leurs duels"
-    override val searchArtist = "Rechercher un artiste..."
     override val lifestyleSubtitle = "Découvrez la vie de vos artistes"
     override val noLifestyleVideos = "Aucune vidéo lifestyle"
     override val leaderboardTitle = "Classement des Artistes"
@@ -948,7 +941,6 @@ object FrStrings : Strings {
     override val giftsWord = "cadeaux"
     override val winsWord = "victoires"
     override val creditsWord = "crédits"
-    override val topDonors = "Meilleurs Donateurs"
     override val anonymousDonor = "Donateur anonyme"
     override val rewardsByRank = "Récompenses par rang"
     override val seasonTypeArtist = "🎤 Artistes"
@@ -1532,11 +1524,9 @@ object EnStrings : Strings {
     override val liveInProgress = "Live in progress"
     override val watchLive = "Watch"
     override val noLivesActive = "No live streams active"
-    override val noLivesHint = "Come back later to catch a live."
     override val concertsSubtitle = "Scheduled virtual concerts with ticketing"
     override val onlineLoc = "Online"
     override val watchLiveConcert = "Watch Live"
-    override val buyTicket = "Buy Ticket"
     override val replayAvailable = "Replay available"
     override val noConcertsLive = "No live concerts"
     override val noConcertsUpcoming = "No upcoming concerts"
@@ -1545,7 +1535,6 @@ object EnStrings : Strings {
     override val noCompetitionsUpcoming = "No upcoming competitions"
     override val discoverArtists = "Discover Our Artists"
     override val discoverArtistsDesc = "Explore our talented artists' profiles, follow them and never miss their duels"
-    override val searchArtist = "Search an artist..."
     override val lifestyleSubtitle = "Discover your artists' life"
     override val noLifestyleVideos = "No lifestyle videos"
     override val leaderboardTitle = "Artist Leaderboard"
@@ -1555,7 +1544,6 @@ object EnStrings : Strings {
     override val giftsWord = "gifts"
     override val winsWord = "wins"
     override val creditsWord = "credits"
-    override val topDonors = "Top Donors"
     override val anonymousDonor = "Anonymous donor"
     override val rewardsByRank = "Rewards by rank"
     override val seasonTypeArtist = "🎤 Artists"
