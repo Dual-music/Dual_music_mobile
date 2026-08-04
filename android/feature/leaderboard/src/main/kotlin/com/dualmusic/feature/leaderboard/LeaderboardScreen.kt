@@ -180,7 +180,7 @@ private fun DonorsTab(list: List<LeaderboardEntry>) {
     list.forEachIndexed { i, e ->
         RankRow(
             rank = i + 1,
-            name = e.name?.takeIf { it.isNotBlank() } ?: e.displayName.takeIf { it != "Utilisateur" } ?: s.anonymousDonor,
+            name = e.displayName,
             avatarUrl = e.avatarUrl,
             stats = "🎁 0 ${s.giftsWord} · ↗ 0 ${s.votesWord}",
             value = "${e.value.toInt()}",
@@ -197,7 +197,7 @@ private fun PodiumCard(rank: Int, entry: LeaderboardEntry, modifier: Modifier = 
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
             Text(medal(rank), fontSize = 22.sp)
             DMRemoteImage(url = entry.avatarUrl, contentDescription = null, modifier = Modifier.size(48.dp).clip(CircleShape), fallbackEmoji = "🙂")
-            Text(entry.name?.takeIf { it.isNotBlank() } ?: s.anonymousDonor, color = colors.foreground, fontSize = 12.sp, maxLines = 1, textAlign = TextAlign.Center)
+            Text(entry.displayName, color = colors.foreground, fontSize = 12.sp, maxLines = 1, textAlign = TextAlign.Center)
             Text("${entry.value.toInt()}", color = colors.primary, fontWeight = FontWeight.Bold)
             Text(s.creditsWord, color = colors.mutedForeground, fontSize = 10.sp)
         }
