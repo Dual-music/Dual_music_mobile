@@ -184,6 +184,8 @@ data class CreateCompetitionBody(
     val rewardAmount: Double = 0.0,
     val entryFeeRequired: Boolean = false,
     val entryFeeAmount: Double = 0.0,
+    /** Le manager accepte-t-il les sponsors ? (défaut oui). */
+    val acceptsSponsors: Boolean = true,
     val eligibilityScope: String = "country",
     val eligibleCountries: List<String> = emptyList(),
     // Présentiel (onsite) — omis en ligne.

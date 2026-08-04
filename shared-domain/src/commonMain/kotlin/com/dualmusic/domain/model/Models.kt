@@ -131,8 +131,23 @@ data class Competition(
     @SerialName("start_at") val startAt: String? = null,
     @SerialName("end_at") val endAt: String? = null,
     @SerialName("reward_amount") val rewardAmount: Double = 0.0,
+    @SerialName("reward_description") val rewardDescription: String? = null,
     @SerialName("viewer_ticket_price") val viewerTicketPrice: Double = 0.0,
+    @SerialName("is_public_paid") val isPublicPaid: Boolean = false,
+    @SerialName("entry_fee_required") val entryFeeRequired: Boolean = false,
+    @SerialName("entry_fee_amount") val entryFeeAmount: Double = 0.0,
+    @SerialName("application_opens_at") val applicationOpensAt: String? = null,
+    @SerialName("application_deadline") val applicationDeadline: String? = null,
     @SerialName("cover_url") val coverUrl: String? = null,
+    val country: String? = null,
+    val city: String? = null,
+    val commune: String? = null,
+    val district: String? = null,
+    @SerialName("venue_name") val venueName: String? = null,
+    @SerialName("venue_address") val venueAddress: String? = null,
+    @SerialName("venue_contact") val venueContact: String? = null,
+    @SerialName("accepts_sponsors") val acceptsSponsors: Boolean = true,
+    @SerialName("sponsor_submission_deadline") val sponsorSubmissionDeadline: String? = null,
 )
 
 /** Demande de retrait de crédits par un artiste/manager. */

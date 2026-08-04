@@ -535,6 +535,9 @@ interface Strings {
     val compOnline: String
     val compOnsite: String
     val compRewardDesc: String
+    val compAcceptSponsors: String
+    val compPublishAction: String
+    val compCandidates: String
     val compRewardAmount: String
     val compEntryFee: String
     val compEntryFeeAmount: String
@@ -1143,6 +1146,9 @@ object FrStrings : Strings {
     override val compOnline = "En ligne"
     override val compOnsite = "En présentiel"
     override val compRewardDesc = "Récompense prévue"
+    override val compAcceptSponsors = "Accepter les sponsors"
+    override val compPublishAction = "Publier la compétition"
+    override val compCandidates = "Candidats"
     override val compRewardAmount = "Valeur (crédits)"
     override val compEntryFee = "Frais d'inscription requis"
     override val compEntryFeeAmount = "Montant des frais (crédits)"
@@ -1746,6 +1752,9 @@ object EnStrings : Strings {
     override val compOnline = "Online"
     override val compOnsite = "On-site"
     override val compRewardDesc = "Planned reward"
+    override val compAcceptSponsors = "Accept sponsors"
+    override val compPublishAction = "Publish competition"
+    override val compCandidates = "Candidates"
     override val compRewardAmount = "Value (credits)"
     override val compEntryFee = "Entry fee required"
     override val compEntryFeeAmount = "Fee amount (credits)"

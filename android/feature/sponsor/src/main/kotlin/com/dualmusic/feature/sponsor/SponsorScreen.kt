@@ -131,7 +131,7 @@ class SponsorViewModel(
         val competitions = runCatching {
             api.request(Endpoint.get(CompetitionEndpoints.LIST, q), ListSerializer(Competition.serializer()))
         }.getOrDefault(emptyList())
-            .filter { it.status != "ended" && it.status != "cancelled" }
+            .filter { it.status != "ended" && it.status != "cancelled" && it.acceptsSponsors }
             .map { SponsorableEvent("competition", it.id, "🏆 ${it.title}") }
 
         val duels = runCatching {
