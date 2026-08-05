@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.ui.draw.clip
@@ -76,6 +77,8 @@ class ManagerCompetitionsViewModel(
         val myId: String? = null,
         val creating: Boolean = false,
         val showForm: Boolean = false,
+        /** Compétition en cours d'édition (null = création). */
+        val editing: Competition? = null,
         val coverUrl: String = "",
         val coverUploading: Boolean = false,
         val message: String? = null,
@@ -119,7 +122,12 @@ class ManagerCompetitionsViewModel(
         }
     }
 
-    fun toggleForm() = _ui.update { it.copy(showForm = !it.showForm, message = null, coverUrl = "") }
+    fun toggleForm() = _ui.update { it.copy(showForm = !it.showForm, message = null, coverUrl = "", editing = null) }
+
+    /** Ouvre le formulaire en mode ÉDITION, pré-rempli avec la compétition. */
+    fun startEdit(comp: Competition) = _ui.update {
+        it.copy(showForm = true, editing = comp, coverUrl = comp.coverUrl ?: "", message = null)
+    }
 
     /** URL de couverture (saisie manuelle ou upload). */
     fun setCover(url: String) = _ui.update { it.copy(coverUrl = url) }
@@ -135,15 +143,23 @@ class ManagerCompetitionsViewModel(
         }
     }
 
-    /** Crée la compétition (managerId + coverUrl injectés depuis l'état). */
+    /** Crée OU met à jour la compétition (managerId + coverUrl injectés depuis l'état). */
     fun create(body: CreateCompetitionBody) {
         val myId = _ui.value.myId ?: return
         if (body.title.isBlank()) return
+        val editing = _ui.value.editing
         viewModelScope.launch {
             _ui.update { it.copy(creating = true, message = null) }
-            runCatching { repository.createCompetition(body.copy(managerId = myId, coverUrl = _ui.value.coverUrl.ifBlank { null })) }
+            val full = body.copy(managerId = myId, coverUrl = _ui.value.coverUrl.ifBlank { null })
+            val result = if (editing != null) {
+                // Édition : on préserve le statut existant (ne pas repasser en "open").
+                runCatching { repository.updateCompetition(editing.id, full.copy(status = editing.status)) }
+            } else {
+                runCatching { repository.createCompetition(full) }
+            }
+            result
                 .onSuccess {
-                    _ui.update { it.copy(creating = false, showForm = false, coverUrl = "", message = com.dualmusic.core.ui.i18n.appStrings.competitionCreated) }
+                    _ui.update { it.copy(creating = false, showForm = false, editing = null, coverUrl = "", message = com.dualmusic.core.ui.i18n.appStrings.competitionCreated) }
                     load()
                 }
                 .onFailure { e -> _ui.update { it.copy(creating = false, message = friendlyCreateError(e)) } }
@@ -225,6 +241,7 @@ fun ManagerCompetitionsScreen(viewModel: ManagerCompetitionsViewModel) {
         // Formulaire complet (révélé par le bouton).
         if (ui.showForm) {
             CompetitionFormCard(
+                initial = ui.editing,
                 creating = ui.creating,
                 coverUrl = ui.coverUrl,
                 coverUploading = ui.coverUploading,
@@ -255,7 +272,13 @@ fun ManagerCompetitionsScreen(viewModel: ManagerCompetitionsViewModel) {
                 modifier = Modifier.fillMaxWidth().padding(top = DualMusicTheme.spacing.lg),
             )
         } else {
-            filtered.forEach { comp -> ManagedCompetitionRow(comp) { openDetail = comp; viewModel.loadCandidates(comp.id) } }
+            filtered.forEach { comp ->
+                ManagedCompetitionRow(
+                    comp = comp,
+                    onOpen = { openDetail = comp; viewModel.loadCandidates(comp.id) },
+                    onEdit = { viewModel.startEdit(comp) },
+                )
+            }
         }
     }
 }
@@ -272,9 +295,9 @@ private fun FilterTab(label: String, selected: Boolean, onClick: () -> Unit) {
     ) { Text(label, color = if (selected) Color.White else colors.mutedForeground, fontSize = 12.sp) }
 }
 
-/** Ligne d'une compétition gérée : miniature + infos + statut + flèche vers le détail. */
+/** Ligne compacte d'une compétition gérée : miniature + infos (1 ligne) + crayon + flèche. */
 @Composable
-private fun ManagedCompetitionRow(comp: Competition, onOpen: () -> Unit) {
+private fun ManagedCompetitionRow(comp: Competition, onOpen: () -> Unit, onEdit: () -> Unit) {
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     DMCard(modifier = Modifier.fillMaxWidth().clickable { onOpen() }) {
@@ -282,18 +305,25 @@ private fun ManagedCompetitionRow(comp: Competition, onOpen: () -> Unit) {
             com.dualmusic.core.ui.components.DMRemoteImage(
                 url = comp.coverUrl,
                 contentDescription = null,
-                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(DualMusicTheme.radii.sm)),
+                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(DualMusicTheme.radii.sm)),
                 fallbackEmoji = "🏆",
             )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(comp.title, color = colors.foreground, fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                    Text(if (comp.mode == "onsite") s.compOnsite else s.compOnline, color = colors.mutedForeground, fontSize = 12.sp)
-                    comp.startAt?.let { Text(com.dualmusic.core.ui.datetime.formatTz(it, "dd/MM/yyyy"), color = colors.mutedForeground, fontSize = 12.sp) }
-                    comp.maxCandidates?.let { Text("· $it ${s.maxCandidatesLabel.lowercase()}", color = colors.mutedForeground, fontSize = 12.sp) }
-                }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(comp.title, color = colors.foreground, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(
+                    buildString {
+                        append(if (comp.mode == "onsite") s.compOnsite else s.compOnline)
+                        comp.startAt?.let { append(" · ${com.dualmusic.core.ui.datetime.formatTz(it, "dd/MM/yyyy")}") }
+                        comp.maxCandidates?.let { append(" · $it ${s.maxCandidatesLabel.lowercase()}") }
+                    },
+                    color = colors.mutedForeground, fontSize = 12.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+                Text(statusLabel(comp.status, s), color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
-            Text(statusLabel(comp.status, s), color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            // Crayon d'édition — masqué en direct/terminée (comme le web).
+            if (comp.status != "live" && comp.status != "finished") {
+                Icon(Icons.Filled.Edit, contentDescription = null, tint = colors.mutedForeground, modifier = Modifier.clickable { onEdit() }.padding(4.dp))
+            }
             Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.mutedForeground)
         }
     }
@@ -409,6 +439,7 @@ private fun InfoRow(label: String, value: String?) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CompetitionFormCard(
+    initial: Competition?,
     creating: Boolean,
     coverUrl: String,
     coverUploading: Boolean,
@@ -433,34 +464,38 @@ private fun CompetitionFormCard(
         }
     }
 
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var mode by remember { mutableStateOf("online") }
-    var maxCandidates by remember { mutableStateOf("10") }
-    var rewardDesc by remember { mutableStateOf("") }
-    var rewardAmount by remember { mutableStateOf("0") }
-    var entryFeeRequired by remember { mutableStateOf(false) }
-    var entryFeeAmount by remember { mutableStateOf("0") }
-    var acceptsSponsors by remember { mutableStateOf(true) }
-    var eligibilityScope by remember { mutableStateOf("country") }
-    val selectedCountries = remember { mutableStateListOf<String>() }
-    var countrySearch by remember { mutableStateOf("") }
-    var applicationOpensAt by remember { mutableStateOf("") }
-    var applicationDeadline by remember { mutableStateOf("") }
-    var startAt by remember { mutableStateOf("") }
-    var endAt by remember { mutableStateOf("") }
+    // Pré-remplissage en ÉDITION (keyé sur l'id → réinitialise si on change de compétition).
+    val k = initial?.id
+    fun dt(iso: String?) = iso?.take(16) ?: "" // ISO → "yyyy-MM-ddTHH:mm" pour DateTimePickerField
+    var title by remember(k) { mutableStateOf(initial?.title ?: "") }
+    var description by remember(k) { mutableStateOf(initial?.description ?: "") }
+    var mode by remember(k) { mutableStateOf(initial?.mode ?: "online") }
+    var maxCandidates by remember(k) { mutableStateOf(initial?.maxCandidates?.toString() ?: "10") }
+    var rewardDesc by remember(k) { mutableStateOf(initial?.rewardDescription ?: "") }
+    var rewardAmount by remember(k) { mutableStateOf(initial?.rewardAmount?.toInt()?.toString() ?: "0") }
+    var entryFeeRequired by remember(k) { mutableStateOf(initial?.entryFeeRequired ?: false) }
+    var entryFeeAmount by remember(k) { mutableStateOf(initial?.entryFeeAmount?.toInt()?.toString() ?: "0") }
+    var acceptsSponsors by remember(k) { mutableStateOf(initial?.acceptsSponsors ?: true) }
+    var eligibilityScope by remember(k) { mutableStateOf("country") }
+    val selectedCountries = remember(k) { mutableStateListOf<String>() }
+    var countrySearch by remember(k) { mutableStateOf("") }
+    var applicationOpensAt by remember(k) { mutableStateOf(dt(initial?.applicationOpensAt)) }
+    var applicationDeadline by remember(k) { mutableStateOf(dt(initial?.applicationDeadline)) }
+    var startAt by remember(k) { mutableStateOf(dt(initial?.startAt)) }
+    var endAt by remember(k) { mutableStateOf(dt(initial?.endAt)) }
+    var sponsorDeadline by remember(k) { mutableStateOf(dt(initial?.sponsorSubmissionDeadline)) }
     // Présentiel.
-    var country by remember { mutableStateOf("") }
-    var city by remember { mutableStateOf("") }
-    var commune by remember { mutableStateOf("") }
-    var district by remember { mutableStateOf("") }
-    var venueName by remember { mutableStateOf("") }
-    var venueAddress by remember { mutableStateOf("") }
-    var venueContact by remember { mutableStateOf("") }
+    var country by remember(k) { mutableStateOf(initial?.country ?: "") }
+    var city by remember(k) { mutableStateOf(initial?.city ?: "") }
+    var commune by remember(k) { mutableStateOf(initial?.commune ?: "") }
+    var district by remember(k) { mutableStateOf(initial?.district ?: "") }
+    var venueName by remember(k) { mutableStateOf(initial?.venueName ?: "") }
+    var venueAddress by remember(k) { mutableStateOf(initial?.venueAddress ?: "") }
+    var venueContact by remember(k) { mutableStateOf(initial?.venueContact ?: "") }
 
     DMCard(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-            Text(s.compNew, color = colors.foreground, fontWeight = FontWeight.Bold)
+            Text(if (initial != null) s.compEditTitle else s.compNew, color = colors.foreground, fontWeight = FontWeight.Bold)
 
             OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text(s.titleLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text(s.descriptionLabel) }, modifier = Modifier.fillMaxWidth())
@@ -509,6 +544,10 @@ private fun CompetitionFormCard(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(s.compAcceptSponsors, color = colors.foreground)
                 Switch(checked = acceptsSponsors, onCheckedChange = { acceptsSponsors = it })
+            }
+            // Date limite des candidatures sponsor — proposée dès que la case est cochée.
+            if (acceptsSponsors) {
+                DateTimePickerField(value = sponsorDeadline, onValueChange = { sponsorDeadline = it }, label = "${s.compSponsorDeadline} ($tz)", modifier = Modifier.fillMaxWidth())
             }
 
             // Éligibilité.
@@ -565,7 +604,7 @@ private fun CompetitionFormCard(
             DateTimePickerField(value = endAt, onValueChange = { endAt = it }, label = "${s.compEndAtLabel} ($tz)", modifier = Modifier.fillMaxWidth())
 
             DMButton(
-                if (creating) s.sending else s.createCompetitionAction,
+                if (creating) s.sending else if (initial != null) s.compEditTitle else s.createCompetitionAction,
                 enabled = !creating,
                 modifier = Modifier.fillMaxWidth().padding(top = DualMusicTheme.spacing.sm),
                 onClick = {
@@ -582,6 +621,7 @@ private fun CompetitionFormCard(
                             entryFeeRequired = entryFeeRequired,
                             entryFeeAmount = if (entryFeeRequired) (entryFeeAmount.toDoubleOrNull() ?: 0.0) else 0.0,
                             acceptsSponsors = acceptsSponsors,
+                            sponsorSubmissionDeadline = if (acceptsSponsors) sponsorDeadline.ifBlank { null } else null,
                             eligibilityScope = eligibilityScope,
                             eligibleCountries = if (eligibilityScope == "country") selectedCountries.toList() else emptyList(),
                             country = if (mode == "onsite") country.ifBlank { null } else null,

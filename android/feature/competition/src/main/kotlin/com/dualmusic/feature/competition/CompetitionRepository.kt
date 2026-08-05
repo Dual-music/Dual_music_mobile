@@ -144,6 +144,12 @@ class CompetitionRepository(private val api: ApiClient) {
         api.request<Unit>(Endpoint.post("/competitions", payload))
     }
 
+    /** Met à jour une compétition existante (édition). `PATCH /competitions/:id`. */
+    suspend fun updateCompetition(id: String, body: CreateCompetitionBody) {
+        val payload = json.encodeToString(CreateCompetitionBody.serializer(), body)
+        api.request<Unit>(Endpoint.patch("/competitions/$id", payload))
+    }
+
     // --- Contrôles MANAGER en direct ---
 
     /** Valide/rejette une candidature (`POST /competitions/candidates/:id/review`). */
@@ -186,6 +192,8 @@ data class CreateCompetitionBody(
     val entryFeeAmount: Double = 0.0,
     /** Le manager accepte-t-il les sponsors ? (défaut oui). */
     val acceptsSponsors: Boolean = true,
+    /** Date limite des candidatures sponsor (ISO, si sponsors acceptés). */
+    val sponsorSubmissionDeadline: String? = null,
     val eligibilityScope: String = "country",
     val eligibleCountries: List<String> = emptyList(),
     // Présentiel (onsite) — omis en ligne.
