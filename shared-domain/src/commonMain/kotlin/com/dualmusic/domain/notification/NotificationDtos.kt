@@ -18,6 +18,9 @@ data class AppNotification(
     val title: String? = null,
     val message: String? = null,
     val type: String? = null,
+    // Le backend renvoie `read` en 0/1 (MySQL TINYINT) → booléen tolérant, sinon la liste
+    // entière échoue à se désérialiser (cloche = 1 mais liste vide).
+    @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class)
     val read: Boolean = false,
     val data: JsonElement? = null,
     @SerialName("created_at") val createdAt: String? = null,
