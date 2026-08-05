@@ -45,6 +45,9 @@ class ApiClient(
     internal val json = Json {
         ignoreUnknownKeys = true // Tolère les champs backend non modélisés côté mobile.
         explicitNulls = false
+        // Un champ non-nullable reçu `null` (ou un enum inconnu) retombe sur sa valeur par défaut
+        // au lieu de faire échouer TOUTE la désérialisation (sinon une liste entière devient vide).
+        coerceInputValues = true
     }
 
     private val refreshMutex = Mutex()

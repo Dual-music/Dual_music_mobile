@@ -574,6 +574,31 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
     // Quitte le profil et sélectionne un onglet bas (réinitialise les superpositions).
     fun goTab(t: Int) { tab = t; showProfile = false; homeOpen = 0; notifOpen = false; rechargeOpen = false }
 
+    // Touche RETOUR du téléphone : navigation hiérarchique (au lieu de fermer l'app).
+    // On dépile l'état le plus profond ; les écrans avec leur propre BackHandler (rooms, replays)
+    // sont composés plus profond → ils gèrent leur cas en priorité. Désactivé sur l'accueil racine
+    // → le système ferme l'app normalement.
+    val canGoBack = notifOpen || rechargeOpen || showProfile || broadcastLive != null ||
+        openDuel != null || openCompetition != null || openConcert != null ||
+        openDuelReplay != null || openCompetitionReplay != null || openConcertReplay != null ||
+        homeOpen != 0 || tab != 0
+    androidx.activity.compose.BackHandler(enabled = canGoBack) {
+        when {
+            rechargeOpen -> rechargeOpen = false
+            notifOpen -> notifOpen = false
+            broadcastLive != null -> broadcastLive = null
+            showProfile -> if (profileSub != 0) profileSub = 0 else showProfile = false
+            openDuelReplay != null -> openDuelReplay = null
+            openCompetitionReplay != null -> openCompetitionReplay = null
+            openConcertReplay != null -> openConcertReplay = null
+            openDuel != null -> openDuel = null
+            openCompetition != null -> openCompetition = null
+            openConcert != null -> openConcert = null
+            homeOpen != 0 -> homeOpen = 0
+            tab != 0 -> tab = 0
+        }
+    }
+
     // Écran de diffusion plein écran (prioritaire sur tout le reste, pas de nav basse).
     broadcastLive?.let { live ->
         val hostVm: LiveViewModel = viewModel(key = "host-${live.id}") { container.makeLiveHostViewModel(live) }
