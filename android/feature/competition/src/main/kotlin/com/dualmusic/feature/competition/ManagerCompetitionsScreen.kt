@@ -91,8 +91,10 @@ class ManagerCompetitionsViewModel(
     fun load() {
         viewModelScope.launch {
             val myId = repository.myUserId()
-            val comps = runCatching { repository.myCompetitions() }.getOrDefault(emptyList())
-            _ui.update { it.copy(myId = myId, competitions = comps) }
+            runCatching { repository.myCompetitions() }
+                .onSuccess { comps -> _ui.update { it.copy(myId = myId, competitions = comps, message = null) } }
+                // DIAGNOSTIC : on affiche la vraie cause (au lieu de masquer par une liste vide).
+                .onFailure { e -> _ui.update { it.copy(myId = myId, message = "⚠️ ${e::class.simpleName}: ${(e.message ?: "").take(200)}") } }
         }
     }
 
