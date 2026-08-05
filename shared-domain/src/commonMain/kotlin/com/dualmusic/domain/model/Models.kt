@@ -133,8 +133,8 @@ data class Competition(
     @SerialName("reward_amount") val rewardAmount: Double = 0.0,
     @SerialName("reward_description") val rewardDescription: String? = null,
     @SerialName("viewer_ticket_price") val viewerTicketPrice: Double = 0.0,
-    @SerialName("is_public_paid") val isPublicPaid: Boolean = false,
-    @SerialName("entry_fee_required") val entryFeeRequired: Boolean = false,
+    @SerialName("is_public_paid") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val isPublicPaid: Boolean = false,
+    @SerialName("entry_fee_required") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val entryFeeRequired: Boolean = false,
     @SerialName("entry_fee_amount") val entryFeeAmount: Double = 0.0,
     @SerialName("application_opens_at") val applicationOpensAt: String? = null,
     @SerialName("application_deadline") val applicationDeadline: String? = null,
@@ -146,7 +146,7 @@ data class Competition(
     @SerialName("venue_name") val venueName: String? = null,
     @SerialName("venue_address") val venueAddress: String? = null,
     @SerialName("venue_contact") val venueContact: String? = null,
-    @SerialName("accepts_sponsors") val acceptsSponsors: Boolean = true,
+    @SerialName("accepts_sponsors") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val acceptsSponsors: Boolean = true,
     @SerialName("sponsor_submission_deadline") val sponsorSubmissionDeadline: String? = null,
 )
 
