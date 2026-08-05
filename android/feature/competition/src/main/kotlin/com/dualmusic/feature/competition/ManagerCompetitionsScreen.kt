@@ -467,6 +467,12 @@ private fun CompetitionFormCard(
     // Pré-remplissage en ÉDITION (keyé sur l'id → réinitialise si on change de compétition).
     val k = initial?.id
     fun dt(iso: String?) = iso?.take(16) ?: "" // ISO → "yyyy-MM-ddTHH:mm" pour DateTimePickerField
+    // "yyyy-MM-ddTHH:mm" (heure GMT saisie) → ISO UTC explicite (suffixe Z) pour que le backend
+    // NE ré-interprète PAS l'heure en local (sinon 14:00 devient 12:00). Vide → null.
+    fun gmt(s: String): String? {
+        val t = s.trim()
+        return if (t.isBlank()) null else if (t.endsWith("Z")) t else "${t.take(16)}:00.000Z"
+    }
     var title by remember(k) { mutableStateOf(initial?.title ?: "") }
     var description by remember(k) { mutableStateOf(initial?.description ?: "") }
     var mode by remember(k) { mutableStateOf(initial?.mode ?: "online") }
@@ -621,7 +627,7 @@ private fun CompetitionFormCard(
                             entryFeeRequired = entryFeeRequired,
                             entryFeeAmount = if (entryFeeRequired) (entryFeeAmount.toDoubleOrNull() ?: 0.0) else 0.0,
                             acceptsSponsors = acceptsSponsors,
-                            sponsorSubmissionDeadline = if (acceptsSponsors) sponsorDeadline.ifBlank { null } else null,
+                            sponsorSubmissionDeadline = if (acceptsSponsors) gmt(sponsorDeadline) else null,
                             eligibilityScope = eligibilityScope,
                             eligibleCountries = if (eligibilityScope == "country") selectedCountries.toList() else emptyList(),
                             country = if (mode == "onsite") country.ifBlank { null } else null,
@@ -631,10 +637,10 @@ private fun CompetitionFormCard(
                             venueName = if (mode == "onsite") venueName.trim().ifBlank { null } else null,
                             venueAddress = if (mode == "onsite") venueAddress.trim().ifBlank { null } else null,
                             venueContact = if (mode == "onsite") venueContact.trim().ifBlank { null } else null,
-                            applicationOpensAt = applicationOpensAt.ifBlank { null },
-                            applicationDeadline = applicationDeadline.ifBlank { null },
-                            startAt = startAt.ifBlank { null },
-                            endAt = endAt.ifBlank { null },
+                            applicationOpensAt = gmt(applicationOpensAt),
+                            applicationDeadline = gmt(applicationDeadline),
+                            startAt = gmt(startAt),
+                            endAt = gmt(endAt),
                         ),
                     )
                 },
