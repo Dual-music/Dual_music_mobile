@@ -135,7 +135,9 @@ class CreatorViewModel(
                 CreateDuelRequest.serializer(),
                 CreateDuelRequest(
                     opponentId = opponentId,
-                    proposedDate = proposedDate?.takeIf { it.isNotBlank() },
+                    // Normalise l'horloge saisie en ISO UTC (Z) comme le web, sinon le backend
+                    // réinterprète l'heure en local et l'écart web/mobile réapparaît.
+                    proposedDate = com.dualmusic.core.ui.datetime.toWireUtc(proposedDate),
                     message = message?.takeIf { it.isNotBlank() },
                 ),
             )
@@ -167,7 +169,8 @@ class CreatorViewModel(
     fun changeDuelDate(id: String, newDate: String) {
         if (newDate.isBlank()) return
         viewModelScope.launch {
-            val body = json.encodeToString(ChangeDuelDateRequest.serializer(), ChangeDuelDateRequest(newDate))
+            val wire = com.dualmusic.core.ui.datetime.toWireUtc(newDate) ?: newDate
+            val body = json.encodeToString(ChangeDuelDateRequest.serializer(), ChangeDuelDateRequest(wire))
             runCatching { api.request<Unit>(Endpoint.patch(CreatorEndpoints.duelChangeDate(id), body)) }
                 .onSuccess {
                     _uiState.update { it.copy(message = "Date du duel modifiée 📅") }
@@ -254,9 +257,9 @@ class CreatorViewModel(
         }
     }
 
-    /** Complète une saisie `YYYY-MM-DDTHH:MM` en ISO `…:00` si nécessaire. */
+    /** Horloge locale (fuseau préféré) → ISO UTC avec `Z`, cohérent web/mobile. */
     private fun normalizeIsoDate(input: String): String =
-        if (Regex("""^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$""").matches(input)) "$input:00" else input
+        com.dualmusic.core.ui.datetime.toWireUtc(input) ?: input
 }
 
 /**

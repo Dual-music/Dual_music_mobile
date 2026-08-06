@@ -466,13 +466,9 @@ private fun CompetitionFormCard(
 
     // Pré-remplissage en ÉDITION (keyé sur l'id → réinitialise si on change de compétition).
     val k = initial?.id
-    fun dt(iso: String?) = iso?.take(16) ?: "" // ISO → "yyyy-MM-ddTHH:mm" pour DateTimePickerField
-    // "yyyy-MM-ddTHH:mm" (heure GMT saisie) → ISO UTC explicite (suffixe Z) pour que le backend
-    // NE ré-interprète PAS l'heure en local (sinon 14:00 devient 12:00). Vide → null.
-    fun gmt(s: String): String? {
-        val t = s.trim()
-        return if (t.isBlank()) null else if (t.endsWith("Z")) t else "${t.take(16)}:00.000Z"
-    }
+    // Conversions centralisées (mêmes règles que le web + fuseau préféré) : ISO UTC ↔ horloge locale.
+    fun dt(iso: String?) = com.dualmusic.core.ui.datetime.toPickerValue(iso)
+    fun gmt(s: String): String? = com.dualmusic.core.ui.datetime.toWireUtc(s)
     var title by remember(k) { mutableStateOf(initial?.title ?: "") }
     var description by remember(k) { mutableStateOf(initial?.description ?: "") }
     var mode by remember(k) { mutableStateOf(initial?.mode ?: "online") }
