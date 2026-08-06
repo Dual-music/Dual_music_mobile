@@ -400,6 +400,9 @@ interface Strings {
     val messageOptional: String
     val sendDuelRequest: String
     val receivedInvitations: String
+    val mySentRequests: String
+    val noSentRequests: String
+    val duelPlanned: String
     val duelRequestSent: String
     // Suivis (artistes suivis uniquement).
     val followedTitle: String
@@ -1025,7 +1028,10 @@ object FrStrings : Strings {
     override val sendDuelRequest = "Envoyer la demande de duel"
     override val noArtistAvailable = "Aucun artiste disponible"
     override val challenge = "Défier"
-    override val receivedInvitations = "Invitations reçues"
+    override val receivedInvitations = "Demandes reçues"
+    override val mySentRequests = "Mes demandes envoyées"
+    override val noSentRequests = "Aucune demande envoyée."
+    override val duelPlanned = "Duel prévu :"
     override val duelRequestSent = "✅ Invitation envoyée."
     override val followedTitle = "Artistes suivis"
     override val notFollowingAny = "Vous ne suivez aucun artiste"
@@ -1640,7 +1646,10 @@ object EnStrings : Strings {
     override val searchArtist = "Search an artist…"
     override val noArtistAvailable = "No artist available"
     override val challenge = "Challenge"
-    override val receivedInvitations = "Received invitations"
+    override val receivedInvitations = "Received requests"
+    override val mySentRequests = "My sent requests"
+    override val noSentRequests = "No request sent yet."
+    override val duelPlanned = "Duel scheduled:"
     override val duelRequestSent = "✅ Invitation sent."
     override val followedTitle = "Followed artists"
     override val notFollowingAny = "You don't follow any artist"

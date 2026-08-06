@@ -29,6 +29,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -324,24 +325,31 @@ fun CreatorScreen(viewModel: CreatorViewModel, initialTab: Int = 0) {
                         }
                     }
                 }
-                // Invitations reçues (accepter/refuser).
-                Text(strings.receivedInvitations, color = colors.foreground, fontWeight = FontWeight.Bold)
-                if (ui.duelRequests.isEmpty()) {
-                    DMEmptyState(
-                        title = strings.noChallenges,
-                        subtitle = strings.noChallengesHint,
-                        icon = Icons.Filled.Notifications,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                    items(ui.duelRequests) { req ->
-                        DuelRequestRow(
-                            request = req,
-                            canRespond = req.opponentId == ui.myUserId && req.status == "pending",
-                            onAccept = { viewModel.respond(req.id, true) },
-                            onDecline = { viewModel.respond(req.id, false) },
-                        )
+                // Séparation « Mes demandes envoyées » (émises) et « Demandes reçues » (parité web).
+                val sent = ui.duelRequests.filter { it.requesterId == ui.myUserId }
+                val received = ui.duelRequests.filter { it.opponentId == ui.myUserId }
+                val nameFor: (String?) -> String = { uid -> ui.artists.firstOrNull { it.opponentUserId == uid }?.displayName ?: strings.artistSingular }
+                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    item { Text(strings.mySentRequests, color = colors.foreground, fontWeight = FontWeight.Bold) }
+                    if (sent.isEmpty()) {
+                        item { Text(strings.noSentRequests, color = colors.mutedForeground) }
+                    } else {
+                        items(sent) { req -> SentDuelRow(opponentName = nameFor(req.opponentId), request = req) }
+                    }
+                    item {
+                        Text(strings.receivedInvitations, color = colors.foreground, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = DualMusicTheme.spacing.md))
+                    }
+                    if (received.isEmpty()) {
+                        item { Text(strings.noChallengesHint, color = colors.mutedForeground) }
+                    } else {
+                        items(received) { req ->
+                            DuelRequestRow(
+                                request = req,
+                                canRespond = req.status == "pending",
+                                onAccept = { viewModel.respond(req.id, true) },
+                                onDecline = { viewModel.respond(req.id, false) },
+                            )
+                        }
                     }
                 }
             }
@@ -534,9 +542,26 @@ private fun ConcertRow(concert: Concert) {
     }
 }
 
+/** Ligne d'une demande de duel ENVOYÉE : adversaire + date prévue + statut (parité web). */
+@Composable
+private fun SentDuelRow(opponentName: String, request: DuelRequestItem) {
+    val colors = DualMusicTheme.colors
+    val strings = LocalStrings.current
+    DMCard(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("🎤 $opponentName", color = colors.foreground, fontWeight = FontWeight.Bold)
+                request.proposedDate?.let { Text("${strings.duelPlanned} ${com.dualmusic.core.ui.datetime.formatTz(it)}", color = colors.mutedForeground, fontSize = 12.sp) }
+            }
+            Text(statusLabel(request.status, strings), color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        }
+    }
+}
+
 private fun statusLabel(status: String, strings: Strings): String = when (status) {
     "pending" -> strings.statusPending
-    "accepted" -> strings.statusAccepted
-    "declined" -> strings.statusDeclined
+    "accepted", "admin_pending" -> strings.statusAccepted
+    "approved" -> strings.statusApproved
+    "rejected", "declined" -> strings.statusRejected
     else -> status
 }
