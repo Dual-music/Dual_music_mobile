@@ -59,8 +59,10 @@ data class MyContentUiState(
     val videos: List<LifestyleVideo> = emptyList(),
     val replays: List<ReplayVideo> = emptyList(),
     val pendingVideoUrl: String? = null,
+    val pendingThumbnailUrl: String? = null,
     val pendingDuration: String = "0:00",
     val uploading: Boolean = false,
+    val uploadingThumb: Boolean = false,
     val submitting: Boolean = false,
     val message: String? = null,
 )
@@ -124,6 +126,16 @@ class MyContentViewModel(
         }
     }
 
+    /** Upload la miniature choisie (catégorie image) et mémorise son URL. */
+    fun uploadThumbnail(media: com.dualmusic.core.upload.LocalMedia) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(uploadingThumb = true, message = null) }
+            runCatching { uploader.upload(media, UploadCategory.IMAGE) }
+                .onSuccess { url -> _uiState.update { it.copy(uploadingThumb = false, pendingThumbnailUrl = url) } }
+                .onFailure { e -> _uiState.update { it.copy(uploadingThumb = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.uploadFailed) } }
+        }
+    }
+
     /** Signale une erreur (lecture/plafond de taille) à l'UI. */
     fun setMessage(text: String?) = _uiState.update { it.copy(message = text) }
 
@@ -142,7 +154,7 @@ class MyContentViewModel(
                     artistName = _uiState.value.artistName,
                     title = title.trim(),
                     videoUrl = videoUrl,
-                    thumbnailUrl = null,
+                    thumbnailUrl = _uiState.value.pendingThumbnailUrl,
                     description = description.ifBlank { null },
                     duration = _uiState.value.pendingDuration,
                 ),
@@ -150,7 +162,7 @@ class MyContentViewModel(
             runCatching { api.request<Unit>(Endpoint.post(ContentEndpoints.LIFESTYLE, body)) }
                 .onSuccess {
                     _uiState.update {
-                        it.copy(submitting = false, pendingVideoUrl = null, message = com.dualmusic.core.ui.i18n.appStrings.videoPublished)
+                        it.copy(submitting = false, pendingVideoUrl = null, pendingThumbnailUrl = null, message = com.dualmusic.core.ui.i18n.appStrings.videoPublished)
                     }
                     load()
                     onDone()
@@ -189,6 +201,18 @@ fun MyContentScreen(viewModel: MyContentViewModel) {
             scope.launch {
                 runCatching { readLocalMedia(context, uri, maxBytes = 500L * 1024 * 1024) }
                     .onSuccess { media -> viewModel.uploadVideo(media, extractDuration(context, uri)) }
+                    .onFailure { viewModel.setMessage(it.message ?: s.fileUnreadable) }
+            }
+        }
+    }
+    // Sélecteur miniature (image, ≤ 5 Mo).
+    val thumbPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                runCatching { readLocalMedia(context, uri, maxBytes = 5L * 1024 * 1024) }
+                    .onSuccess { media -> viewModel.uploadThumbnail(media) }
                     .onFailure { viewModel.setMessage(it.message ?: s.fileUnreadable) }
             }
         }
@@ -232,7 +256,17 @@ fun MyContentScreen(viewModel: MyContentViewModel) {
                             )
                         },
                     )
-                    if (ui.pendingVideoUrl != null) Text(s.videoReady, color = colors.accent)
+                    if (ui.pendingVideoUrl != null) Text("${s.videoReady} · Durée : ${ui.pendingDuration}", color = colors.accent)
+                    // Miniature (optionnelle) — parité web.
+                    DMButton(
+                        if (ui.uploadingThumb) "…" else if (ui.pendingThumbnailUrl != null) "Miniature ✓" else "Miniature (optionnel)",
+                        style = DMButtonStyle.OUTLINE,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !ui.uploadingThumb,
+                        onClick = {
+                            thumbPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        },
+                    )
                     DMButton(
                         s.publishVideo,
                         modifier = Modifier.fillMaxWidth(),
