@@ -147,12 +147,18 @@ class CreatorViewModel(
         }
     }
 
-    /** Répond à un défi reçu (accepter/refuser), puis recharge. */
+    /** Répond à un défi reçu (accepter/refuser), avec retour clair + recharge. */
     fun respond(id: String, accept: Boolean) {
         viewModelScope.launch {
             val body = json.encodeToString(RespondDuelRequest.serializer(), RespondDuelRequest(accept))
             runCatching { api.request<Unit>(Endpoint.post(CreatorEndpoints.duelRespond(id), body)) }
-                .onSuccess { load() }
+                .onSuccess {
+                    _uiState.update { it.copy(message = if (accept) "Duel accepté ✅" else "Duel refusé") }
+                    load()
+                }
+                // Sans ceci, un échec (403/409/réseau) était avalé silencieusement → l'utilisateur
+                // croyait devoir encore répondre. On affiche désormais la vraie cause.
+                .onFailure { e -> _uiState.update { it.copy(message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.errCreateFailed) } }
         }
     }
 
