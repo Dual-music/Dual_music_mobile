@@ -55,6 +55,8 @@ data class UpdateProfileRequest(
     @SerialName("phone_country_code") val phoneCountryCode: String? = null,
     val bio: String? = null,
     @SerialName("avatar_url") val avatarUrl: String? = null,
+    @SerialName("birth_date") val birthDate: String? = null,
+    val gender: String? = null,
 )
 
 /** Chemins REST du profil / utilisateur. */

@@ -1,6 +1,7 @@
 package com.dualmusic.feature.auth
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -74,6 +75,28 @@ fun ProfileCompletionScreen(viewModel: AuthViewModel) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                // Date de naissance (AAAA-MM-JJ).
+                OutlinedTextField(
+                    value = ui.birthDate,
+                    onValueChange = viewModel::onBirthDateChange,
+                    label = { Text("Date de naissance") },
+                    placeholder = { Text("AAAA-MM-JJ") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                // Sexe (pilules sélectionnables).
+                Text("Sexe", color = colors.mutedForeground)
+                androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    listOf("male" to "Homme", "female" to "Femme", "other" to "Autre").forEach { (value, label) ->
+                        val selected = ui.gender == value
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier
+                                .background(if (selected) colors.primary else colors.muted.copy(alpha = 0.25f), androidx.compose.foundation.shape.RoundedCornerShape(999.dp))
+                                .clickable { viewModel.onGenderChange(value) }
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                        ) { Text(label, color = if (selected) androidx.compose.ui.graphics.Color.White else colors.foreground) }
+                    }
+                }
 
                 ui.info?.let { Text(it, color = colors.primaryGlow) }
                 ui.error?.let { Text(it, color = colors.destructive) }

@@ -37,6 +37,8 @@ data class SignInUiState(
     val confirmPassword: String = "",
     val fullName: String = "",
     val phone: String = "",
+    val birthDate: String = "",
+    val gender: String = "",
     val country: Country = Countries.DEFAULT,
     val referralCode: String = "",
     val acceptTerms: Boolean = false,
@@ -82,6 +84,8 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     fun onConfirmPasswordChange(v: String) = _uiState.update { it.copy(confirmPassword = v, error = null) }
     fun onFullNameChange(v: String) = _uiState.update { it.copy(fullName = v, error = null) }
     fun onPhoneChange(v: String) = _uiState.update { it.copy(phone = v, error = null) }
+    fun onBirthDateChange(v: String) = _uiState.update { it.copy(birthDate = v, error = null) }
+    fun onGenderChange(v: String) = _uiState.update { it.copy(gender = v, error = null) }
     fun onReferralChange(v: String) = _uiState.update { it.copy(referralCode = v.uppercase(), error = null) }
     fun onCountrySelected(country: Country) = _uiState.update { it.copy(country = country, error = null) }
     fun onAcceptTermsChange(v: Boolean) = _uiState.update { it.copy(acceptTerms = v, error = null) }
@@ -187,6 +191,8 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
                         countryCode = s.country.code,
                         phone = s.phone.trim().ifBlank { null },
                         phoneCountryCode = s.country.dial,
+                        birthDate = s.birthDate.trim().ifBlank { null },
+                        gender = s.gender.ifBlank { null },
                     ),
                 )
             }.onSuccess { _authState.value = AuthState.SignedIn(pending.user) }
