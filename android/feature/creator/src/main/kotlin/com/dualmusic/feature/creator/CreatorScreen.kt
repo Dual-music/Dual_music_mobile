@@ -60,6 +60,7 @@ import com.dualmusic.core.upload.readLocalMedia
 import com.dualmusic.domain.auth.MeResponse
 import com.dualmusic.domain.concert.ConcertEndpoints
 import com.dualmusic.domain.creator.CreateArtistConcert
+import com.dualmusic.domain.creator.ChangeDuelDateRequest
 import com.dualmusic.domain.creator.CreateDuelRequest
 import com.dualmusic.domain.creator.CreatorEndpoints
 import com.dualmusic.domain.creator.DuelRequestItem
@@ -158,6 +159,20 @@ class CreatorViewModel(
                 }
                 // Sans ceci, un échec (403/409/réseau) était avalé silencieusement → l'utilisateur
                 // croyait devoir encore répondre. On affiche désormais la vraie cause.
+                .onFailure { e -> _uiState.update { it.copy(message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.errCreateFailed) } }
+        }
+    }
+
+    /** Change la date proposée d'un défi ENVOYÉ encore en attente (émetteur). Renotifie l'adversaire. */
+    fun changeDuelDate(id: String, newDate: String) {
+        if (newDate.isBlank()) return
+        viewModelScope.launch {
+            val body = json.encodeToString(ChangeDuelDateRequest.serializer(), ChangeDuelDateRequest(newDate))
+            runCatching { api.request<Unit>(Endpoint.patch(CreatorEndpoints.duelChangeDate(id), body)) }
+                .onSuccess {
+                    _uiState.update { it.copy(message = "Date du duel modifiée 📅") }
+                    load()
+                }
                 .onFailure { e -> _uiState.update { it.copy(message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.errCreateFailed) } }
         }
     }
@@ -358,7 +373,13 @@ fun CreatorScreen(viewModel: CreatorViewModel, initialTab: Int = 0) {
                     if (sent.isEmpty()) {
                         item { Text(strings.noSentRequests, color = colors.mutedForeground) }
                     } else {
-                        items(sent) { req -> SentDuelRow(opponentName = nameFor(req.opponentId), request = req) }
+                        items(sent) { req ->
+                            SentDuelRow(
+                                opponentName = nameFor(req.opponentId),
+                                request = req,
+                                onChangeDate = { newDate -> viewModel.changeDuelDate(req.id, newDate) },
+                            )
+                        }
                     }
                     item {
                         Text(strings.receivedInvitations, color = colors.foreground, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = DualMusicTheme.spacing.md))
@@ -644,18 +665,37 @@ private fun concertStatusText(status: com.dualmusic.domain.model.EventStatus): S
     else -> status.name.lowercase().replaceFirstChar { it.uppercase() }
 }
 
-/** Ligne d'une demande de duel ENVOYÉE : adversaire + date prévue + statut (parité web). */
+/**
+ * Ligne d'une demande de duel ENVOYÉE : adversaire + date prévue + statut (parité web).
+ * Tant que la demande est `pending`, l'émetteur peut reproposer une autre date
+ * (le backend renotifie l'adversaire par notif + email).
+ */
 @Composable
-private fun SentDuelRow(opponentName: String, request: DuelRequestItem) {
+private fun SentDuelRow(opponentName: String, request: DuelRequestItem, onChangeDate: (String) -> Unit) {
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
+    var editing by remember { mutableStateOf(false) }
+    var newDate by remember { mutableStateOf("") }
     DMCard(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("🎤 $opponentName", color = colors.foreground, fontWeight = FontWeight.Bold)
-                request.proposedDate?.let { Text("${strings.duelPlanned} ${com.dualmusic.core.ui.datetime.formatTz(it)}", color = colors.mutedForeground, fontSize = 12.sp) }
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("🎤 $opponentName", color = colors.foreground, fontWeight = FontWeight.Bold)
+                    request.proposedDate?.let { Text("${strings.duelPlanned} ${com.dualmusic.core.ui.datetime.formatTz(it)}", color = colors.mutedForeground, fontSize = 12.sp) }
+                }
+                Text(statusLabel(request.status, strings), color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
-            Text(statusLabel(request.status, strings), color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            if (request.status == "pending") {
+                if (!editing) {
+                    DMButton(strings.changeDate, style = DMButtonStyle.OUTLINE) { editing = true }
+                } else {
+                    DateTimePickerField(value = newDate, onValueChange = { newDate = it }, label = strings.proposedDateOptional)
+                    Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                        DMButton(strings.save, enabled = newDate.isNotBlank()) { onChangeDate(newDate); editing = false }
+                        DMButton(strings.cancel, style = DMButtonStyle.OUTLINE) { editing = false }
+                    }
+                }
+            }
         }
     }
 }

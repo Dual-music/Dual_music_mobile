@@ -397,6 +397,7 @@ interface Strings {
     val artistsAvailable: String
     val selectedArtist: String
     val proposedDateOptional: String
+    val changeDate: String
     val messageOptional: String
     val sendDuelRequest: String
     val receivedInvitations: String
@@ -1024,6 +1025,7 @@ object FrStrings : Strings {
     override val artistsAvailable = "artiste(s) disponible(s)"
     override val selectedArtist = "Artiste sélectionné"
     override val proposedDateOptional = "Date proposée (optionnel)"
+    override val changeDate = "Modifier la date"
     override val messageOptional = "Message (optionnel)"
     override val sendDuelRequest = "Envoyer la demande de duel"
     override val noArtistAvailable = "Aucun artiste disponible"
@@ -1641,6 +1643,7 @@ object EnStrings : Strings {
     override val artistsAvailable = "artist(s) available"
     override val selectedArtist = "Selected artist"
     override val proposedDateOptional = "Proposed date (optional)"
+    override val changeDate = "Change date"
     override val messageOptional = "Message (optional)"
     override val sendDuelRequest = "Send duel request"
     override val searchArtist = "Search an artist…"

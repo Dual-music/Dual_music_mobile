@@ -24,6 +24,13 @@ data class DuelRequestItem(
 @Serializable
 data class RespondDuelRequest(val accept: Boolean)
 
+/**
+ * Corps de `PATCH /duels/requests/:id` — changer la date proposée d'un défi encore en attente.
+ * Réservé à l'émetteur (ou admin). Le backend renotifie l'autre partie (notif + email).
+ */
+@Serializable
+data class ChangeDuelDateRequest(val proposedDate: String?)
+
 /** Corps de `POST /duels/requests` — envoyer un défi à un autre artiste. */
 @Serializable
 data class CreateDuelRequest(
@@ -59,6 +66,8 @@ object CreatorEndpoints {
     const val DUEL_REQUEST_CREATE = "/duels/requests"
     /** Répondre à un défi. */
     fun duelRespond(id: String) = "/duels/requests/$id/respond"
+    /** Changer la date proposée d'un défi (`PATCH`, émetteur/admin). */
+    fun duelChangeDate(id: String) = "/duels/requests/$id"
     /** Concerts de l'artiste caller. */
     const val MY_CONCERTS = "/artist-concerts/me"
 
