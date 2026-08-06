@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -246,7 +248,6 @@ fun CreatorScreen(viewModel: CreatorViewModel, initialTab: Int = 0) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
-    var tab by remember { mutableIntStateOf(initialTab) }
 
     LaunchedEffect(Unit) { viewModel.load() }
 
@@ -258,14 +259,8 @@ fun CreatorScreen(viewModel: CreatorViewModel, initialTab: Int = 0) {
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
         ui.message?.let { Text(it, color = colors.primary) }
-        TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = colors.foreground) {
-            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(strings.tabChallenges) })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(strings.myConcerts) })
-            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text(strings.create) })
-        }
-
-        when (tab) {
-            0 -> {
+        // Deux pages DISTINCTES sans onglets (parité web) : Duels (initialTab 0) OU Concerts.
+        if (initialTab == 0) {
                 var duelQuery by remember { mutableStateOf("") }
                 var selectedArtist by remember { mutableStateOf<com.dualmusic.domain.artist.ArtistSummary?>(null) }
                 var proposedDate by remember { mutableStateOf("") }
@@ -375,15 +370,21 @@ fun CreatorScreen(viewModel: CreatorViewModel, initialTab: Int = 0) {
                         }
                     }
                 }
-            }
-            1 -> {
+        } else {
+            // ===== Page CONCERTS (Mes Concerts & Shows Live) — sans onglets, comme le web =====
+            var showConcertForm by remember { mutableStateOf(false) }
+            if (showConcertForm) {
+                DMButton(strings.compCancel, style = DMButtonStyle.OUTLINE, modifier = Modifier.fillMaxWidth()) { showConcertForm = false }
+                CreateConcertForm(ui, viewModel, modifier = Modifier.weight(1f)) { showConcertForm = false }
+            } else {
+                DMButton("+ Planifier un concert", modifier = Modifier.fillMaxWidth()) { showConcertForm = true }
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                    // Cartes de statistiques (parité web : planifiés / tickets vendus / revenus).
+                    // Cartes de statistiques de MÊME TAILLE (IntrinsicSize.Min → hauteur commune).
                     item {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                            ConcertStat("${ui.concerts.size}", "Concerts planifiés", Modifier.weight(1f))
-                            ConcertStat("${ui.concerts.sumOf { it.ticketsSold }}", "Tickets vendus", Modifier.weight(1f))
-                            ConcertStat("$${ui.concerts.sumOf { it.revenue }.toInt()}", "Revenus", Modifier.weight(1f))
+                        Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                            ConcertStat("${ui.concerts.size}", "Concerts planifiés", Modifier.weight(1f).fillMaxHeight())
+                            ConcertStat("${ui.concerts.sumOf { it.ticketsSold }}", "Tickets vendus", Modifier.weight(1f).fillMaxHeight())
+                            ConcertStat("$${ui.concerts.sumOf { it.revenue }.toInt()}", "Revenus", Modifier.weight(1f).fillMaxHeight())
                         }
                     }
                     if (ui.concerts.isEmpty()) {
@@ -407,7 +408,6 @@ fun CreatorScreen(viewModel: CreatorViewModel, initialTab: Int = 0) {
                     }
                 }
             }
-            else -> CreateConcertForm(ui, viewModel) { tab = 1 }
         }
     }
 }
@@ -417,6 +417,7 @@ fun CreatorScreen(viewModel: CreatorViewModel, initialTab: Int = 0) {
 private fun CreateConcertForm(
     ui: CreatorUiState,
     viewModel: CreatorViewModel,
+    modifier: Modifier = Modifier,
     onCreated: () -> Unit,
 ) {
     val colors = DualMusicTheme.colors
@@ -445,7 +446,7 @@ private fun CreateConcertForm(
         }
     }
 
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+    LazyColumn(modifier = modifier, verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
         item {
             OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text(strings.titleRequired) }, modifier = Modifier.fillMaxWidth())
         }
