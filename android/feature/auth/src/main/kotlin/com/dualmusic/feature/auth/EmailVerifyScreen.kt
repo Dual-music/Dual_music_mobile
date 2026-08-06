@@ -57,12 +57,11 @@ fun EmailVerifyScreen(viewModel: AuthViewModel, email: String) {
 
         DMCard {
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md)) {
-                OutlinedTextField(
+                Text("Code reçu par email", color = colors.mutedForeground)
+                // Une case par chiffre (parité web / PIN).
+                com.dualmusic.core.ui.components.OtpBoxes(
                     value = ui.verifyCode,
                     onValueChange = viewModel::onVerifyCodeChange,
-                    label = { Text("Code reçu par email") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
 

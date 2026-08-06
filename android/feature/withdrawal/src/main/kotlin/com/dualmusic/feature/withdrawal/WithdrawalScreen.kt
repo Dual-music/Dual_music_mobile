@@ -88,17 +88,24 @@ fun WithdrawalScreen(viewModel: WithdrawalViewModel) {
     }
 }
 
-/** Carte de création du PIN de retrait (première configuration). */
+/** Carte de création du PIN de retrait (première configuration) : code + confirmation, une case
+ *  par chiffre (parité web). */
 @Composable
 internal fun CreatePinCard(onCreate: (String) -> Unit) {
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     var pin by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    val match = pin.length == 6 && pin == confirm
     DMCard {
         Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-            Text(strings.createWithdrawPin, color = colors.foreground)
-            PinField(value = pin, onChange = { pin = it })
-            DMButton(strings.createPin, enabled = pin.length == 6) { onCreate(pin) }
+            Text(strings.createWithdrawPin, color = colors.foreground, fontWeight = FontWeight.Bold)
+            Text(strings.pinChooseCode, color = colors.mutedForeground)
+            com.dualmusic.core.ui.components.OtpBoxes(value = pin, onValueChange = { pin = it })
+            Text(strings.pinConfirmCode, color = colors.mutedForeground)
+            com.dualmusic.core.ui.components.OtpBoxes(value = confirm, onValueChange = { confirm = it })
+            if (confirm.length == 6 && pin != confirm) Text(strings.pinMismatch, color = colors.destructive)
+            DMButton(strings.createPin, enabled = match) { onCreate(pin) }
         }
     }
 }
@@ -171,9 +178,9 @@ internal fun WithdrawForm(
         }
     }
 
-    // PIN + confirmation.
+    // PIN (une case par chiffre).
     Text(strings.withdrawPin, color = colors.mutedForeground)
-    PinField(value = pin, onChange = { pin = it })
+    com.dualmusic.core.ui.components.OtpBoxes(value = pin, onValueChange = { pin = it })
     DMButton(
         if (submitting) strings.sending else strings.requestWithdraw,
         enabled = !submitting && pin.length == 6,

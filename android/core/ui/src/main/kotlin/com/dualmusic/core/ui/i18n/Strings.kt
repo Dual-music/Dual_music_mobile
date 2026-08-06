@@ -189,6 +189,9 @@ interface Strings {
     val history: String
     val createWithdrawPin: String
     val createPin: String
+    val pinChooseCode: String
+    val pinConfirmCode: String
+    val pinMismatch: String
     val noWithdrawMethod: String
     val method: String
     val fees: String
@@ -823,6 +826,9 @@ object FrStrings : Strings {
     override val history = "Historique"
     override val createWithdrawPin = "Crée ton code PIN de retrait (6 chiffres)"
     override val createPin = "Créer le code"
+    override val pinChooseCode = "Choisis un code (6 chiffres)"
+    override val pinConfirmCode = "Confirme"
+    override val pinMismatch = "Les codes ne correspondent pas."
     override val noWithdrawMethod = "Aucune méthode de retrait. Ajoute-en une depuis le site pour l'instant."
     override val method = "Méthode"
     override val fees = "Frais"
@@ -1435,6 +1441,9 @@ object EnStrings : Strings {
     override val history = "History"
     override val createWithdrawPin = "Create your withdrawal PIN (6 digits)"
     override val createPin = "Create PIN"
+    override val pinChooseCode = "Choose a code (6 digits)"
+    override val pinConfirmCode = "Confirm"
+    override val pinMismatch = "The codes don't match."
     override val noWithdrawMethod = "No withdrawal method. Add one from the website for now."
     override val method = "Method"
     override val fees = "Fees"

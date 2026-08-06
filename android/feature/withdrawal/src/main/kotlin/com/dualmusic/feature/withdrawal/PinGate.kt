@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
+import com.dualmusic.core.ui.components.OtpBoxes
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 
@@ -50,15 +51,15 @@ internal fun PinLockCard(
             Text(s.pinEnterDesc, color = colors.mutedForeground)
 
             if (!showReset) {
-                PinField(value = pin, onChange = { pin = it })
+                OtpBoxes(value = pin, onValueChange = { pin = it })
                 DMButton(s.pinUnlock, enabled = pin.length == 6, modifier = Modifier.fillMaxWidth()) { onVerify(pin) }
                 Text(s.pinForgot, color = colors.accent, modifier = Modifier.fillMaxWidth().clickable { showReset = true; onRequestReset() })
             } else {
                 if (resetSent) Text(s.pinResetSent, color = colors.primary)
-                PinField(value = otp, onChange = { otp = it }) // OTP 6 chiffres
                 Text(s.pinResetOtp, color = colors.mutedForeground)
-                PinField(value = newPin, onChange = { newPin = it })
+                OtpBoxes(value = otp, onValueChange = { otp = it })
                 Text(s.pinResetNewPin, color = colors.mutedForeground)
+                OtpBoxes(value = newPin, onValueChange = { newPin = it })
                 DMButton(s.pinResetConfirmBtn, enabled = otp.length == 6 && newPin.length == 6, modifier = Modifier.fillMaxWidth()) {
                     onConfirmReset(otp, newPin)
                 }
@@ -88,9 +89,9 @@ internal fun UnlockedControls(onChangePin: (String, String) -> Unit, onLock: () 
             }
             if (showChange) {
                 Text(s.pinCurrent, color = colors.mutedForeground)
-                PinField(value = current, onChange = { current = it })
+                OtpBoxes(value = current, onValueChange = { current = it })
                 Text(s.pinNew, color = colors.mutedForeground)
-                PinField(value = newPin, onChange = { newPin = it })
+                OtpBoxes(value = newPin, onValueChange = { newPin = it })
                 DMButton(s.pinChangeBtn, enabled = current.length == 6 && newPin.length == 6, modifier = Modifier.fillMaxWidth()) {
                     onChangePin(newPin, current)
                     showChange = false
