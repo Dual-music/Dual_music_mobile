@@ -45,7 +45,9 @@ fun FollowedArtistsScreen(viewModel: ArtistsViewModel) {
 
     LaunchedEffect(Unit) { viewModel.load() }
 
-    val followed = artists.filter { it.id in following }
+    // `following` contient des ID UTILISATEUR (pas des ID de profil artiste) → on filtre par
+    // opponentUserId (= user_id), comme l'annuaire public. Sinon l'intersection est vide → 0.
+    val followed = artists.filter { it.opponentUserId in following }
 
     Column(
         modifier = Modifier
