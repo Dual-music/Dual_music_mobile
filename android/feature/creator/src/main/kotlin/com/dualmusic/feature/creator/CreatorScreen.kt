@@ -6,10 +6,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -208,6 +210,27 @@ class CreatorViewModel(
         }
     }
 
+    /** Passe le concert en direct (PATCH `status:live`) puis recharge. */
+    fun goLiveConcert(id: String) {
+        viewModelScope.launch {
+            runCatching { api.request<Unit>(Endpoint.patch(ConcertEndpoints.artistDetail(id), """{"status":"live"}""")) }.onSuccess { load() }
+        }
+    }
+
+    /** Termine le concert (PATCH `status:ended`) puis recharge. */
+    fun endConcert(id: String) {
+        viewModelScope.launch {
+            runCatching { api.request<Unit>(Endpoint.patch(ConcertEndpoints.artistDetail(id), """{"status":"ended"}""")) }.onSuccess { load() }
+        }
+    }
+
+    /** Supprime le concert (DELETE) puis recharge. */
+    fun deleteConcert(id: String) {
+        viewModelScope.launch {
+            runCatching { api.request<Unit>(Endpoint.delete(ConcertEndpoints.artistDetail(id))) }.onSuccess { load() }
+        }
+    }
+
     /** Complète une saisie `YYYY-MM-DDTHH:MM` en ISO `…:00` si nécessaire. */
     private fun normalizeIsoDate(input: String): String =
         if (Regex("""^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$""").matches(input)) "$input:00" else input
@@ -354,16 +377,34 @@ fun CreatorScreen(viewModel: CreatorViewModel, initialTab: Int = 0) {
                 }
             }
             1 -> {
-                if (ui.concerts.isEmpty()) {
-                    DMEmptyState(
-                        title = strings.noConcerts,
-                        subtitle = strings.noConcertsHint,
-                        icon = Icons.Filled.DateRange,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                    items(ui.concerts) { concert -> ConcertRow(concert) }
+                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    // Cartes de statistiques (parité web : planifiés / tickets vendus / revenus).
+                    item {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                            ConcertStat("${ui.concerts.size}", "Concerts planifiés", Modifier.weight(1f))
+                            ConcertStat("${ui.concerts.sumOf { it.ticketsSold }}", "Tickets vendus", Modifier.weight(1f))
+                            ConcertStat("$${ui.concerts.sumOf { it.revenue }.toInt()}", "Revenus", Modifier.weight(1f))
+                        }
+                    }
+                    if (ui.concerts.isEmpty()) {
+                        item {
+                            DMEmptyState(
+                                title = strings.noConcerts,
+                                subtitle = strings.noConcertsHint,
+                                icon = Icons.Filled.DateRange,
+                                modifier = Modifier.fillMaxWidth().padding(top = DualMusicTheme.spacing.lg),
+                            )
+                        }
+                    } else {
+                        items(ui.concerts) { concert ->
+                            ArtistConcertCard(
+                                concert = concert,
+                                onGoLive = { viewModel.goLiveConcert(concert.id) },
+                                onEnd = { viewModel.endConcert(concert.id) },
+                                onDelete = { viewModel.deleteConcert(concert.id) },
+                            )
+                        }
+                    }
                 }
             }
             else -> CreateConcertForm(ui, viewModel) { tab = 1 }
@@ -523,23 +564,77 @@ private fun DuelRequestRow(
     }
 }
 
-/** Ligne d'un concert de l'artiste. */
+/** Carte de statistique concert (valeur + libellé). */
 @Composable
-private fun ConcertRow(concert: Concert) {
+private fun ConcertStat(value: String, label: String, modifier: Modifier = Modifier) {
     val colors = DualMusicTheme.colors
-    DMCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
-                Text(concert.title, color = colors.foreground, fontWeight = FontWeight.Bold)
-                concert.scheduledDate?.let { Text(com.dualmusic.core.ui.datetime.formatTz(it), color = colors.mutedForeground) }
-            }
-            Text(concert.status.name.lowercase().replaceFirstChar { it.uppercase() }, color = colors.mutedForeground)
+    DMCard(modifier = modifier) {
+        Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(value, color = colors.foreground, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text(label, color = colors.mutedForeground, fontSize = 10.sp)
         }
     }
+}
+
+/** Carte riche d'un concert d'artiste (parité web) : pochette, badges, date, mini-stats, actions. */
+@Composable
+private fun ArtistConcertCard(concert: Concert, onGoLive: () -> Unit, onEnd: () -> Unit, onDelete: () -> Unit) {
+    val colors = DualMusicTheme.colors
+    DMCard(modifier = Modifier.fillMaxWidth(), padded = false) {
+        com.dualmusic.core.ui.components.DMRemoteImage(
+            url = concert.cover,
+            contentDescription = null,
+            modifier = Modifier.fillMaxWidth().height(140.dp),
+            fallbackEmoji = "🎵",
+        )
+        Column(modifier = Modifier.fillMaxWidth().padding(DualMusicTheme.spacing.md), verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
+                if (concert.approvalStatus == "pending") ConcertBadge("⏳ En attente de validation", colors.accent)
+                ConcertBadge(concertStatusText(concert.status), colors.primary)
+            }
+            Text(concert.title, color = colors.foreground, fontWeight = FontWeight.Bold)
+            concert.description?.takeIf { it.isNotBlank() }?.let { Text(it, color = colors.mutedForeground, fontSize = 12.sp) }
+            concert.scheduledDate?.let { Text("📅 ${com.dualmusic.core.ui.datetime.formatTz(it, "dd MMMM yyyy HH:mm")}", color = colors.mutedForeground, fontSize = 12.sp) }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                ConcertMini("Prix", "$${concert.ticketPrice.toInt()}")
+                ConcertMini("Vendus", "${concert.ticketsSold}")
+                ConcertMini("Revenus", "$${concert.revenue.toInt()}")
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                when (concert.status) {
+                    com.dualmusic.domain.model.EventStatus.LIVE ->
+                        DMButton("Terminer", style = DMButtonStyle.DESTRUCTIVE, modifier = Modifier.weight(1f), onClick = onEnd)
+                    com.dualmusic.domain.model.EventStatus.UPCOMING ->
+                        DMButton("🔴 Lancer le direct", modifier = Modifier.weight(1f), onClick = onGoLive)
+                    else -> Unit
+                }
+                DMButton("Supprimer", style = DMButtonStyle.OUTLINE, modifier = Modifier.weight(1f), onClick = onDelete)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConcertBadge(label: String, color: Color) {
+    Box(modifier = Modifier.background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(999.dp)).padding(horizontal = 8.dp, vertical = 3.dp)) {
+        Text(label, color = color, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun ConcertMini(label: String, value: String) {
+    val colors = DualMusicTheme.colors
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = colors.foreground, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Text(label, color = colors.mutedForeground, fontSize = 10.sp)
+    }
+}
+
+private fun concertStatusText(status: com.dualmusic.domain.model.EventStatus): String = when (status) {
+    com.dualmusic.domain.model.EventStatus.LIVE -> "🔴 EN DIRECT"
+    com.dualmusic.domain.model.EventStatus.UPCOMING -> "À venir"
+    com.dualmusic.domain.model.EventStatus.ENDED -> "Terminé"
+    else -> status.name.lowercase().replaceFirstChar { it.uppercase() }
 }
 
 /** Ligne d'une demande de duel ENVOYÉE : adversaire + date prévue + statut (parité web). */

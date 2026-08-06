@@ -105,14 +105,18 @@ data class Concert(
     @SerialName("scheduled_date") val scheduledDate: String? = null,
     @SerialName("scheduled_time") val scheduledTime: String? = null,
     @SerialName("ticket_price") val ticketPrice: Double = 0.0,
-    @SerialName("allows_dedications") val allowsDedications: Boolean = false,
+    @SerialName("allows_dedications") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val allowsDedications: Boolean = false,
     @SerialName("cover_image_url") val coverImageUrl: String? = null,
     @SerialName("image_url") val imageUrl: String? = null,
     val location: String? = null,
     @SerialName("artist_name") val artistName: String? = null,
     val artist: DisplayProfile? = null,
-    @SerialName("is_artist_concert") val isArtistConcert: Boolean = false,
+    @SerialName("is_artist_concert") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val isArtistConcert: Boolean = false,
     @SerialName("recording_url") val recordingUrl: String? = null,
+    @SerialName("tickets_sold") val ticketsSold: Int = 0,
+    val revenue: Double = 0.0,
+    @SerialName("max_tickets") val maxTickets: Int? = null,
+    @SerialName("approval_status") val approvalStatus: String? = null,
 ) {
     /** Image de couverture effective (`cover_image_url` artiste OU `image_url` admin). */
     val cover: String? get() = coverImageUrl ?: imageUrl
