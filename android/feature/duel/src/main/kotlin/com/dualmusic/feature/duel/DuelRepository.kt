@@ -94,6 +94,42 @@ class DuelRepository(private val api: ApiClient) {
             ListSerializer(DuelDonorEntry.serializer()),
         )
 
+    /** Catalogue des cadeaux virtuels (partagé). */
+    suspend fun giftCatalog(): List<com.dualmusic.domain.model.VirtualGift> =
+        api.request(
+            Endpoint.get(com.dualmusic.domain.gift.GiftEndpoints.CATALOG),
+            ListSerializer(com.dualmusic.domain.model.VirtualGift.serializer()),
+        )
+
+    /** Inventaire (cadeaux possédés) du caller. */
+    suspend fun inventory(): List<com.dualmusic.domain.gift.InventoryItem> =
+        api.request(
+            Endpoint.get(com.dualmusic.domain.gift.GiftEndpoints.INVENTORY),
+            ListSerializer(com.dualmusic.domain.gift.InventoryItem.serializer()),
+        )
+
+    /** Achète un cadeau (débit portefeuille atomique). */
+    suspend fun purchaseGift(giftId: String, quantity: Int = 1) {
+        api.request<Unit>(
+            Endpoint.post(
+                com.dualmusic.domain.gift.GiftEndpoints.PURCHASE,
+                """{"giftId":"$giftId","quantity":$quantity}""",
+                idempotencyKey = "buy-$giftId-$quantity-${System.nanoTime()}",
+            ),
+        )
+    }
+
+    /** Envoie un cadeau possédé à un artiste/manager dans le contexte du duel. */
+    suspend fun sendGift(duelId: String, giftId: String, toUserId: String) {
+        api.request<Unit>(
+            Endpoint.post(
+                "/wallet/gifts/send",
+                """{"giftId":"$giftId","toUserId":"$toUserId","duelId":"$duelId"}""",
+                idempotencyKey = "gift-$duelId-$giftId-$toUserId-${System.nanoTime()}",
+            ),
+        )
+    }
+
     // --- Espace MANAGER (organisateur de duels) ---
 
     /**

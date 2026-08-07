@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -41,6 +42,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.ui.text.font.FontWeight
@@ -91,6 +94,9 @@ fun DuelRoomScreen(
     val uiPrefs by UiPreferencesStore.state.collectAsStateWithLifecycle()
     val topDonor by viewModel.topDonor.collectAsStateWithLifecycle()
     val isManager by viewModel.isManager.collectAsStateWithLifecycle()
+    val inventory by viewModel.inventory.collectAsStateWithLifecycle()
+    val giftCatalog by viewModel.giftCatalog.collectAsStateWithLifecycle()
+    val leaderboard by viewModel.leaderboard.collectAsStateWithLifecycle()
     val recMode by viewModel.recordingCtl.mode.collectAsStateWithLifecycle()
     val recActive by viewModel.recordingCtl.active.collectAsStateWithLifecycle()
     val recBusy by viewModel.recordingCtl.busy.collectAsStateWithLifecycle()
@@ -101,6 +107,8 @@ fun DuelRoomScreen(
     val strings = LocalStrings.current
     val context = LocalContext.current
     var draft by remember { mutableStateOf("") }
+    var showGiftPanel by remember { mutableStateOf(false) }
+    var showLeaderboard by remember { mutableStateOf(false) }
 
     // Démarre/arrête avec le cycle de vie du composable.
     DisposableEffect(Unit) {
@@ -245,7 +253,7 @@ fun DuelRoomScreen(
                     }
                 }
                 Text("${strings.oneVote} = $voteAmount ${strings.credits}", color = colors.mutedForeground)
-                // Saisie de message.
+                // Saisie de message + cadeau + classement (parité concert/web).
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
                     OutlinedTextField(
                         value = draft,
@@ -255,7 +263,14 @@ fun DuelRoomScreen(
                         keyboardActions = KeyboardActions(onDone = { viewModel.sendMessage(draft); draft = "" }),
                         modifier = Modifier.weight(1f),
                     )
-                    DMButton(strings.send, style = DMButtonStyle.SECONDARY) { viewModel.sendMessage(draft); draft = "" }
+                    Box(
+                        modifier = Modifier.size(48.dp).background(DualMusicTheme.gradients.primary, CircleShape).clickable { showGiftPanel = true },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.Filled.CardGiftcard, contentDescription = strings.sendGift, tint = Color.White) }
+                    Box(
+                        modifier = Modifier.size(44.dp).background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { showLeaderboard = true; viewModel.loadGiftLeaderboard() },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = Color(0xFFFFC107)) }
                 }
             }
         }
@@ -287,7 +302,104 @@ fun DuelRoomScreen(
             onPlay = { viewModel.sponsor.play(it) },
             onStop = { viewModel.sponsor.stop() },
         )
+
+        // --- Panneau cadeaux : destinataire (Artiste 1 / Artiste 2 / Manager) + Mes cadeaux / Boutique ---
+        if (showGiftPanel) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showGiftPanel = false })
+            var giftShop by remember { mutableStateOf(false) }
+            val targets = buildList {
+                duel?.artist1Id?.let { add(it to (duel?.artist1?.displayName ?: strings.artist1)) }
+                duel?.artist2Id?.let { add(it to (duel?.artist2?.displayName ?: strings.artist2)) }
+                duel?.managerId?.let { add(it to "Manager") }
+            }
+            var target by remember(targets.size) { mutableStateOf(targets.firstOrNull()?.first) }
+            Column(
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().fillMaxHeight(0.6f).background(colors.background).navigationBarsPadding().padding(DualMusicTheme.spacing.md),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text("🎁 ${strings.sendGift}", color = colors.foreground, fontWeight = FontWeight.Bold)
+                // Destinataire
+                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
+                    targets.forEach { (id, name) -> GiftPill("🎤 $name", target == id) { target = id } }
+                }
+                // Onglets Mes cadeaux / Boutique
+                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    GiftPill(strings.myGifts, !giftShop) { giftShop = false }
+                    GiftPill(strings.giftShop, giftShop) { giftShop = true }
+                }
+                Column(modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    if (!giftShop) {
+                        if (inventory.isEmpty()) Text(strings.noGiftsBuyInShop, color = colors.mutedForeground, fontSize = 13.sp)
+                        inventory.forEach { g ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                    .clickable { target?.let { viewModel.sendGift(g.giftId, it) }; showGiftPanel = false }.padding(DualMusicTheme.spacing.md),
+                                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("${g.imageUrl ?: "🎁"}  ${g.name ?: ""}", color = colors.foreground)
+                                Text("×${g.quantity}", color = colors.accent, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    } else {
+                        giftCatalog.forEach { gift ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                    .clickable { viewModel.purchaseGift(gift.id) }.padding(DualMusicTheme.spacing.md),
+                                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("${gift.emoji ?: "🎁"}  ${gift.name}", color = colors.foreground)
+                                Text("${gift.price.toInt()} ${strings.credits}", color = colors.accent, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- Classement des donateurs ---
+        if (showLeaderboard) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showLeaderboard = false })
+            Column(
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().fillMaxHeight(0.5f).background(colors.background).navigationBarsPadding().padding(DualMusicTheme.spacing.md),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text("🏆 ${strings.donors}", color = colors.foreground, fontWeight = FontWeight.Bold)
+                if (leaderboard.isEmpty()) {
+                    Text(strings.emptyRanking, color = colors.mutedForeground)
+                } else {
+                    Column(modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                        leaderboard.forEachIndexed { i, entry ->
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("${duelMedal(i)} ${entry.displayName}", color = colors.foreground)
+                                Text("${entry.value} ${strings.credits}", color = colors.accent, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
+}
+
+/** Pastille sélectionnable (destinataire du cadeau / onglet). */
+@Composable
+private fun GiftPill(text: String, selected: Boolean, onClick: () -> Unit) {
+    val colors = DualMusicTheme.colors
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(if (selected) colors.primary else Color.Black.copy(alpha = 0.3f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+    ) { Text(text, color = Color.White, fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) }
+}
+
+/** Médaille de rang (or/argent/bronze puis numéro). */
+private fun duelMedal(i: Int): String = when (i) {
+    0 -> "🥇"
+    1 -> "🥈"
+    2 -> "🥉"
+    else -> "#${i + 1}"
 }
 
 /** Emojis de réaction (identiques au live/web). */

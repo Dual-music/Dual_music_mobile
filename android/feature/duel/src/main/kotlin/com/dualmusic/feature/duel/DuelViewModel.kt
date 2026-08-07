@@ -104,6 +104,18 @@ class DuelViewModel(
         }
     }
 
+    /** Catalogue des cadeaux virtuels (boutique). */
+    private val _giftCatalog = MutableStateFlow<List<com.dualmusic.domain.model.VirtualGift>>(emptyList())
+    val giftCatalog: StateFlow<List<com.dualmusic.domain.model.VirtualGift>> = _giftCatalog.asStateFlow()
+
+    /** Inventaire (cadeaux possédés) du caller. */
+    private val _inventory = MutableStateFlow<List<com.dualmusic.domain.gift.InventoryItem>>(emptyList())
+    val inventory: StateFlow<List<com.dualmusic.domain.gift.InventoryItem>> = _inventory.asStateFlow()
+
+    /** Classement des donateurs (panneau + bulle top-donateur). */
+    private val _leaderboard = MutableStateFlow<List<DuelDonorEntry>>(emptyList())
+    val leaderboard: StateFlow<List<DuelDonorEntry>> = _leaderboard.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
@@ -137,8 +149,39 @@ class DuelViewModel(
             runCatching { repository.chatHistory(duelId) }.getOrNull()?.let { _messages.value = it }
         }
         loadTopDonor()
+        viewModelScope.launch { runCatching { repository.giftCatalog() }.getOrNull()?.let { _giftCatalog.value = it } }
+        loadInventory()
+        loadGiftLeaderboard()
         recordingCtl.refresh()
         connectRealtime()
+    }
+
+    /** Recharge l'inventaire (après achat/envoi). */
+    fun loadInventory() {
+        viewModelScope.launch { runCatching { repository.inventory() }.getOrNull()?.let { _inventory.value = it } }
+    }
+
+    /** Envoie un cadeau possédé à un artiste/manager du duel (débit atomique serveur). */
+    fun sendGift(giftId: String, toUserId: String) {
+        viewModelScope.launch {
+            runCatching { repository.sendGift(duelId, giftId, toUserId) }
+                .onSuccess { loadInventory() }
+                .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
+
+    /** Achète un cadeau (boutique) puis recharge l'inventaire. */
+    fun purchaseGift(giftId: String) {
+        viewModelScope.launch {
+            runCatching { repository.purchaseGift(giftId, 1) }
+                .onSuccess { loadInventory() }
+                .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
+
+    /** Recharge le classement des donateurs. */
+    fun loadGiftLeaderboard() {
+        viewModelScope.launch { runCatching { repository.giftLeaderboard(duelId) }.getOrNull()?.let { _leaderboard.value = it } }
     }
 
     /** Arrête tout (sortie d'écran). */
