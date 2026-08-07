@@ -137,10 +137,16 @@ class ApiClient(
             throw DomainError(0, "DECODING_ERROR", it.message ?: "Décodage impossible")
         }
         if (raw.status !in 200..299 || env.error != null) {
+            // Sur une erreur de validation, le backend précise le champ fautif dans `details`
+            // (ex. {"accept":"…required"}). On l'ajoute au message pour ne pas rester aveugle.
+            val detail = env.error?.details?.let { d ->
+                val s = d.toString()
+                if (s.isBlank() || s == "null" || s == "{}") "" else " ($s)"
+            } ?: ""
             throw DomainError(
                 httpStatus = raw.status,
                 code = env.error?.code ?: "HTTP_${raw.status}",
-                message = env.error?.message ?: "Erreur HTTP ${raw.status}",
+                message = (env.error?.message ?: "Erreur HTTP ${raw.status}") + detail,
             )
         }
         return env.data ?: throw DomainError(raw.status, "NO_DATA", "Champ data absent")
