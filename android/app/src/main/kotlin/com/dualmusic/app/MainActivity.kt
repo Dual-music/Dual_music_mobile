@@ -614,6 +614,37 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
         return
     }
 
+    // Directs d'ÉVÉNEMENT (duel / concert / compétition) en PLEIN ÉCRAN IMMERSIF, au-dessus du
+    // Scaffold → SANS la barre du haut ni les onglets, barres système masquées, écran gardé allumé
+    // (parité web `fixed inset-0`). Gardés par l'onglet courant pour reproduire la visibilité
+    // actuelle (un direct n'apparaît que sur son propre onglet). Les replays restent dans le Scaffold.
+    if (!showProfile && !notifOpen && !rechargeOpen) {
+        if (tab == 2 && openDuelReplay == null) openDuel?.let { duel ->
+            ImmersiveFullscreen()
+            val duelVm: DuelViewModel = viewModel(key = duel.id) { container.makeDuelViewModel(duel) }
+            DuelRoomScreen(viewModel = duelVm, onLeave = { openDuel = null })
+            return
+        }
+        if (tab == 3 && openConcertReplay == null) openConcert?.let { concert ->
+            ImmersiveFullscreen()
+            val roomVm: com.dualmusic.feature.concert.ConcertRoomViewModel =
+                viewModel(key = concert.id) { container.makeConcertRoomViewModel(concert) }
+            com.dualmusic.feature.concert.ConcertRoomScreen(
+                viewModel = roomVm,
+                concertTitle = concert.title,
+                onLeave = { openConcert = null },
+            )
+            return
+        }
+        if (tab == 4 && openCompetitionReplay == null) openCompetition?.let { competition ->
+            ImmersiveFullscreen()
+            val roomVm: CompetitionRoomViewModel =
+                viewModel(key = competition.id) { container.makeCompetitionRoomViewModel(competition.id) }
+            CompetitionRoomScreen(viewModel = roomVm)
+            return
+        }
+    }
+
     Scaffold(
         topBar = {
             // Barre du haut masquée dans le profil, les notifications et la recharge (en-tête propre).
@@ -737,80 +768,52 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                     }
                 }
                 2 -> {
-                    val duel = openDuel
+                    // Le direct de duel est rendu en plein écran au-dessus du Scaffold (voir plus haut) ;
+                    // ici on ne gère que le replay et la liste.
                     val duelReplay = openDuelReplay
-                    when {
-                        duel != null -> {
-                            // Clé = id du duel → un ViewModel (et une room SFU) par duel ouvert.
-                            val duelVm: DuelViewModel = viewModel(key = duel.id) { container.makeDuelViewModel(duel) }
-                            DuelRoomScreen(viewModel = duelVm, onLeave = { openDuel = null })
-                        }
-                        duelReplay != null -> {
-                            androidx.activity.compose.BackHandler { openDuelReplay = null }
-                            val playerVm: ReplayPlayerViewModel = viewModel(key = duelReplay.id) { container.makeReplayPlayerViewModel(duelReplay) }
-                            ReplayPlayerScreen(viewModel = playerVm)
-                        }
-                        else -> {
-                            val listVm: DuelsListViewModel = viewModel { container.makeDuelsListViewModel() }
-                            DuelsListScreen(viewModel = listVm, onOpen = { openDuel = it }, onOpenReplay = { openDuelReplay = it })
-                        }
+                    if (duelReplay != null) {
+                        androidx.activity.compose.BackHandler { openDuelReplay = null }
+                        val playerVm: ReplayPlayerViewModel = viewModel(key = duelReplay.id) { container.makeReplayPlayerViewModel(duelReplay) }
+                        ReplayPlayerScreen(viewModel = playerVm)
+                    } else {
+                        val listVm: DuelsListViewModel = viewModel { container.makeDuelsListViewModel() }
+                        DuelsListScreen(viewModel = listVm, onOpen = { openDuel = it }, onOpenReplay = { openDuelReplay = it })
                     }
                 }
                 3 -> {
-                    val concert = openConcert
+                    // Le direct de concert est rendu en plein écran au-dessus du Scaffold (voir plus haut) ;
+                    // ici on ne gère que le replay et la liste.
                     val concertReplay = openConcertReplay
-                    when {
-                        // Lecteur de replay de concert (parité web /replay/:id).
-                        concertReplay != null -> {
-                            androidx.activity.compose.BackHandler { openConcertReplay = null }
-                            val playerVm: ReplayPlayerViewModel =
-                                viewModel(key = concertReplay.id) { container.makeReplayPlayerViewModel(concertReplay) }
-                            ReplayPlayerScreen(viewModel = playerVm)
-                        }
-                        concert == null -> {
-                            val concertsVm: ConcertsViewModel = viewModel { container.makeConcertsViewModel() }
-                            ConcertsListScreen(
-                                viewModel = concertsVm,
-                                onOpen = { openConcert = it },
-                                onOpenReplay = { openConcertReplay = it },
-                            )
-                        }
-                        else -> {
-                            // Clé = id du concert → un ViewModel (et une room SFU) par concert ouvert.
-                            val roomVm: com.dualmusic.feature.concert.ConcertRoomViewModel =
-                                viewModel(key = concert.id) { container.makeConcertRoomViewModel(concert) }
-                            com.dualmusic.feature.concert.ConcertRoomScreen(
-                                viewModel = roomVm,
-                                concertTitle = concert.title,
-                                onLeave = { openConcert = null },
-                            )
-                        }
+                    if (concertReplay != null) {
+                        androidx.activity.compose.BackHandler { openConcertReplay = null }
+                        val playerVm: ReplayPlayerViewModel =
+                            viewModel(key = concertReplay.id) { container.makeReplayPlayerViewModel(concertReplay) }
+                        ReplayPlayerScreen(viewModel = playerVm)
+                    } else {
+                        val concertsVm: ConcertsViewModel = viewModel { container.makeConcertsViewModel() }
+                        ConcertsListScreen(
+                            viewModel = concertsVm,
+                            onOpen = { openConcert = it },
+                            onOpenReplay = { openConcertReplay = it },
+                        )
                     }
                 }
                 4 -> {
-                    val competition = openCompetition
+                    // Le direct de compétition est rendu en plein écran au-dessus du Scaffold (voir plus haut) ;
+                    // ici on ne gère que le replay et la liste.
                     val competitionReplay = openCompetitionReplay
-                    when {
-                        // Lecteur de replay de compétition.
-                        competitionReplay != null -> {
-                            androidx.activity.compose.BackHandler { openCompetitionReplay = null }
-                            val playerVm: ReplayPlayerViewModel =
-                                viewModel(key = competitionReplay.id) { container.makeReplayPlayerViewModel(competitionReplay) }
-                            ReplayPlayerScreen(viewModel = playerVm)
-                        }
-                        competition == null -> {
-                            val listVm: CompetitionsViewModel = viewModel { container.makeCompetitionsViewModel() }
-                            CompetitionsListScreen(
-                                viewModel = listVm,
-                                onOpen = { openCompetition = it },
-                                onOpenReplay = { openCompetitionReplay = it },
-                            )
-                        }
-                        else -> {
-                            val roomVm: CompetitionRoomViewModel =
-                                viewModel(key = competition.id) { container.makeCompetitionRoomViewModel(competition.id) }
-                            CompetitionRoomScreen(viewModel = roomVm)
-                        }
+                    if (competitionReplay != null) {
+                        androidx.activity.compose.BackHandler { openCompetitionReplay = null }
+                        val playerVm: ReplayPlayerViewModel =
+                            viewModel(key = competitionReplay.id) { container.makeReplayPlayerViewModel(competitionReplay) }
+                        ReplayPlayerScreen(viewModel = playerVm)
+                    } else {
+                        val listVm: CompetitionsViewModel = viewModel { container.makeCompetitionsViewModel() }
+                        CompetitionsListScreen(
+                            viewModel = listVm,
+                            onOpen = { openCompetition = it },
+                            onOpenReplay = { openCompetitionReplay = it },
+                        )
                     }
                 }
             }
