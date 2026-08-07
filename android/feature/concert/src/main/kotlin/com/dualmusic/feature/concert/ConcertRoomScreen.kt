@@ -35,10 +35,10 @@ import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Podcasts
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material3.Icon
@@ -160,30 +160,18 @@ fun ConcertRoomScreen(
         // Bulle du meilleur donateur (parité web), pilotée par les préférences visuelles.
         TopDonorBubble(donor = topDonor, mode = uiPrefs.topDonorMode, animation = uiPrefs.topDonorAnimation)
 
-        // Barre du haut : LIVE + spectateurs + likes + partage.
-        Row(
-            modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().fillMaxWidth().padding(DualMusicTheme.spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
-        ) {
-            Box(Modifier.background(colors.destructive, RoundedCornerShape(6.dp)).padding(horizontal = DualMusicTheme.spacing.sm, vertical = DualMusicTheme.spacing.xs)) {
-                Text("🔴 LIVE", color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp)
-            }
-            Box(Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape).padding(horizontal = DualMusicTheme.spacing.md, vertical = DualMusicTheme.spacing.xs)) {
-                Text("👁 $viewerCount", color = Color.White, fontSize = 12.sp)
-            }
-            Box(Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape).padding(horizontal = DualMusicTheme.spacing.md, vertical = DualMusicTheme.spacing.xs)) {
-                Text("❤️ $likes", color = Color.White, fontSize = 12.sp)
-            }
-            Box(Modifier.weight(1f))
-            Box(
-                modifier = Modifier.size(36.dp).background(Color.Black.copy(alpha = 0.4f), CircleShape).clickable {
-                    val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, s.shareLiveText) }
-                    context.startActivity(Intent.createChooser(send, null))
-                },
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Filled.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp)) }
-        }
+        // Barre du haut unifiée (mêmes icônes que le web) : LIVE + spectateurs + likes + partage + fermer.
+        com.dualmusic.core.ui.live.LiveHeader(
+            modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(DualMusicTheme.spacing.md),
+            eventLabel = "CONCERT",
+            viewerCount = viewerCount,
+            likes = likes,
+            onShare = {
+                val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, s.shareLiveText) }
+                context.startActivity(Intent.createChooser(send, null))
+            },
+            onClose = onLeave,
+        )
 
         // Bas : chat + barre de réactions + barre d'action.
         Column(
@@ -216,7 +204,7 @@ fun ConcertRoomScreen(
                 Box(
                     modifier = Modifier.size(40.dp).background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { viewModel.sendLike() },
                     contentAlignment = Alignment.Center,
-                ) { Text("❤️", fontSize = 18.sp) }
+                ) { Icon(Icons.Filled.Favorite, contentDescription = null, tint = Color(0xFFFF4D6D), modifier = Modifier.size(20.dp)) }
                 ConcertReactionEmojis.forEach { e ->
                     Box(
                         modifier = Modifier.background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { viewModel.sendReaction(e) }.padding(horizontal = 10.dp, vertical = 6.dp),

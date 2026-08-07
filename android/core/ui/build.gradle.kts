@@ -27,6 +27,9 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
     implementation("androidx.compose.material3:material3")
+    // Jeu d'icônes complet (Visibility, Share, EmojiEvents, CardGiftcard, Timer…) pour le
+    // header/rail de direct partagé, aligné sur les icônes lucide du web.
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")

@@ -1,5 +1,6 @@
 package com.dualmusic.feature.duel
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -38,6 +39,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material3.Icon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -94,6 +99,7 @@ fun DuelRoomScreen(
     val sponsorBusy by viewModel.sponsor.busy.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
+    val context = LocalContext.current
     var draft by remember { mutableStateOf("") }
 
     // Démarre/arrête avec le cycle de vie du composable.
@@ -145,16 +151,18 @@ fun DuelRoomScreen(
                 .padding(DualMusicTheme.spacing.lg),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            // Haut : LIVE + spectateurs, barre de votes + minuteur.
+            // Haut : header live unifié (mêmes icônes que le web), barre de votes + minuteur.
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
-                    Box(Modifier.background(colors.destructive, RoundedCornerShape(6.dp)).padding(horizontal = DualMusicTheme.spacing.sm, vertical = DualMusicTheme.spacing.xs)) {
-                        Text("🔴 LIVE", color = Color.White, fontWeight = FontWeight.Black)
-                    }
-                    Box(Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape).padding(horizontal = DualMusicTheme.spacing.md, vertical = DualMusicTheme.spacing.xs)) {
-                        Text("👁 $viewerCount", color = Color.White)
-                    }
-                }
+                com.dualmusic.core.ui.live.LiveHeader(
+                    eventLabel = "DUEL",
+                    viewerCount = viewerCount,
+                    likes = likes,
+                    onShare = {
+                        val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, strings.shareLiveText) }
+                        context.startActivity(Intent.createChooser(send, null))
+                    },
+                    onClose = onLeave,
+                )
                 val a1 = duel?.artist1Id
                 val a2 = duel?.artist2Id
                 VoteBar(
@@ -214,8 +222,7 @@ fun DuelRoomScreen(
                     Box(
                         modifier = Modifier.size(40.dp).background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { viewModel.sendLike() },
                         contentAlignment = Alignment.Center,
-                    ) { Text("❤️", fontSize = 18.sp) }
-                    if (likes > 0) Text("$likes", color = Color.White, fontSize = 12.sp)
+                    ) { Icon(Icons.Filled.Favorite, contentDescription = null, tint = Color(0xFFFF4D6D), modifier = Modifier.size(20.dp)) }
                     DuelReactionEmojis.forEach { e ->
                         Box(
                             modifier = Modifier.background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { viewModel.sendReaction(e) }.padding(horizontal = 10.dp, vertical = 6.dp),
