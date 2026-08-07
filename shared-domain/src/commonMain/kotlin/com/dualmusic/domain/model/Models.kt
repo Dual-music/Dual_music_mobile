@@ -55,7 +55,8 @@ data class VirtualGift(
     /** Prix en crédits. */
     val price: Double,
     @SerialName("image_url") val imageUrl: String? = null,
-    @SerialName("is_active") val isActive: Boolean = true,
+    // MySQL renvoie ce booléen en 0/1 → FlexibleBoolSerializer, sinon la liste des cadeaux casse.
+    @SerialName("is_active") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val isActive: Boolean = true,
 )
 
 /** Duel 1v1 entre deux artistes, avec votes payants et cadeaux. */
@@ -74,7 +75,9 @@ data class Duel(
     @SerialName("current_timer_target_id") val currentTimerTargetId: String? = null,
     @SerialName("room_id") val roomId: String? = null,
     /** L'organisateur autorise-t-il la diffusion de pubs sponsor sur ce duel (parité web). */
-    @SerialName("allows_sponsor_ads") val allowsSponsorAds: Boolean = true,
+    // MySQL renvoie ce booléen en 0/1 (TINYINT) : sans FlexibleBoolSerializer, kotlinx strict
+    // échoue et TOUTE la liste des duels devient vide (getOrDefault(emptyList)).
+    @SerialName("allows_sponsor_ads") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val allowsSponsorAds: Boolean = true,
     /** Profils hydratés côté serveur (peuvent être absents selon l'endpoint). */
     val artist1: DisplayProfile? = null,
     val artist2: DisplayProfile? = null,
