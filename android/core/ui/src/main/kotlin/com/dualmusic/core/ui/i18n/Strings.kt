@@ -640,6 +640,7 @@ interface Strings {
     val goOnStage: String
     val topDonors: String
     val shareLiveText: String
+    val reportSent: String
     val liveControls: String
     val cameraOn: String
     val cameraOff: String
@@ -1261,6 +1262,7 @@ object FrStrings : Strings {
     override val goOnStage = "Monter sur scène"
     override val topDonors = "Top donateurs"
     override val shareLiveText = "🔴 Je suis en live sur Dual Music ! Rejoins-moi."
+    override val reportSent = "Signalement envoyé"
     override val liveControls = "Contrôles du live"
     override val cameraOn = "Caméra activée"
     override val cameraOff = "Caméra coupée"
@@ -1880,6 +1882,7 @@ object EnStrings : Strings {
     override val goOnStage = "Go on stage"
     override val topDonors = "Top donors"
     override val shareLiveText = "🔴 I'm live on Dual Music! Join me."
+    override val reportSent = "Report sent"
     override val liveControls = "Live controls"
     override val cameraOn = "Camera on"
     override val cameraOff = "Camera off"

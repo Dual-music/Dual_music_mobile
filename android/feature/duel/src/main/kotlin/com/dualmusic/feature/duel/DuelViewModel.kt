@@ -261,6 +261,11 @@ class DuelViewModel(
         patchDuel("""{"currentTimerEndsAt":null,"currentTimerTargetId":null}""")
     }
 
+    /** Signale ce direct à la modération (best-effort ; l'échec reste silencieux). */
+    fun report(reason: String) {
+        viewModelScope.launch { runCatching { repository.reportLive(duelId, reason) } }
+    }
+
     /** Annonce le vainqueur (ne termine pas le duel). */
     fun announceWinner(artistId: String) {
         patchDuel("""{"winnerId":"$artistId"}""")

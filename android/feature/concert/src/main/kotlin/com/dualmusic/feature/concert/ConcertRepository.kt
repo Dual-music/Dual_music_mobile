@@ -65,6 +65,14 @@ class ConcertRepository(private val api: ApiClient) {
 
     private val json = Json { explicitNulls = false }
 
+    /**
+     * Signale ce direct à la modération (parité web `LiveReportButton`).
+     * `POST /moderation/reports/live` — le concert est identifié par son id (`liveId`).
+     */
+    suspend fun reportLive(liveId: String, reason: String) {
+        api.request<Unit>(Endpoint.post("moderation/reports/live", """{"liveId":"$liveId","reason":"$reason"}"""))
+    }
+
     /** Catalogue public des concerts d'artistes (approuvés). */
     suspend fun concerts(limit: Int = 50): List<Concert> =
         api.request(

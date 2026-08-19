@@ -115,6 +115,7 @@ fun ConcertRoomScreen(
     var draft by remember { mutableStateOf("") }
     var showGiftPanel by remember { mutableStateOf(false) }
     var showLeaderboard by remember { mutableStateOf(false) }
+    var showReport by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         viewModel.start()
@@ -170,8 +171,20 @@ fun ConcertRoomScreen(
                 val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, s.shareLiveText) }
                 context.startActivity(Intent.createChooser(send, null))
             },
+            onReport = { showReport = true },
             onClose = onLeave,
         )
+
+        // --- Signalement du direct (parité web LiveReportButton) ---
+        if (showReport) {
+            com.dualmusic.core.ui.live.ReportDialog(
+                onDismiss = { showReport = false },
+                onSubmit = { reason ->
+                    viewModel.report(reason)
+                    android.widget.Toast.makeText(context, s.reportSent, android.widget.Toast.LENGTH_SHORT).show()
+                },
+            )
+        }
 
         // Bas : chat + barre de réactions + barre d'action.
         Column(

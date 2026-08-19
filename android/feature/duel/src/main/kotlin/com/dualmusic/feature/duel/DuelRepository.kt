@@ -33,6 +33,14 @@ data class DuelChatMessage(
 class DuelRepository(private val api: ApiClient) {
 
     /**
+     * Signale ce direct à la modération (parité web `LiveReportButton`).
+     * `POST /moderation/reports/live` — le duel est identifié par son id (`liveId`).
+     */
+    suspend fun reportLive(liveId: String, reason: String) {
+        api.request<Unit>(Endpoint.post("moderation/reports/live", """{"liveId":"$liveId","reason":"$reason"}"""))
+    }
+
+    /**
      * Liste des duels.
      * @param status filtre optionnel (`upcoming` | `live` | `ended`).
      */

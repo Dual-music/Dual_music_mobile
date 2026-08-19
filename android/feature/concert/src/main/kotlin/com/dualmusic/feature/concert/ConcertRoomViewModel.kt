@@ -184,6 +184,11 @@ class ConcertRoomViewModel(
         viewModelScope.launch { runCatching { repository.postMessage(concertId, content) } }
     }
 
+    /** Signale ce direct à la modération (best-effort ; l'échec reste silencieux). */
+    fun report(reason: String) {
+        viewModelScope.launch { runCatching { repository.reportLive(concertId, reason) } }
+    }
+
     /** J'aime : compteur + persistance + cœur flottant + compteur partagé (parité web). */
     fun sendLike() {
         _likes.value += 1

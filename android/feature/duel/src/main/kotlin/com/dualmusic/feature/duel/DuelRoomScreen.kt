@@ -109,6 +109,7 @@ fun DuelRoomScreen(
     var draft by remember { mutableStateOf("") }
     var showGiftPanel by remember { mutableStateOf(false) }
     var showLeaderboard by remember { mutableStateOf(false) }
+    var showReport by remember { mutableStateOf(false) }
 
     // Démarre/arrête avec le cycle de vie du composable.
     DisposableEffect(Unit) {
@@ -169,6 +170,7 @@ fun DuelRoomScreen(
                         val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, strings.shareLiveText) }
                         context.startActivity(Intent.createChooser(send, null))
                     },
+                    onReport = { showReport = true },
                     onClose = onLeave,
                 )
                 val a1 = duel?.artist1Id
@@ -383,6 +385,17 @@ fun DuelRoomScreen(
                     }
                 }
             }
+        }
+
+        // --- Signalement du direct (parité web LiveReportButton) ---
+        if (showReport) {
+            com.dualmusic.core.ui.live.ReportDialog(
+                onDismiss = { showReport = false },
+                onSubmit = { reason ->
+                    viewModel.report(reason)
+                    android.widget.Toast.makeText(context, strings.reportSent, android.widget.Toast.LENGTH_SHORT).show()
+                },
+            )
         }
     }
 }
