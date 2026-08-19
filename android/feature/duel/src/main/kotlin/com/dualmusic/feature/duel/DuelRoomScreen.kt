@@ -180,7 +180,13 @@ fun DuelRoomScreen(
                     rightTotal = a2?.let { totals[it] } ?: 0.0,
                 )
                 if (timer.isRunning) {
-                    Text(strings.timerRunning, color = colors.accent, fontWeight = FontWeight.Bold)
+                    // Décompte visuel MM:SS (parité web) avec le nom de l'artiste qui a la parole.
+                    val speaker = when (timer.targetId) {
+                        a1 -> duel?.artist1?.displayName ?: strings.artist1
+                        a2 -> duel?.artist2?.displayName ?: strings.artist2
+                        else -> null
+                    }
+                    com.dualmusic.core.ui.live.LiveCountdown(endsAtIso = timer.endsAt, label = speaker)
                 }
                 // Contrôles de l'arbitre (manager) : minuteur de parole, vainqueur, fin.
                 if (isManager) {
