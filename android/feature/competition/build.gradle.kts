@@ -27,6 +27,8 @@ dependencies {
     implementation(project(":shared-domain"))
     implementation(project(":core:network"))
     implementation(project(":core:realtime"))
+    // Room vidéo LiveKit (expose transitivement le SDK LiveKit : SurfaceViewRenderer/VideoTrack).
+    implementation(project(":core:media"))
     implementation(project(":core:ui"))
     // Diffusion pub sponsor (overlay vidéo + contrôle organisateur).
     implementation(project(":feature:sponsor"))
@@ -36,6 +38,7 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.foundation:foundation")
     // Sélecteur média système (PickVisualMedia).
     implementation("androidx.activity:activity-compose:1.9.3")

@@ -9,9 +9,24 @@ import com.dualmusic.domain.competition.CompetitionVoteRequest
 import com.dualmusic.domain.gift.GiftEndpoints
 import com.dualmusic.domain.gift.InventoryItem
 import com.dualmusic.domain.model.Competition
+import com.dualmusic.domain.model.DisplayProfile
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.util.UUID
+
+/** Message de chat d'une compétition (sous-ressource `chat.helper`, auteur hydraté). */
+@Serializable
+data class CompetitionChatMessage(
+    val id: String? = null,
+    @SerialName("user_id") val userId: String,
+    // Le backend utilise la clé `message` (colonne DB) et hydrate l'auteur sous `author`.
+    @SerialName("message") val content: String,
+    @SerialName("author") val user: DisplayProfile? = null,
+) {
+    val authorName: String get() = user?.displayName ?: com.dualmusic.core.ui.i18n.appStrings.fan
+}
 
 /**
  * Accès REST aux compétitions.
@@ -21,6 +36,26 @@ import java.util.UUID
  * exécuté par une procédure stockée côté serveur.
  */
 class CompetitionRepository(private val api: ApiClient) {
+
+    /**
+     * Signale ce direct à la modération (parité web `LiveReportButton`).
+     * `POST /moderation/reports/live` — la compétition est identifiée par son id (`liveId`).
+     */
+    suspend fun reportLive(liveId: String, reason: String) {
+        api.request<Unit>(Endpoint.post("moderation/reports/live", """{"liveId":"$liveId","reason":"$reason"}"""))
+    }
+
+    /** Historique du chat (50 derniers messages). */
+    suspend fun chatHistory(id: String): List<CompetitionChatMessage> =
+        api.request(
+            Endpoint.get(CompetitionEndpoints.messages(id), query = mapOf("limit" to "50")),
+            ListSerializer(CompetitionChatMessage.serializer()),
+        )
+
+    /** Poste un message de chat. */
+    suspend fun postMessage(id: String, content: String) {
+        api.request<Unit>(Endpoint.post(CompetitionEndpoints.messages(id), """{"message":${content.jsonQuoted()}}"""))
+    }
 
     private val json = Json { explicitNulls = false }
 
@@ -173,6 +208,9 @@ class CompetitionRepository(private val api: ApiClient) {
         api.request<Unit>(Endpoint.post("/competitions/$id/finalize", "{}"))
     }
 }
+
+/** Échappe une chaîne pour l'insérer dans un corps JSON construit à la main. */
+private fun String.jsonQuoted(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 /**
  * Corps JSON de création d'une compétition (`POST /competitions`) — parité stricte avec le

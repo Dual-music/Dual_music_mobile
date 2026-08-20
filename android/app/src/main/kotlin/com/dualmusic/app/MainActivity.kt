@@ -393,9 +393,11 @@ class AppContainer(context: Context) {
     fun makeMyContentViewModel(): com.dualmusic.feature.content.MyContentViewModel =
         com.dualmusic.feature.content.MyContentViewModel(api, mediaUploader)
 
-    /** Nouveau ViewModel de room de compétition (classement + votes). */
-    fun makeCompetitionRoomViewModel(competitionId: String): CompetitionRoomViewModel =
-        CompetitionRoomViewModel(competitionId, competitionRepository, realtimeClient, sponsorAdRepository, recordingRepository)
+    /** Nouveau ViewModel de room de compétition (vidéo LiveKit + classement + votes). */
+    fun makeCompetitionRoomViewModel(competitionId: String): CompetitionRoomViewModel {
+        val media = LiveRoomClient(appContext, tokenService, appScope)
+        return CompetitionRoomViewModel(competitionId, competitionRepository, realtimeClient, media, sponsorAdRepository, recordingRepository)
+    }
 
     /**
      * Fabrique un ViewModel de room de concert (viewer + hôte artiste). L'hôte est déterminé
@@ -640,7 +642,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
             ImmersiveFullscreen()
             val roomVm: CompetitionRoomViewModel =
                 viewModel(key = competition.id) { container.makeCompetitionRoomViewModel(competition.id) }
-            CompetitionRoomScreen(viewModel = roomVm)
+            CompetitionRoomScreen(viewModel = roomVm, onLeave = { openCompetition = null })
             return
         }
     }

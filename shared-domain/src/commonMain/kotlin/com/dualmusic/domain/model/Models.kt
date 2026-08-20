@@ -134,6 +134,8 @@ data class Competition(
     val status: String,
     @SerialName("manager_id") val managerId: String? = null,
     val mode: String? = null,
+    // Room LiveKit partagée avec le web (même room = mobile et web se voient). Repli `comp-<id>`.
+    @SerialName("livekit_room") val livekitRoom: String? = null,
     @SerialName("max_candidates") val maxCandidates: Int? = null,
     @SerialName("start_at") val startAt: String? = null,
     @SerialName("end_at") val endAt: String? = null,

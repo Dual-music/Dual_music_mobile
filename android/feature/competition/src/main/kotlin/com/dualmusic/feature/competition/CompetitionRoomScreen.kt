@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.dualmusic.core.media.LiveRoomClient
 import com.dualmusic.core.realtime.NamespaceSession
 import com.dualmusic.core.realtime.RealtimeClient
 import com.dualmusic.core.ui.components.DMButton
@@ -52,6 +53,37 @@ import com.dualmusic.feature.sponsor.SponsorAdLayer
 import com.dualmusic.domain.competition.CompetitionCandidate
 import com.dualmusic.domain.realtime.Realtime
 import com.dualmusic.domain.realtime.StatusPayload
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.Cameraswitch
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideocamOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import io.livekit.android.renderer.SurfaceViewRenderer
+import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -73,6 +105,7 @@ class CompetitionRoomViewModel(
     private val competitionId: String,
     private val repository: CompetitionRepository,
     private val realtime: RealtimeClient,
+    val media: LiveRoomClient,
     sponsorAds: com.dualmusic.feature.sponsor.SponsorAdRepository,
     recording: com.dualmusic.feature.sponsor.RecordingRepository,
 ) : ViewModel() {
@@ -112,7 +145,27 @@ class CompetitionRoomViewModel(
     private val _isManager = MutableStateFlow(false)
     val isManager: StateFlow<Boolean> = _isManager.asStateFlow()
 
+    /** Vrai si le caller peut diffuser sa caméra (manager, ou candidat approuvé en mode online). */
+    private val _canPublish = MutableStateFlow(false)
+    val canPublish: StateFlow<Boolean> = _canPublish.asStateFlow()
+
+    /** Diffusion caméra/micro en cours (publieur). */
+    private val _broadcasting = MutableStateFlow(false)
+    val broadcasting: StateFlow<Boolean> = _broadcasting.asStateFlow()
+
+    /** Nombre de spectateurs en direct (présence Socket.IO). */
+    private val _viewerCount = MutableStateFlow(0)
+    val viewerCount: StateFlow<Int> = _viewerCount.asStateFlow()
+
+    /** Chat de la compétition (parité duel/concert). */
+    private val _messages = MutableStateFlow<List<CompetitionChatMessage>>(emptyList())
+    val messages: StateFlow<List<CompetitionChatMessage>> = _messages.asStateFlow()
+
+    /** Room LiveKit (identique au web : `livekit_room` ou repli `comp-<id>`). */
+    private var roomName: String = "comp-$competitionId"
+
     private var liveSession: NamespaceSession? = null
+    private var chatSession: NamespaceSession? = null
 
     /** Charge l'inventaire de cadeaux du caller. */
     fun loadInventory() {
@@ -138,7 +191,7 @@ class CompetitionRoomViewModel(
         }
     }
 
-    /** Démarre : charge le classement + détermine l'organisateur + écoute le temps réel. */
+    /** Démarre : classement + organisateur + room vidéo LiveKit + chat + présence + temps réel. */
     fun start() {
         refresh()
         loadInventory()
@@ -146,19 +199,41 @@ class CompetitionRoomViewModel(
         viewModelScope.launch {
             val comp = runCatching { repository.competition(competitionId) }.getOrNull()
             _status.value = comp?.status
-            val myId = repository.myUserId()
-            _isManager.value = comp?.managerId != null && comp.managerId == myId
+            // Room partagée avec le web : mobile et web rejoignent la MÊME room LiveKit.
+            roomName = comp?.livekitRoom?.takeIf { it.isNotBlank() } ?: "comp-$competitionId"
+            val myId = runCatching { repository.myUserId() }.getOrNull()
+            val manager = comp?.managerId != null && comp.managerId == myId
+            _isManager.value = manager
+            // Multi-cam : en mode « online », un candidat APPROUVÉ diffuse aussi sa caméra.
+            val cands = runCatching { repository.candidates(competitionId) }.getOrNull().orEmpty()
+            val approvedCandidate = comp?.mode == "online" && myId != null &&
+                cands.any { it.artistId == myId && it.status == "approved" }
+            val publish = manager || approvedCandidate
+            _canPublish.value = publish
+            // Rejoint la room : les spectateurs consomment, les publieurs pourront diffuser.
+            runCatching { media.join(roomName = roomName, isHost = manager, canPublish = publish) }
+            // Historique du chat.
+            runCatching { repository.chatHistory(competitionId) }.getOrNull()?.let { _messages.value = it }
         }
         val live = realtime.session(Realtime.Namespace.LIVE).also { liveSession = it }
+        val chat = realtime.session(Realtime.Namespace.CHAT).also { chatSession = it }
         viewModelScope.launch {
             live.onConnect {
                 live.join(Realtime.RoomType.COMPETITION, competitionId)
                 live.emit("broadcast:join", "competition-emojis-$competitionId")
             }
+            chat.onConnect { chat.join(Realtime.RoomType.COMPETITION, competitionId) }
+            chat.on(Realtime.RealtimeEvent.CHAT_MESSAGE, com.dualmusic.domain.realtime.ChatMessagePayload.serializer()) { p ->
+                _messages.update { it + CompetitionChatMessage(id = p.id, userId = p.userId, content = p.content, user = p.user) }
+            }
             live.on(Realtime.RealtimeEvent.STATUS, StatusPayload.serializer()) { p ->
                 _status.value = p.status
                 // Un changement d'état peut clore les votes → on resynchronise le classement.
                 refresh()
+            }
+            // Présence : compteur de spectateurs en direct (parité web usePresence).
+            live.on(Realtime.RealtimeEvent.PRESENCE, com.dualmusic.domain.realtime.PresencePayload.serializer()) { p ->
+                _viewerCount.value = p.count
             }
             // Réactions emojis relayées (canal competition-emojis-<id>) — émetteur exclu.
             live.on("broadcast", com.dualmusic.domain.realtime.BroadcastEnvelope.serializer()) { env ->
@@ -175,7 +250,37 @@ class CompetitionRoomViewModel(
                 sponsor.onEvent(p)
             }
             live.connect()
+            chat.connect()
         }
+    }
+
+    /** Publieur : démarre la diffusion caméra/micro. */
+    fun startBroadcast() {
+        viewModelScope.launch {
+            runCatching { media.startBroadcast() }
+            _broadcasting.value = true
+        }
+    }
+
+    /** Publieur : coupe/rétablit la caméra. */
+    fun toggleCamera() { media.setCamEnabled(!media.camEnabled.value) }
+
+    /** Publieur : coupe/rétablit le micro. */
+    fun toggleMic() { viewModelScope.launch { runCatching { media.setMicEnabled(!media.micEnabled.value) } } }
+
+    /** Publieur : bascule caméra avant/arrière. */
+    fun flipCamera() { viewModelScope.launch { runCatching { media.switchCamera() } } }
+
+    /** Poste un message de chat. */
+    fun sendMessage(text: String) {
+        val content = text.trim()
+        if (content.isEmpty()) return
+        viewModelScope.launch { runCatching { repository.postMessage(competitionId, content) } }
+    }
+
+    /** Signale ce direct à la modération (best-effort ; l'échec reste silencieux). */
+    fun report(reason: String) {
+        viewModelScope.launch { runCatching { repository.reportLive(competitionId, reason) } }
     }
 
     /** J'aime : incrémente le compteur local + fait flotter un cœur pour tous. */
@@ -203,8 +308,12 @@ class CompetitionRoomViewModel(
         _emojiFeed.update { (it + (emojiCounter++ to emoji)).takeLast(12) }
     }
 
-    /** Arrête l'écoute temps réel. */
-    fun stop() { liveSession?.disconnect() }
+    /** Arrête l'écoute temps réel + libère la room vidéo. */
+    fun stop() {
+        liveSession?.disconnect()
+        chatSession?.disconnect()
+        media.leave()
+    }
 
     /** Recharge le classement depuis le serveur (source de vérité des tallies). */
     fun refresh() {
@@ -277,6 +386,7 @@ class CompetitionRoomViewModel(
 fun CompetitionRoomScreen(
     viewModel: CompetitionRoomViewModel,
     voteCredits: Int = 10,
+    onLeave: () -> Unit = {},
 ) {
     val candidates by viewModel.candidates.collectAsStateWithLifecycle()
     val status by viewModel.status.collectAsStateWithLifecycle()
@@ -285,6 +395,15 @@ fun CompetitionRoomScreen(
     val giftPulse by viewModel.giftPulse.collectAsStateWithLifecycle()
     val inventory by viewModel.inventory.collectAsStateWithLifecycle()
     val likes by viewModel.likes.collectAsStateWithLifecycle()
+    val messages by viewModel.messages.collectAsStateWithLifecycle()
+    val viewerCount by viewModel.viewerCount.collectAsStateWithLifecycle()
+    val canPublish by viewModel.canPublish.collectAsStateWithLifecycle()
+    val broadcasting by viewModel.broadcasting.collectAsStateWithLifecycle()
+    val primaryTrack by viewModel.media.primaryVideoTrack.collectAsStateWithLifecycle()
+    val remoteVideos by viewModel.media.remoteVideos.collectAsStateWithLifecycle()
+    val localTrack by viewModel.media.localVideoTrack.collectAsStateWithLifecycle()
+    val camOn by viewModel.media.camEnabled.collectAsStateWithLifecycle()
+    val micOn by viewModel.media.micEnabled.collectAsStateWithLifecycle()
     val sponsorAd by viewModel.sponsor.activeAd.collectAsStateWithLifecycle()
     val sponsorAds by viewModel.sponsor.ads.collectAsStateWithLifecycle()
     val sponsorBusy by viewModel.sponsor.busy.collectAsStateWithLifecycle()
@@ -295,87 +414,56 @@ fun CompetitionRoomScreen(
     val isManager by viewModel.isManager.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
-    // Candidat ciblé par l'offrande de cadeau (ouvre le sélecteur d'inventaire).
+    val context = LocalContext.current
     var giftTargetCandidate by remember { mutableStateOf<String?>(null) }
+    var showLeaderboard by remember { mutableStateOf(false) }
+    var showReport by remember { mutableStateOf(false) }
+    var draft by remember { mutableStateOf("") }
+    // Caméra mise en avant (focus local, tap sur une vignette). Défaut = piste primaire.
+    var focusedTrack by remember { mutableStateOf<VideoTrack?>(null) }
+
+    // Permissions caméra/micro requises avant de diffuser (publieur).
+    val perms = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+    fun hasPerms() = perms.all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+    val broadcastLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result.values.all { it }) viewModel.startBroadcast()
+    }
 
     DisposableEffect(Unit) {
         viewModel.start()
         onDispose { viewModel.stop() }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(DualMusicTheme.gradients.hero)) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(DualMusicTheme.spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
-        ) {
-            Text(strings.ranking, color = colors.foreground, fontWeight = FontWeight.Bold)
-            error?.let { Text(it, color = colors.destructive) }
-            // Contrôles de l'organisateur (manager) : publier + finaliser + enregistrement.
-            if (isManager) {
-                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                    DMButton(strings.publishAction, modifier = Modifier.weight(1f), onClick = { viewModel.publish() })
-                    DMButton(strings.finalizeAction, style = DMButtonStyle.OUTLINE, modifier = Modifier.weight(1f), onClick = { viewModel.finalize() })
-                }
-                com.dualmusic.feature.sponsor.RecordingHostButton(mode = recMode, active = recActive, busy = recBusy, onToggle = { viewModel.recordingCtl.toggle() })
-            }
-            if (candidates.isEmpty()) {
-                DMEmptyState(
-                    title = strings.noCandidates,
-                    subtitle = strings.noCandidatesHint,
-                    icon = Icons.Filled.Star,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+    // Multi-cam : toutes les pistes publiées (distantes + locale) ; une en grand, les autres en vignettes.
+    val allTracks = remember(remoteVideos, localTrack) { (remoteVideos + listOfNotNull(localTrack)).distinct() }
+    val mainTrack = focusedTrack?.takeIf { it in allTracks } ?: primaryTrack ?: localTrack
+    val thumbs = allTracks.filter { it !== mainTrack }
 
-            LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                itemsIndexed(candidates) { index, candidate ->
-                    CandidateRow(
-                        rank = index + 1,
-                        candidate = candidate,
-                        voteCredits = voteCredits,
-                        isManager = isManager,
-                        onVote = { viewModel.vote(candidate.id, voteCredits) },
-                        onGift = { giftTargetCandidate = candidate.id },
-                        onApprove = { viewModel.reviewCandidate(candidate.id, true) },
-                        onReject = { viewModel.reviewCandidate(candidate.id, false) },
-                        onPerformer = { viewModel.setPerformer(candidate.id, 120) },
-                    )
-                }
-            }
-
-            // Barre de réactions : J'aime + emojis (flottent pour tous les spectateurs).
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
-            ) {
-                Box(
-                    modifier = Modifier.size(40.dp).background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { viewModel.sendLike() },
-                    contentAlignment = Alignment.Center,
-                ) { Text("❤️", fontSize = 18.sp) }
-                if (likes > 0) Text("$likes", color = colors.foreground, fontSize = 12.sp)
-                CompetitionReactionEmojis.forEach { e ->
-                    Box(
-                        modifier = Modifier.background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { viewModel.sendReaction(e) }.padding(horizontal = 10.dp, vertical = 6.dp),
-                    ) { Text(e) }
-                }
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        // --- Couche vidéo principale ---
+        if (mainTrack != null) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { ctx -> SurfaceViewRenderer(ctx).apply { viewModel.media.room.initVideoRenderer(this) } },
+                update = { renderer -> mainTrack.addRenderer(renderer) },
+            )
+        } else {
+            // Pas encore de flux : fond dégradé + trophée (parité web « en attente du direct »).
+            Box(Modifier.fillMaxSize().background(DualMusicTheme.gradients.hero), contentAlignment = Alignment.Center) {
+                Text("🏆", fontSize = 54.sp)
             }
         }
 
-        // Réactions flottantes montantes (vues par tous), respecte « Réduire les animations ».
+        // Dégradés haut + bas pour la lisibilité des overlays.
+        Box(Modifier.fillMaxSize().background(
+            Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent, Color.Black.copy(alpha = 0.6f))),
+        ))
+
+        // Réactions montantes + cadeau burst + célébration du vainqueur.
         FloatingReactionsLayer(reactions = emojiFeed, reduceAnimations = uiPrefs.reduceAnimations)
-
-        // Cadeau reçu : burst central (halo GPU), masqué si « Réduire les animations ». Parité live.
         if (!uiPrefs.reduceAnimations && giftPulse > 0L) {
-            androidx.compose.runtime.key(giftPulse) {
-                GiftBurst(symbol = "🎁", modifier = Modifier.align(Alignment.Center))
-            }
+            key(giftPulse) { GiftBurst(symbol = "🎁", modifier = Modifier.align(Alignment.Center)) }
         }
-
-        // Classement finalisé : célébration du vainqueur (rang 1 = plus haut score). Vue par tous
-        // les spectateurs dès que l'organisateur finalise (event `status` = finished).
         if (status == "finished" && candidates.isNotEmpty()) {
             WinnerCelebration(
                 winnerName = candidates.first().artist?.displayName ?: strings.winnerGeneric,
@@ -383,6 +471,142 @@ fun CompetitionRoomScreen(
                 subtitle = strings.winnerCongrats,
                 reduceAnimations = uiPrefs.reduceAnimations,
             )
+        }
+
+        // --- Header live unifié (mêmes icônes que le web) ---
+        com.dualmusic.core.ui.live.LiveHeader(
+            modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(DualMusicTheme.spacing.md),
+            eventLabel = "COMPÉTITION",
+            viewerCount = viewerCount,
+            likes = likes,
+            onShare = {
+                val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, strings.shareLiveText) }
+                context.startActivity(Intent.createChooser(send, null))
+            },
+            onReport = { showReport = true },
+            onClose = onLeave,
+        )
+
+        // Vignettes multi-cam (sous le header) : tap pour mettre une caméra en avant.
+        if (thumbs.isNotEmpty()) {
+            Row(
+                modifier = Modifier.align(Alignment.TopStart).statusBarsPadding()
+                    .padding(top = 56.dp, start = DualMusicTheme.spacing.md, end = DualMusicTheme.spacing.md)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                thumbs.forEach { t ->
+                    key(t) {
+                        AndroidView(
+                            modifier = Modifier.width(72.dp).height(96.dp)
+                                .background(Color.Black, RoundedCornerShape(8.dp))
+                                .clickable { focusedTrack = t },
+                            factory = { ctx -> SurfaceViewRenderer(ctx).apply { viewModel.media.room.initVideoRenderer(this) } },
+                            update = { renderer -> t.addRenderer(renderer) },
+                        )
+                    }
+                }
+            }
+        }
+
+        // --- Bas : erreur + chat + réactions + barre d'action ---
+        Column(
+            modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().navigationBarsPadding().imePadding().padding(DualMusicTheme.spacing.md),
+            verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+        ) {
+            error?.let { Text(it, color = colors.destructive, fontSize = 12.sp) }
+
+            // Chat (semi-transparent, auto-scroll).
+            val chatState = rememberLazyListState()
+            LaunchedEffect(messages.size) { if (messages.isNotEmpty()) chatState.animateScrollToItem(messages.size - 1) }
+            LazyColumn(state = chatState, modifier = Modifier.fillMaxWidth(0.68f).height(160.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                items(messages) { msg ->
+                    Row(modifier = Modifier.background(Color.Black.copy(alpha = 0.28f), RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 3.dp)) {
+                        Text(msg.authorName, color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("  ${msg.content}", color = Color.White, fontSize = 12.sp)
+                    }
+                }
+            }
+
+            // Barre de réactions : J'aime + emojis (flottent pour tous).
+            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                Box(modifier = Modifier.size(40.dp).background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { viewModel.sendLike() }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Favorite, contentDescription = null, tint = Color(0xFFFF4D6D), modifier = Modifier.size(20.dp))
+                }
+                if (likes > 0) Text("$likes", color = Color.White, fontSize = 12.sp)
+                CompetitionReactionEmojis.forEach { e ->
+                    Box(modifier = Modifier.background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { viewModel.sendReaction(e) }.padding(horizontal = 10.dp, vertical = 6.dp)) { Text(e) }
+                }
+            }
+
+            // Barre d'action : message + classement.
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    placeholder = { Text(strings.saySomething, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp) },
+                    singleLine = true,
+                    keyboardActions = KeyboardActions(onDone = { viewModel.sendMessage(draft); draft = "" }),
+                    modifier = Modifier.weight(1f),
+                )
+                Box(modifier = Modifier.size(44.dp).background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { showLeaderboard = true }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.EmojiEvents, contentDescription = strings.ranking, tint = Color(0xFFFFC107))
+                }
+            }
+        }
+
+        // --- Contrôles publieur (manager / candidat approuvé) : démarrer + caméra/micro/flip + REC ---
+        if (canPublish) {
+            Column(
+                modifier = Modifier.align(Alignment.CenterEnd).statusBarsPadding().padding(end = DualMusicTheme.spacing.md, top = 120.dp),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                if (!broadcasting) {
+                    CompCircleBtn(Icons.Filled.Podcasts, colors.primary) {
+                        if (hasPerms()) viewModel.startBroadcast() else broadcastLauncher.launch(perms)
+                    }
+                } else {
+                    CompCircleBtn(if (camOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff, Color.Black.copy(alpha = 0.4f)) { viewModel.toggleCamera() }
+                    CompCircleBtn(if (micOn) Icons.Filled.Mic else Icons.Filled.MicOff, Color.Black.copy(alpha = 0.4f)) { viewModel.toggleMic() }
+                    CompCircleBtn(Icons.Filled.Cameraswitch, Color.Black.copy(alpha = 0.4f)) { viewModel.flipCamera() }
+                }
+                if (isManager) {
+                    com.dualmusic.feature.sponsor.RecordingHostButton(mode = recMode, active = recActive, busy = recBusy, onToggle = { viewModel.recordingCtl.toggle() })
+                }
+            }
+        }
+
+        // --- Classement (panneau bas) : candidats + vote/cadeau + actions organisateur ---
+        if (showLeaderboard) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showLeaderboard = false })
+            Column(
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().fillMaxHeight(0.6f).background(colors.background).navigationBarsPadding().padding(DualMusicTheme.spacing.md),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text(strings.ranking, color = colors.foreground, fontWeight = FontWeight.Bold)
+                if (isManager) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                        DMButton(strings.publishAction, modifier = Modifier.weight(1f), onClick = { viewModel.publish() })
+                        DMButton(strings.finalizeAction, style = DMButtonStyle.OUTLINE, modifier = Modifier.weight(1f), onClick = { viewModel.finalize() })
+                    }
+                }
+                if (candidates.isEmpty()) Text(strings.noCandidatesHint, color = colors.mutedForeground, fontSize = 13.sp)
+                LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    itemsIndexed(candidates) { index, candidate ->
+                        CandidateRow(
+                            rank = index + 1,
+                            candidate = candidate,
+                            voteCredits = voteCredits,
+                            isManager = isManager,
+                            onVote = { viewModel.vote(candidate.id, voteCredits) },
+                            onGift = { giftTargetCandidate = candidate.id },
+                            onApprove = { viewModel.reviewCandidate(candidate.id, true) },
+                            onReject = { viewModel.reviewCandidate(candidate.id, false) },
+                            onPerformer = { viewModel.setPerformer(candidate.id, 120) },
+                        )
+                    }
+                }
+            }
         }
 
         // Sélecteur de cadeau : offrande à un candidat (alimente son score). Parité live/duel/web.
@@ -394,6 +618,7 @@ fun CompetitionRoomScreen(
                     .fillMaxWidth()
                     .fillMaxHeight(0.5f)
                     .background(colors.background)
+                    .navigationBarsPadding()
                     .padding(DualMusicTheme.spacing.md),
                 verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
             ) {
@@ -426,6 +651,17 @@ fun CompetitionRoomScreen(
             }
         }
 
+        // Signalement du direct (parité web LiveReportButton).
+        if (showReport) {
+            com.dualmusic.core.ui.live.ReportDialog(
+                onDismiss = { showReport = false },
+                onSubmit = { reason ->
+                    viewModel.report(reason)
+                    android.widget.Toast.makeText(context, strings.reportSent, android.widget.Toast.LENGTH_SHORT).show()
+                },
+            )
+        }
+
         // Diffusion pub sponsor : overlay vidéo pour tous + contrôle pour l'organisateur.
         SponsorAdLayer(
             activeAd = sponsorAd,
@@ -437,6 +673,15 @@ fun CompetitionRoomScreen(
             onStop = { viewModel.sponsor.stop() },
         )
     }
+}
+
+/** Bouton d'action circulaire (contrôles de diffusion : caméra/micro/flip/démarrer). */
+@Composable
+private fun CompCircleBtn(icon: androidx.compose.ui.graphics.vector.ImageVector, bg: Color, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier.size(46.dp).background(bg, CircleShape).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp)) }
 }
 
 /** Emojis de réaction (identiques au live/duel/web). */

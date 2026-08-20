@@ -90,6 +90,9 @@ object CompetitionEndpoints {
     /** Candidats (avec tallies) d'une compétition. */
     fun candidates(id: String) = "/competitions/$id/candidates"
 
+    /** Chat de la compétition (sous-ressource `chat.helper` backend). */
+    fun messages(id: String) = "/competitions/$id/messages"
+
     /** Vote payant pour un candidat (débit atomique). */
     fun vote(id: String) = "/competitions/$id/vote"
 
