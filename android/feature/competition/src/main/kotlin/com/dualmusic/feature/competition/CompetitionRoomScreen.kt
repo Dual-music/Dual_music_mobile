@@ -47,6 +47,7 @@ import com.dualmusic.core.ui.components.DMEmptyState
 import com.dualmusic.core.ui.gifts.GiftBurst
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.overlay.FloatingReactionsLayer
+import com.dualmusic.core.ui.overlay.TopDonorBubble
 import com.dualmusic.core.ui.prefs.UiPreferencesStore
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.feature.sponsor.SponsorAdLayer
@@ -101,6 +102,9 @@ import kotlinx.coroutines.launch
  * @param repository lectures + débits de la compétition.
  * @param realtime client Socket.IO (écoute des changements de statut).
  */
+/** Performeur courant d'une compétition : id du candidat + instant de fin du slot (ISO, pour le chrono). */
+data class CompetitionPerformer(val performerId: String?, val endsAtIso: String?)
+
 class CompetitionRoomViewModel(
     private val competitionId: String,
     private val repository: CompetitionRepository,
@@ -161,6 +165,22 @@ class CompetitionRoomViewModel(
     private val _messages = MutableStateFlow<List<CompetitionChatMessage>>(emptyList())
     val messages: StateFlow<List<CompetitionChatMessage>> = _messages.asStateFlow()
 
+    /** Meilleur donateur courant (bulle top-donateur). Rechargé à chaque cadeau. */
+    private val _topDonor = MutableStateFlow<com.dualmusic.core.ui.overlay.TopDonor?>(null)
+    val topDonor: StateFlow<com.dualmusic.core.ui.overlay.TopDonor?> = _topDonor.asStateFlow()
+
+    /** Performeur courant désigné par le manager (id candidat + fin du slot ISO) → chrono visuel. */
+    private val _performer = MutableStateFlow(CompetitionPerformer(null, null))
+    val performer: StateFlow<CompetitionPerformer> = _performer.asStateFlow()
+
+    /** Billet requis pour regarder : compétition payante, ni organisateur ni candidat, sans billet. */
+    private val _needsTicket = MutableStateFlow(false)
+    val needsTicket: StateFlow<Boolean> = _needsTicket.asStateFlow()
+
+    /** Prix du billet spectateur (crédits) — pour l'écran de blocage. */
+    private val _ticketPrice = MutableStateFlow(0.0)
+    val ticketPrice: StateFlow<Double> = _ticketPrice.asStateFlow()
+
     /** Room LiveKit (identique au web : `livekit_room` ou repli `comp-<id>`). */
     private var roomName: String = "comp-$competitionId"
 
@@ -171,6 +191,14 @@ class CompetitionRoomViewModel(
     fun loadInventory() {
         viewModelScope.launch {
             runCatching { repository.inventory() }.getOrNull()?.let { _inventory.value = it }
+        }
+    }
+
+    /** Recharge le classement des donateurs → alimente la bulle top-donateur (parité concert/duel). */
+    fun loadGiftLeaderboard() {
+        viewModelScope.launch {
+            val list = runCatching { repository.giftLeaderboard(competitionId) }.getOrDefault(emptyList())
+            _topDonor.value = list.firstOrNull()?.let { com.dualmusic.core.ui.overlay.TopDonor(it.displayName, it.value) }
         }
     }
 
@@ -195,6 +223,7 @@ class CompetitionRoomViewModel(
     fun start() {
         refresh()
         loadInventory()
+        loadGiftLeaderboard()
         recordingCtl.refresh()
         viewModelScope.launch {
             val comp = runCatching { repository.competition(competitionId) }.getOrNull()
@@ -210,8 +239,13 @@ class CompetitionRoomViewModel(
                 cands.any { it.artistId == myId && it.status == "approved" }
             val publish = manager || approvedCandidate
             _canPublish.value = publish
-            // Rejoint la room : les spectateurs consomment, les publieurs pourront diffuser.
-            runCatching { media.join(roomName = roomName, isHost = manager, canPublish = publish) }
+            // Billetterie : une compétition payante exige un billet pour les spectateurs (hors publieurs).
+            _ticketPrice.value = comp?.viewerTicketPrice ?: 0.0
+            val needsTicket = comp?.isPublicPaid == true && !publish &&
+                runCatching { repository.ticketInfo(competitionId) }.getOrNull()?.hasTicket != true
+            _needsTicket.value = needsTicket
+            // Rejoint la room (sauf blocage billet) : les spectateurs consomment, les publieurs diffusent.
+            if (!needsTicket) runCatching { media.join(roomName = roomName, isHost = manager, canPublish = publish) }
             // Historique du chat.
             runCatching { repository.chatHistory(competitionId) }.getOrNull()?.let { _messages.value = it }
         }
@@ -235,6 +269,12 @@ class CompetitionRoomViewModel(
             live.on(Realtime.RealtimeEvent.PRESENCE, com.dualmusic.domain.realtime.PresencePayload.serializer()) { p ->
                 _viewerCount.value = p.count
             }
+            // Performeur désigné par le manager : on calcule la fin du slot (maintenant + durée) → chrono.
+            live.on(Realtime.RealtimeEvent.PERFORMER, com.dualmusic.domain.realtime.PerformerPayload.serializer()) { p ->
+                _performer.value = if (p.performerId != null)
+                    CompetitionPerformer(p.performerId, java.time.Instant.now().plusSeconds(p.durationSec.toLong()).toString())
+                else CompetitionPerformer(null, null)
+            }
             // Réactions emojis relayées (canal competition-emojis-<id>) — émetteur exclu.
             live.on("broadcast", com.dualmusic.domain.realtime.BroadcastEnvelope.serializer()) { env ->
                 if (env.event == "emoji_reaction") env.payload?.emoji?.let { pushEmoji(it) }
@@ -244,6 +284,7 @@ class CompetitionRoomViewModel(
             live.on(Realtime.RealtimeEvent.GIFT, com.dualmusic.domain.realtime.GiftPayload.serializer()) { _ ->
                 _giftPulse.update { it + 1 }
                 refresh()
+                loadGiftLeaderboard() // met à jour la bulle top-donateur en direct
             }
             // Pub sponsor (start/stop) diffusée à toute la room.
             live.on(Realtime.RealtimeEvent.SPONSOR_AD, com.dualmusic.domain.realtime.SponsorAdPayload.serializer()) { p ->
@@ -281,6 +322,18 @@ class CompetitionRoomViewModel(
     /** Signale ce direct à la modération (best-effort ; l'échec reste silencieux). */
     fun report(reason: String) {
         viewModelScope.launch { runCatching { repository.reportLive(competitionId, reason) } }
+    }
+
+    /** Achète le billet spectateur puis rejoint la room vidéo. */
+    fun buyTicket() {
+        viewModelScope.launch {
+            runCatching { repository.buyTicket(competitionId) }
+                .onSuccess {
+                    _needsTicket.value = false
+                    runCatching { media.join(roomName = roomName, isHost = false, canPublish = false) }
+                }
+                .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
     }
 
     /** J'aime : incrémente le compteur local + fait flotter un cœur pour tous. */
@@ -396,9 +449,13 @@ fun CompetitionRoomScreen(
     val inventory by viewModel.inventory.collectAsStateWithLifecycle()
     val likes by viewModel.likes.collectAsStateWithLifecycle()
     val messages by viewModel.messages.collectAsStateWithLifecycle()
+    val topDonor by viewModel.topDonor.collectAsStateWithLifecycle()
+    val performer by viewModel.performer.collectAsStateWithLifecycle()
     val viewerCount by viewModel.viewerCount.collectAsStateWithLifecycle()
     val canPublish by viewModel.canPublish.collectAsStateWithLifecycle()
     val broadcasting by viewModel.broadcasting.collectAsStateWithLifecycle()
+    val needsTicket by viewModel.needsTicket.collectAsStateWithLifecycle()
+    val ticketPrice by viewModel.ticketPrice.collectAsStateWithLifecycle()
     val primaryTrack by viewModel.media.primaryVideoTrack.collectAsStateWithLifecycle()
     val remoteVideos by viewModel.media.remoteVideos.collectAsStateWithLifecycle()
     val localTrack by viewModel.media.localVideoTrack.collectAsStateWithLifecycle()
@@ -461,6 +518,8 @@ fun CompetitionRoomScreen(
 
         // Réactions montantes + cadeau burst + célébration du vainqueur.
         FloatingReactionsLayer(reactions = emojiFeed, reduceAnimations = uiPrefs.reduceAnimations)
+        // Bulle du meilleur donateur (parité web), pilotée par les préférences visuelles.
+        TopDonorBubble(donor = topDonor, mode = uiPrefs.topDonorMode, animation = uiPrefs.topDonorAnimation)
         if (!uiPrefs.reduceAnimations && giftPulse > 0L) {
             key(giftPulse) { GiftBurst(symbol = "🎁", modifier = Modifier.align(Alignment.Center)) }
         }
@@ -486,6 +545,16 @@ fun CompetitionRoomScreen(
             onReport = { showReport = true },
             onClose = onLeave,
         )
+
+        // Chrono du performeur courant (parité web CompetitionPerformerTimer), centré sous le header.
+        performer.endsAtIso?.let { endsAt ->
+            val performerName = candidates.find { it.id == performer.performerId }?.artist?.displayName
+            com.dualmusic.core.ui.live.LiveCountdown(
+                endsAtIso = endsAt,
+                label = performerName,
+                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 50.dp),
+            )
+        }
 
         // Vignettes multi-cam (sous le header) : tap pour mettre une caméra en avant.
         if (thumbs.isNotEmpty()) {
@@ -660,6 +729,19 @@ fun CompetitionRoomScreen(
                     android.widget.Toast.makeText(context, strings.reportSent, android.widget.Toast.LENGTH_SHORT).show()
                 },
             )
+        }
+
+        // Blocage billet : compétition payante sans billet → écran d'achat (parité web).
+        if (needsTicket) {
+            Column(
+                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)).padding(DualMusicTheme.spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("🎟️", fontSize = 48.sp)
+                Text(strings.buyTicket, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                DMButton("${strings.buyTicket} · ${ticketPrice.toInt()} ${strings.credits}", onClick = { viewModel.buyTicket() })
+            }
         }
 
         // Diffusion pub sponsor : overlay vidéo pour tous + contrôle pour l'organisateur.

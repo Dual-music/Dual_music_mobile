@@ -85,6 +85,9 @@ object Realtime {
         /** `/live` · room event — présence (viewers). Payload [PresencePayload]. */
         const val PRESENCE = "presence"
 
+        /** `/live` · room compétition — désignation du performeur courant + durée. Payload [PerformerPayload]. */
+        const val PERFORMER = "performer"
+
         /** `/live` · room event — diffusion d'une pub sponsor (start/stop). Payload [SponsorAdPayload]. */
         const val SPONSOR_AD = "sponsor:ad"
 
@@ -182,6 +185,18 @@ data class PresencePayload(
     /** Nom de room (`live:<id>`) — sert à identifier le live en écoute multi-room. */
     val room: String? = null,
     val count: Int,
+)
+
+/**
+ * `performer` — le manager désigne le candidat qui performe (ou `null` pour arrêter) + la durée
+ * de son slot. Le backend émet en camelCase. Pas de `startedAt` : le client calcule la fin à
+ * la réception (`maintenant + durationSec`), l'event arrivant quasi immédiatement.
+ */
+@Serializable
+data class PerformerPayload(
+    val competitionId: String? = null,
+    val performerId: String? = null,
+    val durationSec: Int = 0,
 )
 
 /** `message` — message de chat d'une room. */

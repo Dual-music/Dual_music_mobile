@@ -16,6 +16,26 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
+/** Entrée du classement des donateurs (`GET /leaderboards/gifts?contextType=competition`). */
+@Serializable
+data class CompetitionDonorEntry(
+    @SerialName("user_id") val userId: String? = null,
+    @SerialName("full_name") val fullName: String? = null,
+    @SerialName("stage_name") val stageName: String? = null,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    val total: Double = 0.0,
+    val score: Double = 0.0,
+    val user: DisplayProfile? = null,
+) {
+    val displayName: String
+        get() = user?.displayName ?: stageName?.takeIf { it.isNotBlank() } ?: fullName?.takeIf { it.isNotBlank() } ?: "Donateur"
+    val value: Int get() = (if (total > 0.0) total else score).toInt()
+}
+
+/** Réponse de `GET /competitions/:id/my-ticket` — le caller a-t-il un billet ? */
+@Serializable
+data class CompetitionTicketInfo(val hasTicket: Boolean = false, val count: Int = 0)
+
 /** Message de chat d'une compétition (sous-ressource `chat.helper`, auteur hydraté). */
 @Serializable
 data class CompetitionChatMessage(
@@ -56,6 +76,13 @@ class CompetitionRepository(private val api: ApiClient) {
     suspend fun postMessage(id: String, content: String) {
         api.request<Unit>(Endpoint.post(CompetitionEndpoints.messages(id), """{"message":${content.jsonQuoted()}}"""))
     }
+
+    /** Classement des donateurs (`GET /leaderboards/gifts?contextType=competition`). */
+    suspend fun giftLeaderboard(id: String): List<CompetitionDonorEntry> =
+        api.request(
+            Endpoint.get("/leaderboards/gifts", query = mapOf("contextType" to "competition", "contextId" to id)),
+            ListSerializer(CompetitionDonorEntry.serializer()),
+        )
 
     private val json = Json { explicitNulls = false }
 
@@ -142,6 +169,10 @@ class CompetitionRepository(private val api: ApiClient) {
     /** Inventaire de cadeaux du caller (partagé avec le live/boutique). */
     suspend fun inventory(): List<InventoryItem> =
         api.request(Endpoint.get(GiftEndpoints.INVENTORY), ListSerializer(InventoryItem.serializer()))
+
+    /** Le caller possède-t-il un billet pour cette compétition ? (`GET /competitions/:id/my-ticket`). */
+    suspend fun ticketInfo(id: String): CompetitionTicketInfo =
+        api.request(Endpoint.get(CompetitionEndpoints.myTicket(id)), CompetitionTicketInfo.serializer())
 
     /** Achète le billet spectateur de la compétition. */
     suspend fun buyTicket(
