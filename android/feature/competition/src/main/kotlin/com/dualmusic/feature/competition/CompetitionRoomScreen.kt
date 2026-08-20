@@ -74,6 +74,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material3.Icon
@@ -173,6 +174,10 @@ class CompetitionRoomViewModel(
     private val _performer = MutableStateFlow(CompetitionPerformer(null, null))
     val performer: StateFlow<CompetitionPerformer> = _performer.asStateFlow()
 
+    /** Caméra épinglée par le manager (identité LiveKit = userId) → focus imposé à tous. */
+    private val _forcedFocusId = MutableStateFlow<String?>(null)
+    val forcedFocusId: StateFlow<String?> = _forcedFocusId.asStateFlow()
+
     /** Billet requis pour regarder : compétition payante, ni organisateur ni candidat, sans billet. */
     private val _needsTicket = MutableStateFlow(false)
     val needsTicket: StateFlow<Boolean> = _needsTicket.asStateFlow()
@@ -228,6 +233,7 @@ class CompetitionRoomViewModel(
         viewModelScope.launch {
             val comp = runCatching { repository.competition(competitionId) }.getOrNull()
             _status.value = comp?.status
+            _forcedFocusId.value = comp?.forcedFocusParticipantId
             // Room partagée avec le web : mobile et web rejoignent la MÊME room LiveKit.
             roomName = comp?.livekitRoom?.takeIf { it.isNotBlank() } ?: "comp-$competitionId"
             val myId = runCatching { repository.myUserId() }.getOrNull()
@@ -274,6 +280,10 @@ class CompetitionRoomViewModel(
                 _performer.value = if (p.performerId != null)
                     CompetitionPerformer(p.performerId, java.time.Instant.now().plusSeconds(p.durationSec.toLong()).toString())
                 else CompetitionPerformer(null, null)
+            }
+            // Focus caméra imposé par le manager → tous les clients mettent cette identité en avant.
+            live.on(Realtime.RealtimeEvent.FOCUS, com.dualmusic.domain.realtime.FocusPayload.serializer()) { p ->
+                _forcedFocusId.value = p.participantId
             }
             // Réactions emojis relayées (canal competition-emojis-<id>) — émetteur exclu.
             live.on("broadcast", com.dualmusic.domain.realtime.BroadcastEnvelope.serializer()) { env ->
@@ -420,6 +430,15 @@ class CompetitionRoomViewModel(
         }
     }
 
+    /** Manager : impose (ou libère avec `null`) la caméra épinglée pour tous. Optimiste + diffusé. */
+    fun setFocus(participantId: String?) {
+        _forcedFocusId.value = participantId // retour immédiat ; l'event `focus` confirmera pour tous
+        viewModelScope.launch {
+            runCatching { repository.setFocus(competitionId, participantId) }
+                .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
+
     /** Efface l'erreur affichée. */
     fun clearError() { _error.value = null }
 
@@ -457,8 +476,9 @@ fun CompetitionRoomScreen(
     val needsTicket by viewModel.needsTicket.collectAsStateWithLifecycle()
     val ticketPrice by viewModel.ticketPrice.collectAsStateWithLifecycle()
     val primaryTrack by viewModel.media.primaryVideoTrack.collectAsStateWithLifecycle()
-    val remoteVideos by viewModel.media.remoteVideos.collectAsStateWithLifecycle()
+    val remoteTiles by viewModel.media.remoteTiles.collectAsStateWithLifecycle()
     val localTrack by viewModel.media.localVideoTrack.collectAsStateWithLifecycle()
+    val forcedFocusId by viewModel.forcedFocusId.collectAsStateWithLifecycle()
     val camOn by viewModel.media.camEnabled.collectAsStateWithLifecycle()
     val micOn by viewModel.media.micEnabled.collectAsStateWithLifecycle()
     val sponsorAd by viewModel.sponsor.activeAd.collectAsStateWithLifecycle()
@@ -491,10 +511,18 @@ fun CompetitionRoomScreen(
         onDispose { viewModel.stop() }
     }
 
-    // Multi-cam : toutes les pistes publiées (distantes + locale) ; une en grand, les autres en vignettes.
-    val allTracks = remember(remoteVideos, localTrack) { (remoteVideos + listOfNotNull(localTrack)).distinct() }
-    val mainTrack = focusedTrack?.takeIf { it in allTracks } ?: primaryTrack ?: localTrack
-    val thumbs = allTracks.filter { it !== mainTrack }
+    // Multi-cam avec identité LiveKit (focus imposé synchronisé). Tuile = (identité publieur, piste).
+    // La tuile locale porte l'identité locale (= userId) pour être épinglable comme les autres.
+    val localIdentity = viewModel.media.localIdentity()
+    val allTiles = remember(remoteTiles, localTrack, localIdentity) {
+        remoteTiles + (localTrack?.let { listOf((localIdentity ?: "local") to it) } ?: emptyList())
+    }
+    // Piste principale : focus imposé par le manager > focus local (tap) > piste primaire.
+    val mainTile = forcedFocusId?.let { fid -> allTiles.find { it.first == fid } }
+        ?: focusedTrack?.let { ft -> allTiles.find { it.second === ft } }
+        ?: allTiles.firstOrNull()
+    val mainTrack = mainTile?.second ?: primaryTrack ?: localTrack
+    val thumbs = allTiles.filter { it.second !== mainTrack }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         // --- Couche vidéo principale ---
@@ -556,7 +584,16 @@ fun CompetitionRoomScreen(
             )
         }
 
-        // Vignettes multi-cam (sous le header) : tap pour mettre une caméra en avant.
+        // Épinglage manager (PinOff) sur la caméra principale : libère le focus imposé.
+        if (isManager && forcedFocusId != null) {
+            Box(
+                modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 96.dp, end = DualMusicTheme.spacing.md)
+                    .size(40.dp).background(colors.primary, CircleShape).clickable { viewModel.setFocus(null) },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Filled.PushPin, contentDescription = "Libérer le focus", tint = Color.White, modifier = Modifier.size(20.dp)) }
+        }
+
+        // Vignettes multi-cam (sous le header) : tap = focus local ; icône épingle (manager) = focus imposé.
         if (thumbs.isNotEmpty()) {
             Row(
                 modifier = Modifier.align(Alignment.TopStart).statusBarsPadding()
@@ -564,15 +601,26 @@ fun CompetitionRoomScreen(
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                thumbs.forEach { t ->
-                    key(t) {
-                        AndroidView(
-                            modifier = Modifier.width(72.dp).height(96.dp)
-                                .background(Color.Black, RoundedCornerShape(8.dp))
-                                .clickable { focusedTrack = t },
-                            factory = { ctx -> SurfaceViewRenderer(ctx).apply { viewModel.media.room.initVideoRenderer(this) } },
-                            update = { renderer -> t.addRenderer(renderer) },
-                        )
+                thumbs.forEach { tile ->
+                    key(tile.first, tile.second) {
+                        Box(modifier = Modifier.width(72.dp).height(96.dp)) {
+                            AndroidView(
+                                modifier = Modifier.fillMaxSize()
+                                    .background(Color.Black, RoundedCornerShape(8.dp))
+                                    .clickable { focusedTrack = tile.second },
+                                factory = { ctx -> SurfaceViewRenderer(ctx).apply { viewModel.media.room.initVideoRenderer(this) } },
+                                update = { renderer -> tile.second.addRenderer(renderer) },
+                            )
+                            // Manager : épingle cette caméra pour TOUS les spectateurs.
+                            if (isManager) {
+                                Box(
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(3.dp).size(22.dp)
+                                        .background(Color.Black.copy(alpha = 0.55f), CircleShape)
+                                        .clickable { viewModel.setFocus(tile.first) },
+                                    contentAlignment = Alignment.Center,
+                                ) { Icon(Icons.Filled.PushPin, contentDescription = "Imposer cette caméra", tint = Color.White, modifier = Modifier.size(13.dp)) }
+                            }
+                        }
                     }
                 }
             }

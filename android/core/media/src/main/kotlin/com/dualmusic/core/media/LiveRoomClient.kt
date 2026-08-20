@@ -67,6 +67,14 @@ class LiveRoomClient(
     private val _remoteVideos = MutableStateFlow<List<VideoTrack>>(emptyList())
     val remoteVideos: StateFlow<List<VideoTrack>> = _remoteVideos.asStateFlow()
 
+    /**
+     * Pistes distantes avec l'**identité LiveKit** du participant (= userId côté backend).
+     * Permet le focus imposé synchronisé : le manager épingle une identité, tous les clients
+     * mettent la piste correspondante en avant.
+     */
+    private val _remoteTiles = MutableStateFlow<List<Pair<String, VideoTrack>>>(emptyList())
+    val remoteTiles: StateFlow<List<Pair<String, VideoTrack>>> = _remoteTiles.asStateFlow()
+
     /** Piste vidéo LOCALE (aperçu de l'hôte quand il diffuse). `null` en mode viewer. */
     private val _localVideoTrack = MutableStateFlow<VideoTrack?>(null)
     val localVideoTrack: StateFlow<VideoTrack?> = _localVideoTrack.asStateFlow()
@@ -202,6 +210,7 @@ class LiveRoomClient(
         processor = null
         _primaryVideoTrack.value = null
         _remoteVideos.value = emptyList()
+        _remoteTiles.value = emptyList()
         _localVideoTrack.value = null
         _blurEnabled.value = false
         _connectionState.value = LiveConnectionState.Idle
@@ -287,11 +296,17 @@ class LiveRoomClient(
         _blurEnabled.value = false
     }
 
-    /** Rafraîchit la liste des pistes distantes + la piste primaire (première = hôte). */
+    /** Identité LiveKit locale (= userId) — pour épingler sa propre caméra (focus imposé). */
+    fun localIdentity(): String? = room.localParticipant.identity?.value
+
+    /** Rafraîchit la liste des pistes distantes (+ identité) + la piste primaire (première = hôte). */
     private fun refreshPrimaryTrack() {
-        val videos = room.remoteParticipants.values
-            .flatMap { it.videoTrackPublications }
-            .mapNotNull { it.second as? VideoTrack }
+        val tiles = room.remoteParticipants.values.flatMap { p ->
+            val id = p.identity?.value ?: ""
+            p.videoTrackPublications.mapNotNull { pub -> (pub.second as? VideoTrack)?.let { id to it } }
+        }
+        _remoteTiles.value = tiles
+        val videos = tiles.map { it.second }
         _remoteVideos.value = videos
         _primaryVideoTrack.value = videos.firstOrNull()
     }

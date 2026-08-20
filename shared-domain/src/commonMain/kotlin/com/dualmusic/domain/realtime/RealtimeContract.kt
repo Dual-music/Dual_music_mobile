@@ -88,6 +88,9 @@ object Realtime {
         /** `/live` · room compétition — désignation du performeur courant + durée. Payload [PerformerPayload]. */
         const val PERFORMER = "performer"
 
+        /** `/live` · room compétition — focus caméra imposé par le manager. Payload [FocusPayload]. */
+        const val FOCUS = "focus"
+
         /** `/live` · room event — diffusion d'une pub sponsor (start/stop). Payload [SponsorAdPayload]. */
         const val SPONSOR_AD = "sponsor:ad"
 
@@ -197,6 +200,16 @@ data class PerformerPayload(
     val competitionId: String? = null,
     val performerId: String? = null,
     val durationSec: Int = 0,
+)
+
+/**
+ * `focus` — le manager impose (ou libère avec `null`) la caméra mise en avant pour TOUS les
+ * spectateurs. `participantId` = identité LiveKit du publieur épinglé (= userId). camelCase.
+ */
+@Serializable
+data class FocusPayload(
+    val competitionId: String? = null,
+    val participantId: String? = null,
 )
 
 /** `message` — message de chat d'une room. */

@@ -136,6 +136,8 @@ data class Competition(
     val mode: String? = null,
     // Room LiveKit partagée avec le web (même room = mobile et web se voient). Repli `comp-<id>`.
     @SerialName("livekit_room") val livekitRoom: String? = null,
+    // Caméra épinglée par le manager (identité LiveKit = userId) — focus imposé au chargement.
+    @SerialName("forced_focus_participant_id") val forcedFocusParticipantId: String? = null,
     @SerialName("max_candidates") val maxCandidates: Int? = null,
     @SerialName("start_at") val startAt: String? = null,
     @SerialName("end_at") val endAt: String? = null,

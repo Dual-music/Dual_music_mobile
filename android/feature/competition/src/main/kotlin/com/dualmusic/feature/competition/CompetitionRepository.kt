@@ -238,6 +238,12 @@ class CompetitionRepository(private val api: ApiClient) {
     suspend fun finalize(id: String) {
         api.request<Unit>(Endpoint.post("/competitions/$id/finalize", "{}"))
     }
+
+    /** Impose (ou libère avec `null`) la caméra épinglée pour tous. `POST /competitions/:id/focus`. */
+    suspend fun setFocus(id: String, participantId: String?) {
+        val pid = participantId?.let { """"$it"""" } ?: "null"
+        api.request<Unit>(Endpoint.post("/competitions/$id/focus", """{"participantId":$pid}"""))
+    }
 }
 
 /** Échappe une chaîne pour l'insérer dans un corps JSON construit à la main. */
