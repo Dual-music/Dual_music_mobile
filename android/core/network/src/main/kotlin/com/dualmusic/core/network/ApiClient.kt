@@ -112,6 +112,11 @@ class ApiClient(
                 method = endpoint.method.toKtor()
                 endpoint.query.forEach { (k, v) -> this.url.parameters.append(k, v) }
                 header("Accept", "application/json")
+                // On demande une réponse NON compressée. Le backend (middleware `compression`)
+                // gzip les réponses > ~1 Ko ; or le moteur Ktor/OkHttp ne les décompresse pas ici
+                // → le corps gzippé illisible faisait échouer le décodage (ex. login) et remontait
+                // en « Connexion instable ». `identity` = pas de compression, corps JSON brut.
+                header("Accept-Encoding", "identity")
                 endpoint.idempotencyKey?.let { header("Idempotency-Key", it) }
                 if (!endpoint.anonymous) {
                     tokenStore.accessToken()?.let { header("Authorization", "Bearer $it") }
