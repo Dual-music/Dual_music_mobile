@@ -159,7 +159,8 @@ fun DuelRoomScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         // --- Couche vidéo (décodage matériel, zero-copy) ---
-        val track = videoTrack
+        // Piste principale = un participant distant ; à défaut (je diffuse seul) MA caméra.
+        val track = videoTrack ?: localTrack
         if (track != null) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
@@ -197,7 +198,7 @@ fun DuelRoomScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .imePadding()
-                .padding(start = 56.dp, top = DualMusicTheme.spacing.lg, end = DualMusicTheme.spacing.lg, bottom = DualMusicTheme.spacing.lg),
+                .padding(DualMusicTheme.spacing.lg),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             // Haut : header live unifié (mêmes icônes que le web), barre de votes + minuteur.
@@ -261,7 +262,8 @@ fun DuelRoomScreen(
                 }
                 LazyColumn(
                     state = chatState,
-                    modifier = Modifier.fillMaxWidth(0.68f).height(180.dp),
+                    // Décalé à droite du rail gauche (le rail est centré et chevauche cette zone).
+                    modifier = Modifier.fillMaxWidth(0.86f).height(170.dp).padding(start = 50.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     items(messages) { msg ->
@@ -311,7 +313,6 @@ fun DuelRoomScreen(
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Filled.CardGiftcard, contentDescription = strings.sendGift, tint = Color.White) }
                     BottomBarIcon(Icons.Filled.EmojiEvents, Color(0xFFFFC107)) { showLeaderboard = true; viewModel.loadGiftLeaderboard() }
-                    BottomBarIcon(Icons.Filled.HowToVote, colors.accent) { showVotePanel = true }
                 }
             }
         }
@@ -338,6 +339,8 @@ fun DuelRoomScreen(
                     MediaRailButton(Icons.Filled.Cameraswitch, "Retourner") { viewModel.flipCamera() }
                 }
             }
+            // Voter (spectateurs + participants) → ouvre le panneau de vote.
+            MediaRailButton(Icons.Filled.HowToVote, "Voter") { showVotePanel = true }
         }
         // État « Prêt à démarrer » au centre (participant pas encore en direct).
         if (canPublish && !broadcasting) {
@@ -361,8 +364,9 @@ fun DuelRoomScreen(
             duel?.managerId -> "Manager"
             else -> strings.artistSingular
         }
-        val labeledTiles = remoteTiles.map { tileLabel(it.first) to it.second } +
-            (localTrack?.let { listOf("Moi" to it) } ?: emptyList())
+        val labeledTiles = (remoteTiles.map { tileLabel(it.first) to it.second } +
+            (localTrack?.let { listOf("Moi" to it) } ?: emptyList()))
+            .filter { it.second !== track } // pas la piste déjà affichée en grand
         if (labeledTiles.isNotEmpty()) {
             Column(
                 modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 8.dp, bottom = 160.dp),
