@@ -212,6 +212,11 @@ fun DuelRoomScreen(
                     },
                     onReport = { showReport = true },
                     onClose = onLeave,
+                    // Quand JE diffuse : mon état micro/caméra dans la barre (parité web) + participants.
+                    mediaLabel = if (broadcasting) "Vous" else null,
+                    micOn = if (broadcasting) micOn else null,
+                    camOn = if (broadcasting) camOn else null,
+                    onParticipants = { showDescription = true },
                 )
                 val a1 = duel?.artist1Id
                 val a2 = duel?.artist2Id

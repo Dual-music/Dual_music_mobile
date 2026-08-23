@@ -13,7 +13,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material3.Icon
@@ -52,6 +57,11 @@ fun LiveHeader(
     onShare: (() -> Unit)? = null,
     onReport: (() -> Unit)? = null,
     onClose: (() -> Unit)? = null,
+    // Optionnels (parité web) : nom du diffuseur + état micro/caméra + bouton participants.
+    mediaLabel: String? = null,
+    micOn: Boolean? = null,
+    camOn: Boolean? = null,
+    onParticipants: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -84,12 +94,29 @@ fun LiveHeader(
             }
             StatPill(icon = Icons.Filled.Visibility, text = compact(viewerCount))
             if (likes > 0) StatPill(icon = Icons.Filled.Favorite, text = compact(likes), tint = Color(0xFFFF4D6D))
+            // Diffuseur : nom + état micro/caméra (vert = actif, rouge = coupé) — parité web.
+            if (!mediaLabel.isNullOrBlank()) {
+                Row(
+                    modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(999.dp)).padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(mediaLabel, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    micOn?.let {
+                        Icon(if (it) Icons.Filled.Mic else Icons.Filled.MicOff, contentDescription = null, tint = if (it) Color(0xFF22C55E) else Color(0xFFFF4D6D), modifier = Modifier.size(14.dp))
+                    }
+                    camOn?.let {
+                        Icon(if (it) Icons.Filled.Videocam else Icons.Filled.VideocamOff, contentDescription = null, tint = if (it) Color(0xFF22C55E) else Color(0xFFFF4D6D), modifier = Modifier.size(14.dp))
+                    }
+                }
+            }
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             onShare?.let { IconPill(icon = Icons.Filled.Share, contentDescription = "Partager", onClick = it) }
+            onParticipants?.let { IconPill(icon = Icons.Filled.Groups, contentDescription = "Participants", onClick = it) }
             onReport?.let { IconPill(icon = Icons.Outlined.Flag, contentDescription = "Signaler", onClick = it) }
             onClose?.let { IconPill(icon = Icons.Filled.Close, contentDescription = "Fermer", onClick = it) }
         }
