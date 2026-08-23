@@ -261,9 +261,15 @@ fun DuelRoomScreen(
                 ) {
                     items(messages) { msg ->
                         Row(
-                            modifier = Modifier.background(Color.Black.copy(alpha = 0.28f), RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.background(Color.Black.copy(alpha = 0.28f), RoundedCornerShape(12.dp)).padding(horizontal = 6.dp, vertical = 3.dp),
                         ) {
-                            Text(msg.authorName, color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            // Avatar rond (initiale) — parité web.
+                            Box(
+                                modifier = Modifier.size(22.dp).background(colors.primary.copy(alpha = 0.55f), CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) { Text(msg.authorName.take(1).uppercase(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                            Text("  ${msg.authorName}", color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             Text("  ${msg.content}", color = Color.White, fontSize = 12.sp)
                         }
                     }
@@ -343,20 +349,37 @@ fun DuelRoomScreen(
             }
         }
 
-        // Vignettes multi-cam (ma caméra + autres participants) — bas-droite, au-dessus de la barre.
-        val duelTiles = remoteTiles.map { it.second } + listOfNotNull(localTrack)
-        if (duelTiles.isNotEmpty()) {
+        // Vignettes multi-cam (ma caméra + autres participants) — bas-droite, avec libellé nom.
+        fun tileLabel(identity: String): String = when (identity) {
+            duel?.artist1Id -> duel?.artist1?.displayName ?: strings.artist1
+            duel?.artist2Id -> duel?.artist2?.displayName ?: strings.artist2
+            duel?.managerId -> "Manager"
+            else -> strings.artistSingular
+        }
+        val labeledTiles = remoteTiles.map { tileLabel(it.first) to it.second } +
+            (localTrack?.let { listOf("Moi" to it) } ?: emptyList())
+        if (labeledTiles.isNotEmpty()) {
             Column(
                 modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 8.dp, bottom = 160.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                duelTiles.takeLast(3).forEach { t ->
+                labeledTiles.takeLast(3).forEach { (label, t) ->
                     key(t) {
-                        AndroidView(
-                            modifier = Modifier.width(84.dp).height(112.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black),
-                            factory = { ctx -> SurfaceViewRenderer(ctx).apply { viewModel.media.room.initVideoRenderer(this) } },
-                            update = { renderer -> t.addRenderer(renderer) },
-                        )
+                        Box(Modifier.width(84.dp).height(112.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black)) {
+                            AndroidView(
+                                modifier = Modifier.fillMaxSize(),
+                                factory = { ctx -> SurfaceViewRenderer(ctx).apply { viewModel.media.room.initVideoRenderer(this) } },
+                                update = { renderer -> t.addRenderer(renderer) },
+                            )
+                            // Libellé : pastille signal verte + nom (parité web « Papou Koné »).
+                            Row(
+                                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 4.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(Modifier.size(6.dp).background(Color(0xFF22C55E), CircleShape))
+                                Text("  $label", color = Color.White, fontSize = 9.sp, maxLines = 1)
+                            }
+                        }
                     }
                 }
             }
