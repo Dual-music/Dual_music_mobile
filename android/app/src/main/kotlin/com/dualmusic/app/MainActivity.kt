@@ -422,11 +422,11 @@ class AppContainer(context: Context) {
      * Le vote payant est délégué au portefeuille (procédure atomique serveur).
      */
     fun makeDuelViewModel(duel: Duel): DuelViewModel {
-        val media = LiveRoomClient(appContext, tokenService, appScope)
         return DuelViewModel(
             duelId = duel.id,
-            roomName = duel.roomId ?: "duel:${duel.id}",
-            media = media,
+            // Format identique au web (`duel-<id>`) ; les rooms de slot sont `<base>-artist1/2/manager`.
+            baseRoom = duel.roomId ?: "duel-${duel.id}",
+            mediaFactory = { LiveRoomClient(appContext, tokenService, appScope) },
             realtime = realtimeClient,
             repository = duelRepository,
             wallet = walletRepository,

@@ -75,6 +75,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dualmusic.core.media.LiveRoomClient
+import io.livekit.android.room.track.VideoTrack
 import com.dualmusic.core.ui.celebration.WinnerCelebration
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
@@ -109,7 +111,10 @@ fun DuelRoomScreen(
     val totals by viewModel.voteTotals.collectAsStateWithLifecycle()
     val timer by viewModel.timer.collectAsStateWithLifecycle()
     val giftFeed by viewModel.giftFeed.collectAsStateWithLifecycle()
-    val videoTrack by viewModel.media.primaryVideoTrack.collectAsStateWithLifecycle()
+    // Vidéo par SLOT (parité web : 1 room LiveKit par acteur → 3 connexions).
+    val a1Video by viewModel.artist1Video.collectAsStateWithLifecycle()
+    val a2Video by viewModel.artist2Video.collectAsStateWithLifecycle()
+    val mgrVideo by viewModel.managerVideo.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val viewerCount by viewModel.viewerCount.collectAsStateWithLifecycle()
@@ -130,10 +135,8 @@ fun DuelRoomScreen(
     // Diffusion caméra/micro (participant : artiste 1/2 ou manager) — parité web.
     val canPublish by viewModel.canPublish.collectAsStateWithLifecycle()
     val broadcasting by viewModel.broadcasting.collectAsStateWithLifecycle()
-    val localTrack by viewModel.media.localVideoTrack.collectAsStateWithLifecycle()
-    val remoteTiles by viewModel.media.remoteTiles.collectAsStateWithLifecycle()
-    val micOn by viewModel.media.micEnabled.collectAsStateWithLifecycle()
-    val camOn by viewModel.media.camEnabled.collectAsStateWithLifecycle()
+    val micOn by viewModel.micOn.collectAsStateWithLifecycle()
+    val camOn by viewModel.camOn.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     val context = LocalContext.current
@@ -170,14 +173,21 @@ fun DuelRoomScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        // --- Couche vidéo (décodage matériel, zero-copy) ---
-        // Piste principale = un participant distant ; à défaut (je diffuse seul) MA caméra.
-        val track = videoTrack ?: localTrack
-        if (track != null) {
+        // --- Multi-cam (parité web) : chaque slot est rendu avec la room de SON client LiveKit ---
+        val slotTiles: List<Triple<String, VideoTrack, LiveRoomClient>> = buildList {
+            a1Video?.let { add(Triple(duel?.artist1?.displayName ?: strings.artist1, it, viewModel.mediaA1)) }
+            a2Video?.let { add(Triple(duel?.artist2?.displayName ?: strings.artist2, it, viewModel.mediaA2)) }
+            mgrVideo?.let { add(Triple("Manager", it, viewModel.mediaMgr)) }
+        }
+        val mainTile = slotTiles.firstOrNull()
+        // --- Couche vidéo principale (décodage matériel, zero-copy) ---
+        if (mainTile != null) {
+            val mainTrack = mainTile.second
+            val mainClient = mainTile.third
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
-                factory = { ctx -> SurfaceViewRenderer(ctx).apply { viewModel.media.room.initVideoRenderer(this) } },
-                update = { renderer -> track.addRenderer(renderer) },
+                factory = { ctx -> SurfaceViewRenderer(ctx).apply { mainClient.room.initVideoRenderer(this) } },
+                update = { renderer -> mainTrack.addRenderer(renderer) },
             )
         } else {
             Box(Modifier.fillMaxSize().background(DualMusicTheme.gradients.hero))
@@ -399,27 +409,19 @@ fun DuelRoomScreen(
             }
         }
 
-        // Vignettes multi-cam (ma caméra + autres participants) — bas-droite, avec libellé nom.
-        fun tileLabel(identity: String): String = when (identity) {
-            duel?.artist1Id -> duel?.artist1?.displayName ?: strings.artist1
-            duel?.artist2Id -> duel?.artist2?.displayName ?: strings.artist2
-            duel?.managerId -> "Manager"
-            else -> strings.artistSingular
-        }
-        val labeledTiles = (remoteTiles.map { tileLabel(it.first) to it.second } +
-            (localTrack?.let { listOf("Moi" to it) } ?: emptyList()))
-            .filter { it.second !== track } // pas la piste déjà affichée en grand
-        if (labeledTiles.isNotEmpty() && !overlaysHidden && !thumbnailsHidden) {
+        // Vignettes multi-cam = les slots autres que celui affiché en grand (parité web).
+        val thumbTiles = slotTiles.drop(1)
+        if (thumbTiles.isNotEmpty() && !overlaysHidden && !thumbnailsHidden) {
             Column(
                 modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 8.dp, bottom = 160.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                labeledTiles.takeLast(3).forEach { (label, t) ->
+                thumbTiles.forEach { (label, t, client) ->
                     key(t) {
                         Box(Modifier.width(84.dp).height(112.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black)) {
                             AndroidView(
                                 modifier = Modifier.fillMaxSize(),
-                                factory = { ctx -> SurfaceViewRenderer(ctx).apply { viewModel.media.room.initVideoRenderer(this) } },
+                                factory = { ctx -> SurfaceViewRenderer(ctx).apply { client.room.initVideoRenderer(this) } },
                                 update = { renderer -> t.addRenderer(renderer) },
                             )
                             // Libellé : pastille signal verte + nom (parité web « Papou Koné »).

@@ -14,9 +14,13 @@ import com.dualmusic.domain.realtime.StatusPayload
 import com.dualmusic.domain.realtime.TimerPayload
 import com.dualmusic.domain.realtime.VotePayload
 import com.dualmusic.feature.wallet.WalletRepository
+import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -53,14 +57,40 @@ data class DuelTimer(
  */
 class DuelViewModel(
     private val duelId: String,
-    private val roomName: String,
-    val media: LiveRoomClient,
+    // Base de room LiveKit (ex. "duel-<id>" ou duel.roomId). Les rooms réelles sont
+    // "$baseRoom-artist1", "$baseRoom-artist2", "$baseRoom-manager" — parité web : chaque
+    // acteur publie dans SA room de slot, tout le monde s'abonne aux 3.
+    private val baseRoom: String,
+    private val mediaFactory: () -> LiveRoomClient,
     private val realtime: RealtimeClient,
     private val repository: DuelRepository,
     private val wallet: WalletRepository,
     sponsorAds: com.dualmusic.feature.sponsor.SponsorAdRepository,
     recording: com.dualmusic.feature.sponsor.RecordingRepository,
 ) : ViewModel() {
+
+    // Un client LiveKit par slot (une connexion SFU par room de slot).
+    val mediaA1: LiveRoomClient = mediaFactory()
+    val mediaA2: LiveRoomClient = mediaFactory()
+    val mediaMgr: LiveRoomClient = mediaFactory()
+
+    /** Client du slot du caller (celui où IL publie) — null pour un spectateur. */
+    private var myMedia: LiveRoomClient? = null
+
+    /** Piste vidéo à afficher pour un slot = ma caméra locale si je publie là, sinon le distant. */
+    private fun slotVideo(client: LiveRoomClient): StateFlow<VideoTrack?> =
+        combine(client.localVideoTrack, client.primaryVideoTrack) { local, remote -> local ?: remote }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    val artist1Video: StateFlow<VideoTrack?> = slotVideo(mediaA1)
+    val artist2Video: StateFlow<VideoTrack?> = slotVideo(mediaA2)
+    val managerVideo: StateFlow<VideoTrack?> = slotVideo(mediaMgr)
+
+    /** État micro/caméra du caller (reflète myMedia après le lancement de la diffusion). */
+    private val _micOn = MutableStateFlow(true)
+    val micOn: StateFlow<Boolean> = _micOn.asStateFlow()
+    private val _camOn = MutableStateFlow(true)
+    val camOn: StateFlow<Boolean> = _camOn.asStateFlow()
 
     /** État + actions de diffusion pub sponsor (overlay vidéo + contrôle hôte/manager). */
     val sponsor = com.dualmusic.feature.sponsor.SponsorAdHolder("duel", duelId, sponsorAds, viewModelScope)
@@ -143,22 +173,25 @@ class DuelViewModel(
     fun start() {
         viewModelScope.launch {
             val d = runCatching { repository.duel(duelId) }.getOrNull()
+            myUserId = myUserId ?: runCatching { repository.myUserId() }.getOrNull()
             if (d != null) {
                 _duel.value = d
                 // Réhydrate le minuteur persisté (arrivants tardifs).
                 _timer.value = DuelTimer(d.currentTimerEndsAt, d.currentTimerTargetId)
-                // Rôle du caller : arbitre (manager) et/ou participant (artiste 1/2 ou manager).
-                myUserId = myUserId ?: runCatching { repository.myUserId() }.getOrNull()
                 _isManager.value = d.managerId != null && d.managerId == myUserId
-                val participant = myUserId != null &&
-                    (myUserId == d.artist1Id || myUserId == d.artist2Id || myUserId == d.managerId)
-                _canPublish.value = participant
-                // Un participant rejoint AVEC le droit de publier caméra/micro (parité web) ;
-                // un spectateur en lecture seule.
-                runCatching { media.join(roomName = roomName, isHost = participant, canPublish = participant) }
-            } else {
-                runCatching { media.join(roomName = roomName, isHost = false) }
+                // Mon slot selon mon rôle → le client où JE publie (null = spectateur).
+                myMedia = when (myUserId) {
+                    d.artist1Id -> mediaA1
+                    d.artist2Id -> mediaA2
+                    d.managerId -> mediaMgr
+                    else -> null
+                }
+                _canPublish.value = myMedia != null
             }
+            // Rejoint les 3 rooms de slot (parité web) : publieur sur MA room, spectateur sur les 2 autres.
+            joinSlot(mediaA1, "artist1")
+            joinSlot(mediaA2, "artist2")
+            joinSlot(mediaMgr, "manager")
             runCatching { repository.voteTotals(duelId) }.getOrNull()?.let { totals ->
                 _voteTotals.value = totals.associate { it.artistId to it.total }
             }
@@ -179,33 +212,50 @@ class DuelViewModel(
 
     // --- Diffusion caméra/micro (PARTICIPANT : artiste 1/2 ou manager) — parité web ---
 
-    /** Participant : démarre la diffusion caméra + micro (« Prêt à démarrer » → en direct). */
-    fun startBroadcast() {
+    /** Rejoint la room d'un slot : publieur si c'est MON slot, spectateur sinon. */
+    private fun joinSlot(client: LiveRoomClient, slot: String) {
+        val publish = client === myMedia
         viewModelScope.launch {
-            runCatching { media.startBroadcast() }.onSuccess { _broadcasting.value = true }
+            runCatching { client.join(roomName = "$baseRoom-$slot", isHost = publish, canPublish = publish) }
+        }
+    }
+
+    /** Participant : démarre la diffusion caméra + micro dans MA room de slot. */
+    fun startBroadcast() {
+        val m = myMedia ?: return
+        viewModelScope.launch {
+            runCatching { m.startBroadcast() }.onSuccess {
+                _broadcasting.value = true; _micOn.value = true; _camOn.value = true
+            }
         }
     }
 
     /** Participant : coupe/rétablit la caméra. */
     fun toggleCamera() {
-        media.setCamEnabled(!media.camEnabled.value)
+        val m = myMedia ?: return
+        val next = !m.camEnabled.value
+        m.setCamEnabled(next); _camOn.value = next
     }
 
     /** Participant : coupe/rétablit le micro. */
     fun toggleMic() {
-        viewModelScope.launch { runCatching { media.setMicEnabled(!media.micEnabled.value) } }
+        val m = myMedia ?: return
+        val next = !m.micEnabled.value
+        viewModelScope.launch { runCatching { m.setMicEnabled(next) }; _micOn.value = next }
     }
 
     /** Participant : bascule caméra avant/arrière. */
     fun flipCamera() {
-        viewModelScope.launch { runCatching { media.switchCamera() } }
+        val m = myMedia ?: return
+        viewModelScope.launch { runCatching { m.switchCamera() } }
     }
 
     /** Participant : Pause (coupe caméra + micro) / Reprendre (les réactive). */
     fun togglePause() {
-        val resume = !media.camEnabled.value && !media.micEnabled.value
-        media.setCamEnabled(resume)
-        viewModelScope.launch { runCatching { media.setMicEnabled(resume) } }
+        val m = myMedia ?: return
+        val resume = !m.camEnabled.value && !m.micEnabled.value
+        m.setCamEnabled(resume); _camOn.value = resume
+        viewModelScope.launch { runCatching { m.setMicEnabled(resume) }; _micOn.value = resume }
     }
 
     /** Envoie un cadeau possédé à un artiste/manager du duel (débit atomique serveur). */
@@ -231,11 +281,13 @@ class DuelViewModel(
         viewModelScope.launch { runCatching { repository.giftLeaderboard(duelId) }.getOrNull()?.let { _leaderboard.value = it } }
     }
 
-    /** Arrête tout (sortie d'écran). */
+    /** Arrête tout (sortie d'écran) : temps réel + les 3 connexions LiveKit de slot. */
     fun stop() {
         liveSession?.disconnect()
         chatSession?.disconnect()
-        media.leave()
+        mediaA1.leave()
+        mediaA2.leave()
+        mediaMgr.leave()
     }
 
     /**
