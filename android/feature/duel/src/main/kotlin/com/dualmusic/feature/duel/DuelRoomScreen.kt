@@ -1,6 +1,10 @@
 package com.dualmusic.feature.duel
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -17,6 +21,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -40,11 +45,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material3.Icon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -103,6 +115,13 @@ fun DuelRoomScreen(
     val sponsorAd by viewModel.sponsor.activeAd.collectAsStateWithLifecycle()
     val sponsorAds by viewModel.sponsor.ads.collectAsStateWithLifecycle()
     val sponsorBusy by viewModel.sponsor.busy.collectAsStateWithLifecycle()
+    // Diffusion caméra/micro (participant : artiste 1/2 ou manager) — parité web.
+    val canPublish by viewModel.canPublish.collectAsStateWithLifecycle()
+    val broadcasting by viewModel.broadcasting.collectAsStateWithLifecycle()
+    val localTrack by viewModel.media.localVideoTrack.collectAsStateWithLifecycle()
+    val remoteTiles by viewModel.media.remoteTiles.collectAsStateWithLifecycle()
+    val micOn by viewModel.media.micEnabled.collectAsStateWithLifecycle()
+    val camOn by viewModel.media.camEnabled.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     val context = LocalContext.current
@@ -110,6 +129,13 @@ fun DuelRoomScreen(
     var showGiftPanel by remember { mutableStateOf(false) }
     var showLeaderboard by remember { mutableStateOf(false) }
     var showReport by remember { mutableStateOf(false) }
+
+    // Permission caméra/micro avant de diffuser (participant) — on lance la diffusion au retour.
+    val camMicPerms = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+    fun hasCamMic() = camMicPerms.all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+    val camMicLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result.values.all { it }) viewModel.startBroadcast()
+    }
 
     // Démarre/arrête avec le cycle de vie du composable.
     DisposableEffect(Unit) {
@@ -283,6 +309,58 @@ fun DuelRoomScreen(
             }
         }
 
+        // --- Diffusion PARTICIPANT (artiste 1/2 ou manager) : parité web ---
+        if (canPublish) {
+            // Rail vertical GAUCHE : démarrer, puis micro / caméra / retourner une fois en direct.
+            Column(
+                modifier = Modifier.align(Alignment.CenterStart).statusBarsPadding().padding(start = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (!broadcasting) {
+                    MediaRailButton(Icons.Filled.Podcasts, "Démarrer", accent = true) {
+                        if (hasCamMic()) viewModel.startBroadcast() else camMicLauncher.launch(camMicPerms)
+                    }
+                } else {
+                    MediaRailButton(if (micOn) Icons.Filled.Mic else Icons.Filled.MicOff, "Micro", active = micOn) { viewModel.toggleMic() }
+                    MediaRailButton(if (camOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff, "Caméra", active = camOn) { viewModel.toggleCamera() }
+                    MediaRailButton(Icons.Filled.Cameraswitch, "Retourner") { viewModel.flipCamera() }
+                }
+            }
+            // État « Prêt à démarrer » au centre tant que la caméra n'est pas lancée.
+            if (!broadcasting) {
+                Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(
+                        Modifier.size(64.dp).background(Color.Black.copy(alpha = 0.4f), CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.Filled.Podcasts, contentDescription = null, tint = Color.White, modifier = Modifier.size(30.dp)) }
+                    Text("Prêt à démarrer", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        // Vignettes multi-cam (ma caméra + autres participants) — bas-droite, au-dessus de la barre.
+        val duelTiles = remoteTiles.map { it.second } + listOfNotNull(localTrack)
+        if (duelTiles.isNotEmpty()) {
+            Column(
+                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 8.dp, bottom = 160.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                duelTiles.takeLast(3).forEach { t ->
+                    key(t) {
+                        AndroidView(
+                            modifier = Modifier.width(84.dp).height(112.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black),
+                            factory = { ctx -> SurfaceViewRenderer(ctx).apply { viewModel.media.room.initVideoRenderer(this) } },
+                            update = { renderer -> t.addRenderer(renderer) },
+                        )
+                    }
+                }
+            }
+        }
+
         // Célébration du vainqueur : dès que l'arbitre l'annonce (event `status` → winnerId),
         // tous les spectateurs voient les confettis + la carte. Non bloquant pour « Terminer ».
         duel?.winnerId?.let { wid ->
@@ -423,6 +501,30 @@ private fun duelMedal(i: Int): String = when (i) {
 
 /** Emojis de réaction (identiques au live/web). */
 private val DuelReactionEmojis = listOf("🔥", "😍", "👏", "🎵", "💎", "🎶", "⚡", "🌟", "😂")
+
+/**
+ * Bouton circulaire du rail de contrôle média (participant) : démarrer/micro/caméra/flip.
+ * `accent` = action principale (démarrer, violet) ; `active=false` = état coupé (rouge).
+ */
+@Composable
+private fun MediaRailButton(
+    icon: ImageVector,
+    label: String,
+    accent: Boolean = false,
+    active: Boolean = true,
+    onClick: () -> Unit,
+) {
+    val colors = DualMusicTheme.colors
+    val bg = when {
+        accent -> colors.primary
+        !active -> Color(0xFFDC2626)
+        else -> Color.Black.copy(alpha = 0.4f)
+    }
+    Box(
+        modifier = Modifier.size(48.dp).background(bg, CircleShape).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(22.dp)) }
+}
 
 /** Panneau de contrôle de l'arbitre (manager) : minuteur de parole, vainqueur, fin du duel. */
 @Composable

@@ -127,21 +127,37 @@ class DuelViewModel(
     val isManager: StateFlow<Boolean> = _isManager.asStateFlow()
     private var myUserId: String? = null
 
+    /** Vrai si le caller est un PARTICIPANT (artiste 1/2 ou manager) → peut diffuser caméra/micro. */
+    private val _canPublish = MutableStateFlow(false)
+    val canPublish: StateFlow<Boolean> = _canPublish.asStateFlow()
+
+    /** Diffusion caméra/micro en cours (participant). */
+    private val _broadcasting = MutableStateFlow(false)
+    val broadcasting: StateFlow<Boolean> = _broadcasting.asStateFlow()
+
     private var giftCounter = 0L
     private var liveSession: NamespaceSession? = null
     private var chatSession: NamespaceSession? = null
 
     /** Démarre : détail du duel, tallies, vidéo, chat, temps réel. */
     fun start() {
-        viewModelScope.launch { media.join(roomName = roomName, isHost = false) }
         viewModelScope.launch {
-            runCatching { repository.duel(duelId) }.getOrNull()?.let { d ->
+            val d = runCatching { repository.duel(duelId) }.getOrNull()
+            if (d != null) {
                 _duel.value = d
                 // Réhydrate le minuteur persisté (arrivants tardifs).
                 _timer.value = DuelTimer(d.currentTimerEndsAt, d.currentTimerTargetId)
-                // Détermine si le caller est l'arbitre (manager) de ce duel.
+                // Rôle du caller : arbitre (manager) et/ou participant (artiste 1/2 ou manager).
                 myUserId = myUserId ?: runCatching { repository.myUserId() }.getOrNull()
                 _isManager.value = d.managerId != null && d.managerId == myUserId
+                val participant = myUserId != null &&
+                    (myUserId == d.artist1Id || myUserId == d.artist2Id || myUserId == d.managerId)
+                _canPublish.value = participant
+                // Un participant rejoint AVEC le droit de publier caméra/micro (parité web) ;
+                // un spectateur en lecture seule.
+                runCatching { media.join(roomName = roomName, isHost = participant, canPublish = participant) }
+            } else {
+                runCatching { media.join(roomName = roomName, isHost = false) }
             }
             runCatching { repository.voteTotals(duelId) }.getOrNull()?.let { totals ->
                 _voteTotals.value = totals.associate { it.artistId to it.total }
@@ -159,6 +175,30 @@ class DuelViewModel(
     /** Recharge l'inventaire (après achat/envoi). */
     fun loadInventory() {
         viewModelScope.launch { runCatching { repository.inventory() }.getOrNull()?.let { _inventory.value = it } }
+    }
+
+    // --- Diffusion caméra/micro (PARTICIPANT : artiste 1/2 ou manager) — parité web ---
+
+    /** Participant : démarre la diffusion caméra + micro (« Prêt à démarrer » → en direct). */
+    fun startBroadcast() {
+        viewModelScope.launch {
+            runCatching { media.startBroadcast() }.onSuccess { _broadcasting.value = true }
+        }
+    }
+
+    /** Participant : coupe/rétablit la caméra. */
+    fun toggleCamera() {
+        media.setCamEnabled(!media.camEnabled.value)
+    }
+
+    /** Participant : coupe/rétablit le micro. */
+    fun toggleMic() {
+        viewModelScope.launch { runCatching { media.setMicEnabled(!media.micEnabled.value) } }
+    }
+
+    /** Participant : bascule caméra avant/arrière. */
+    fun flipCamera() {
+        viewModelScope.launch { runCatching { media.switchCamera() } }
     }
 
     /** Envoie un cadeau possédé à un artiste/manager du duel (débit atomique serveur). */
