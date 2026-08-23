@@ -48,7 +48,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Close
@@ -59,7 +61,10 @@ import androidx.compose.material.icons.filled.HowToVote
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Mood
 import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material.icons.filled.Visibility
@@ -137,12 +142,19 @@ fun DuelRoomScreen(
     var showLeaderboard by remember { mutableStateOf(false) }
     var showReport by remember { mutableStateOf(false) }
 
-    // Rail gauche (parité web) : masquer les overlays (voir la vidéo plein cadre) + panneau infos.
+    // Rail gauche (parité web capture 4).
+    // overlaysHidden (icône ✕) : masque TOUT (rail, barres, messages, vignettes) sauf la vidéo,
+    //   + un œil flottant en haut pour tout réafficher.
+    // thumbnailsHidden (icône œil) : masque seulement les petites cases (vignettes).
+    // showSettings (icône ⚙️) : pop-up regroupant les contrôles de diffusion (participant).
     var overlaysHidden by remember { mutableStateOf(false) }
+    var thumbnailsHidden by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     var showDescription by remember { mutableStateOf(false) }
-    // Barre du bas condensée (parité web) : emojis repliables + panneau de vote.
+    // Barre du bas condensée (parité web) : emojis repliables + panneau de vote + pop-up saisie.
     var showEmojiBar by remember { mutableStateOf(false) }
     var showVotePanel by remember { mutableStateOf(false) }
+    var showCommentPopup by remember { mutableStateOf(false) }
 
     // Permission caméra/micro avant de diffuser (participant) — on lance la diffusion au retour.
     val camMicPerms = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
@@ -204,7 +216,8 @@ fun DuelRoomScreen(
             // Haut : header live unifié (mêmes icônes que le web), barre de votes + minuteur.
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
                 com.dualmusic.core.ui.live.LiveHeader(
-                    eventLabel = "DUEL",
+                    eventLabel = "",
+                    badgeText = "DUEL",
                     viewerCount = viewerCount,
                     likes = likes,
                     onShare = {
@@ -295,52 +308,64 @@ fun DuelRoomScreen(
                         }
                     }
                 }
-                // Barre du bas UNIQUE (parité web) : message · ❤️ · 😊 · 🎁 · 🏆 · vote.
+                // Barre du bas UNIQUE (parité web capture 1) : Message… · ❤️ · 😊 · 🎁 · 🏆 · vote.
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(
-                        value = draft,
-                        onValueChange = { draft = it },
-                        placeholder = { Text(strings.saySomething, color = Color.White.copy(alpha = 0.7f)) },
-                        singleLine = true,
-                        keyboardActions = KeyboardActions(onDone = { viewModel.sendMessage(draft); draft = "" }),
-                        modifier = Modifier.weight(1f),
-                    )
+                    // « Message... » = pill déclencheur ; la vraie saisie s'ouvre en pop-up (capture 2).
+                    Row(
+                        modifier = Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(999.dp))
+                            .background(Color.Black.copy(alpha = 0.35f)).clickable { showCommentPopup = true }
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(16.dp))
+                        Text("Message...", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp, maxLines = 1)
+                    }
                     BottomBarIcon(Icons.Filled.Favorite, Color(0xFFFF4D6D)) { viewModel.sendLike() }
                     BottomBarIcon(Icons.Filled.Mood, Color.White) { showEmojiBar = !showEmojiBar }
-                    // Cadeau : bouton principal (violet, plus gros) — parité web.
+                    // Cadeau : bouton principal (violet) — parité web.
                     Box(
-                        modifier = Modifier.size(48.dp).background(DualMusicTheme.gradients.primary, CircleShape).clickable { showGiftPanel = true },
+                        modifier = Modifier.size(44.dp).background(DualMusicTheme.gradients.primary, CircleShape).clickable { showGiftPanel = true },
                         contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Filled.CardGiftcard, contentDescription = strings.sendGift, tint = Color.White) }
+                    ) { Icon(Icons.Filled.CardGiftcard, contentDescription = strings.sendGift, tint = Color.White, modifier = Modifier.size(20.dp)) }
                     BottomBarIcon(Icons.Filled.EmojiEvents, Color(0xFFFFC107)) { showLeaderboard = true; viewModel.loadGiftLeaderboard() }
+                    BottomBarIcon(Icons.Filled.HowToVote, colors.accent) { showVotePanel = true }
                 }
             }
         }
 
-        // --- Rail vertical GAUCHE (parité web mobile) : fermer, quitter, infos, masquer + média ---
-        // Toujours visible (même overlays masqués) pour pouvoir revenir. Aligné milieu-gauche.
-        Column(
-            modifier = Modifier.align(Alignment.CenterStart).statusBarsPadding().padding(start = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            MediaRailButton(Icons.Filled.Close, "Fermer") { onLeave() }
-            MediaRailButton(Icons.AutoMirrored.Filled.Logout, "Quitter", danger = true) { onLeave() }
-            MediaRailButton(Icons.Filled.Description, "Infos") { showDescription = true }
-            MediaRailButton(if (overlaysHidden) Icons.Filled.Visibility else Icons.Filled.VisibilityOff, "Masquer") { overlaysHidden = !overlaysHidden }
-            // Contrôles de diffusion réservés aux participants (artiste 1/2 ou manager).
-            if (canPublish) {
-                if (!broadcasting) {
-                    MediaRailButton(Icons.Filled.Podcasts, "Démarrer", accent = true) {
-                        if (hasCamMic()) viewModel.startBroadcast() else camMicLauncher.launch(camMicPerms)
+        // --- Rail vertical GAUCHE (parité web capture 4) — masqué avec le reste via ✕ ---
+        if (!overlaysHidden) {
+            Column(
+                modifier = Modifier.align(Alignment.CenterStart).statusBarsPadding().padding(start = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                // ✕ : masque TOUT sauf la vidéo (œil flottant en haut pour restaurer).
+                MediaRailButton(Icons.Filled.Close, "Masquer tout") { overlaysHidden = true }
+                // Rouge : QUITTER le direct (ne termine pas le direct).
+                MediaRailButton(Icons.AutoMirrored.Filled.Logout, "Quitter", danger = true) { onLeave() }
+                MediaRailButton(Icons.Filled.Description, "Infos") { showDescription = true }
+                // Œil : masque/affiche seulement les petites cases (vignettes).
+                MediaRailButton(if (thumbnailsHidden) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, "Petites cases") { thumbnailsHidden = !thumbnailsHidden }
+                // Participant : Démarrer, puis ⚙️ regroupe les contrôles direct dans un pop-up.
+                if (canPublish) {
+                    if (!broadcasting) {
+                        MediaRailButton(Icons.Filled.Podcasts, "Démarrer", accent = true) {
+                            if (hasCamMic()) viewModel.startBroadcast() else camMicLauncher.launch(camMicPerms)
+                        }
+                    } else {
+                        MediaRailButton(Icons.Filled.Settings, "Réglages", accent = true) { showSettings = true }
                     }
-                } else {
-                    MediaRailButton(if (micOn) Icons.Filled.Mic else Icons.Filled.MicOff, "Micro", active = micOn) { viewModel.toggleMic() }
-                    MediaRailButton(if (camOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff, "Caméra", active = camOn) { viewModel.toggleCamera() }
-                    MediaRailButton(Icons.Filled.Cameraswitch, "Retourner") { viewModel.flipCamera() }
                 }
             }
-            // Voter (spectateurs + participants) → ouvre le panneau de vote.
-            MediaRailButton(Icons.Filled.HowToVote, "Voter") { showVotePanel = true }
+        }
+        // Œil flottant : réafficher tout après un ✕ (parité web).
+        if (overlaysHidden) {
+            Box(
+                modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp)
+                    .size(44.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape).clickable { overlaysHidden = false },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Filled.Visibility, contentDescription = "Réafficher", tint = Color.White, modifier = Modifier.size(22.dp)) }
         }
         // État « Prêt à démarrer » au centre (participant pas encore en direct).
         if (canPublish && !broadcasting) {
@@ -357,6 +382,23 @@ fun DuelRoomScreen(
             }
         }
 
+        // Pop-up RÉGLAGES du direct (icône ⚙️) — regroupe les contrôles pour gagner de la place.
+        if (showSettings && broadcasting && !overlaysHidden) {
+            Box(Modifier.fillMaxSize().clickable { showSettings = false })
+            val paused = !camOn && !micOn
+            Column(
+                modifier = Modifier.align(Alignment.CenterStart).statusBarsPadding().padding(start = 62.dp)
+                    .width(190.dp).background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp)).padding(6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                SettingsRow(if (paused) Icons.Filled.Podcasts else Icons.Filled.Pause, if (paused) "Reprendre" else "Pause") { viewModel.togglePause() }
+                SettingsRow(if (camOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff, if (camOn) "Caméra ON" else "Caméra OFF") { viewModel.toggleCamera() }
+                SettingsRow(if (micOn) Icons.Filled.Mic else Icons.Filled.MicOff, if (micOn) "Micro ON" else "Micro OFF") { viewModel.toggleMic() }
+                SettingsRow(Icons.Filled.Cameraswitch, "Retourner caméra") { viewModel.flipCamera() }
+                SettingsRow(Icons.Filled.Stop, "Arrêter", danger = true) { showSettings = false; onLeave() }
+            }
+        }
+
         // Vignettes multi-cam (ma caméra + autres participants) — bas-droite, avec libellé nom.
         fun tileLabel(identity: String): String = when (identity) {
             duel?.artist1Id -> duel?.artist1?.displayName ?: strings.artist1
@@ -367,7 +409,7 @@ fun DuelRoomScreen(
         val labeledTiles = (remoteTiles.map { tileLabel(it.first) to it.second } +
             (localTrack?.let { listOf("Moi" to it) } ?: emptyList()))
             .filter { it.second !== track } // pas la piste déjà affichée en grand
-        if (labeledTiles.isNotEmpty()) {
+        if (labeledTiles.isNotEmpty() && !overlaysHidden && !thumbnailsHidden) {
             Column(
                 modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 8.dp, bottom = 160.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -427,6 +469,36 @@ fun DuelRoomScreen(
                     }
                 }
                 Text("${strings.oneVote} = $voteAmount ${strings.credits}", color = colors.mutedForeground, fontSize = 13.sp)
+            }
+        }
+
+        // Pop-up de saisie « Commenter » (capture 2) — ouvert depuis le pill « Message... ».
+        if (showCommentPopup) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showCommentPopup = false })
+            fun send() { if (draft.isNotBlank()) { viewModel.sendMessage(draft); draft = "" }; showCommentPopup = false }
+            Column(
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(colors.background)
+                    .navigationBarsPadding().imePadding().padding(DualMusicTheme.spacing.md),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Commenter", color = colors.foreground, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Filled.Close, contentDescription = "Fermer", tint = colors.mutedForeground, modifier = Modifier.size(20.dp).clickable { showCommentPopup = false })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        placeholder = { Text("Votre message...", color = colors.mutedForeground) },
+                        singleLine = true,
+                        keyboardActions = KeyboardActions(onDone = { send() }),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Box(
+                        modifier = Modifier.size(44.dp).background(DualMusicTheme.gradients.primary, CircleShape).clickable { send() },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Envoyer", tint = Color.White, modifier = Modifier.size(20.dp)) }
+                }
             }
         }
 
@@ -594,6 +666,21 @@ private fun MediaRailButton(
         modifier = Modifier.size(48.dp).background(bg, CircleShape).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(22.dp)) }
+}
+
+/** Ligne du pop-up réglages du direct (Pause / Caméra / Micro / Retourner / Arrêter). */
+@Composable
+private fun SettingsRow(icon: ImageVector, label: String, danger: Boolean = false, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+            .background(if (danger) Color(0xFFDC2626) else Color.Transparent)
+            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+        Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    }
 }
 
 /** Bouton rond translucide de la barre du bas (like / emoji / classement / vote). */

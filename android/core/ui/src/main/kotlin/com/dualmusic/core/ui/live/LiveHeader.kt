@@ -62,6 +62,8 @@ fun LiveHeader(
     micOn: Boolean? = null,
     camOn: Boolean? = null,
     onParticipants: (() -> Unit)? = null,
+    // Texte du badge rouge (ex. "DUEL" pour un duel, "LIVE" par défaut).
+    badgeText: String = "LIVE",
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -81,7 +83,7 @@ fun LiveHeader(
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 Box(Modifier.size(7.dp).background(Color.White, CircleShape))
-                Text("LIVE", color = Color.White, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                Text(badgeText, color = Color.White, fontWeight = FontWeight.Black, fontSize = 11.sp)
             }
             if (eventLabel.isNotBlank()) {
                 Box(

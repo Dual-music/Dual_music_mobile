@@ -201,6 +201,13 @@ class DuelViewModel(
         viewModelScope.launch { runCatching { media.switchCamera() } }
     }
 
+    /** Participant : Pause (coupe caméra + micro) / Reprendre (les réactive). */
+    fun togglePause() {
+        val resume = !media.camEnabled.value && !media.micEnabled.value
+        media.setCamEnabled(resume)
+        viewModelScope.launch { runCatching { media.setMicEnabled(resume) } }
+    }
+
     /** Envoie un cadeau possédé à un artiste/manager du duel (débit atomique serveur). */
     fun sendGift(giftId: String, toUserId: String) {
         viewModelScope.launch {
