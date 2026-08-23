@@ -48,8 +48,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Mic
@@ -57,6 +60,8 @@ import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideocamOff
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -130,6 +135,10 @@ fun DuelRoomScreen(
     var showLeaderboard by remember { mutableStateOf(false) }
     var showReport by remember { mutableStateOf(false) }
 
+    // Rail gauche (parité web) : masquer les overlays (voir la vidéo plein cadre) + panneau infos.
+    var overlaysHidden by remember { mutableStateOf(false) }
+    var showDescription by remember { mutableStateOf(false) }
+
     // Permission caméra/micro avant de diffuser (participant) — on lance la diffusion au retour.
     val camMicPerms = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
     fun hasCamMic() = camMicPerms.all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
@@ -176,14 +185,14 @@ fun DuelRoomScreen(
         // Bulle du meilleur donateur (parité web), pilotée par les préférences visuelles.
         TopDonorBubble(donor = topDonor, mode = uiPrefs.topDonorMode, animation = uiPrefs.topDonorAnimation)
 
-        // --- Overlays (zones sûres : barre d'état en haut, touches système + clavier en bas) ---
-        Column(
+        // --- Overlays (zones sûres) — masquables via l'œil du rail gauche (vidéo plein cadre) ---
+        if (!overlaysHidden) Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .imePadding()
-                .padding(DualMusicTheme.spacing.lg),
+                .padding(start = 56.dp, top = DualMusicTheme.spacing.lg, end = DualMusicTheme.spacing.lg, bottom = DualMusicTheme.spacing.lg),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             // Haut : header live unifié (mêmes icônes que le web), barre de votes + minuteur.
@@ -309,13 +318,18 @@ fun DuelRoomScreen(
             }
         }
 
-        // --- Diffusion PARTICIPANT (artiste 1/2 ou manager) : parité web ---
-        if (canPublish) {
-            // Rail vertical GAUCHE : démarrer, puis micro / caméra / retourner une fois en direct.
-            Column(
-                modifier = Modifier.align(Alignment.CenterStart).statusBarsPadding().padding(start = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
+        // --- Rail vertical GAUCHE (parité web mobile) : fermer, quitter, infos, masquer + média ---
+        // Toujours visible (même overlays masqués) pour pouvoir revenir. Aligné milieu-gauche.
+        Column(
+            modifier = Modifier.align(Alignment.CenterStart).statusBarsPadding().padding(start = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            MediaRailButton(Icons.Filled.Close, "Fermer") { onLeave() }
+            MediaRailButton(Icons.AutoMirrored.Filled.Logout, "Quitter", danger = true) { onLeave() }
+            MediaRailButton(Icons.Filled.Description, "Infos") { showDescription = true }
+            MediaRailButton(if (overlaysHidden) Icons.Filled.Visibility else Icons.Filled.VisibilityOff, "Masquer") { overlaysHidden = !overlaysHidden }
+            // Contrôles de diffusion réservés aux participants (artiste 1/2 ou manager).
+            if (canPublish) {
                 if (!broadcasting) {
                     MediaRailButton(Icons.Filled.Podcasts, "Démarrer", accent = true) {
                         if (hasCamMic()) viewModel.startBroadcast() else camMicLauncher.launch(camMicPerms)
@@ -326,19 +340,19 @@ fun DuelRoomScreen(
                     MediaRailButton(Icons.Filled.Cameraswitch, "Retourner") { viewModel.flipCamera() }
                 }
             }
-            // État « Prêt à démarrer » au centre tant que la caméra n'est pas lancée.
-            if (!broadcasting) {
-                Column(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Box(
-                        Modifier.size(64.dp).background(Color.Black.copy(alpha = 0.4f), CircleShape),
-                        contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Filled.Podcasts, contentDescription = null, tint = Color.White, modifier = Modifier.size(30.dp)) }
-                    Text("Prêt à démarrer", color = Color.White, fontWeight = FontWeight.Bold)
-                }
+        }
+        // État « Prêt à démarrer » au centre (participant pas encore en direct).
+        if (canPublish && !broadcasting) {
+            Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(
+                    Modifier.size(64.dp).background(Color.Black.copy(alpha = 0.4f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Filled.Podcasts, contentDescription = null, tint = Color.White, modifier = Modifier.size(30.dp)) }
+                Text("Prêt à démarrer", color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -358,6 +372,22 @@ fun DuelRoomScreen(
                         )
                     }
                 }
+            }
+        }
+
+        // Panneau « Infos » (icône doc du rail) : rappel de l'affiche du duel.
+        if (showDescription) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showDescription = false })
+            Column(
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(colors.background).navigationBarsPadding().padding(DualMusicTheme.spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text("⚔️ Duel", color = colors.accent, fontWeight = FontWeight.Bold)
+                Text(
+                    "${duel?.artist1?.displayName ?: strings.artist1}  vs  ${duel?.artist2?.displayName ?: strings.artist2}",
+                    color = colors.foreground,
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
 
@@ -512,12 +542,13 @@ private fun MediaRailButton(
     label: String,
     accent: Boolean = false,
     active: Boolean = true,
+    danger: Boolean = false,
     onClick: () -> Unit,
 ) {
     val colors = DualMusicTheme.colors
     val bg = when {
         accent -> colors.primary
-        !active -> Color(0xFFDC2626)
+        danger || !active -> Color(0xFFDC2626)
         else -> Color.Black.copy(alpha = 0.4f)
     }
     Box(
