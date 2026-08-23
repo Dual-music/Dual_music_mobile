@@ -55,7 +55,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.HowToVote
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Mood
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Videocam
@@ -138,6 +140,9 @@ fun DuelRoomScreen(
     // Rail gauche (parité web) : masquer les overlays (voir la vidéo plein cadre) + panneau infos.
     var overlaysHidden by remember { mutableStateOf(false) }
     var showDescription by remember { mutableStateOf(false) }
+    // Barre du bas condensée (parité web) : emojis repliables + panneau de vote.
+    var showEmojiBar by remember { mutableStateOf(false) }
+    var showVotePanel by remember { mutableStateOf(false) }
 
     // Permission caméra/micro avant de diffuser (participant) — on lance la diffusion au retour.
     val camMicPerms = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
@@ -264,40 +269,21 @@ fun DuelRoomScreen(
                     }
                 }
                 error?.let { Text(it, color = colors.destructive) }
-                // Barre de réactions : J'aime + emojis (flottent pour tous).
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
-                ) {
-                    Box(
-                        modifier = Modifier.size(40.dp).background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { viewModel.sendLike() },
-                        contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Filled.Favorite, contentDescription = null, tint = Color(0xFFFF4D6D), modifier = Modifier.size(20.dp)) }
-                    DuelReactionEmojis.forEach { e ->
-                        Box(
-                            modifier = Modifier.background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { viewModel.sendReaction(e) }.padding(horizontal = 10.dp, vertical = 6.dp),
-                        ) { Text(e) }
+                // Barre d'emojis repliable (ouverte par le bouton 😊 de la rangée du bas).
+                if (showEmojiBar) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        DuelReactionEmojis.forEach { e ->
+                            Box(
+                                modifier = Modifier.background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { viewModel.sendReaction(e) }.padding(horizontal = 10.dp, vertical = 6.dp),
+                            ) { Text(e) }
+                        }
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-                    duel?.artist1Id?.let { id ->
-                        DMButton(
-                            "${strings.vote} ${duel?.artist1?.displayName ?: strings.artist1}",
-                            modifier = Modifier.weight(1f),
-                        ) { viewModel.vote(id, voteAmount) }
-                    }
-                    duel?.artist2Id?.let { id ->
-                        DMButton(
-                            "${strings.vote} ${duel?.artist2?.displayName ?: strings.artist2}",
-                            style = DMButtonStyle.SECONDARY,
-                            modifier = Modifier.weight(1f),
-                        ) { viewModel.vote(id, voteAmount) }
-                    }
-                }
-                Text("${strings.oneVote} = $voteAmount ${strings.credits}", color = colors.mutedForeground)
-                // Saisie de message + cadeau + classement (parité concert/web).
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                // Barre du bas UNIQUE (parité web) : message · ❤️ · 😊 · 🎁 · 🏆 · vote.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     OutlinedTextField(
                         value = draft,
                         onValueChange = { draft = it },
@@ -306,14 +292,15 @@ fun DuelRoomScreen(
                         keyboardActions = KeyboardActions(onDone = { viewModel.sendMessage(draft); draft = "" }),
                         modifier = Modifier.weight(1f),
                     )
+                    BottomBarIcon(Icons.Filled.Favorite, Color(0xFFFF4D6D)) { viewModel.sendLike() }
+                    BottomBarIcon(Icons.Filled.Mood, Color.White) { showEmojiBar = !showEmojiBar }
+                    // Cadeau : bouton principal (violet, plus gros) — parité web.
                     Box(
                         modifier = Modifier.size(48.dp).background(DualMusicTheme.gradients.primary, CircleShape).clickable { showGiftPanel = true },
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Filled.CardGiftcard, contentDescription = strings.sendGift, tint = Color.White) }
-                    Box(
-                        modifier = Modifier.size(44.dp).background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable { showLeaderboard = true; viewModel.loadGiftLeaderboard() },
-                        contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = Color(0xFFFFC107)) }
+                    BottomBarIcon(Icons.Filled.EmojiEvents, Color(0xFFFFC107)) { showLeaderboard = true; viewModel.loadGiftLeaderboard() }
+                    BottomBarIcon(Icons.Filled.HowToVote, colors.accent) { showVotePanel = true }
                 }
             }
         }
@@ -388,6 +375,26 @@ fun DuelRoomScreen(
                     color = colors.foreground,
                     fontWeight = FontWeight.Bold,
                 )
+            }
+        }
+
+        // Panneau de VOTE (icône vote de la barre du bas) : voter pour l'un des deux artistes.
+        if (showVotePanel) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showVotePanel = false })
+            Column(
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(colors.background).navigationBarsPadding().padding(DualMusicTheme.spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text("⚔️ ${strings.vote}", color = colors.foreground, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    duel?.artist1Id?.let { id ->
+                        DMButton(duel?.artist1?.displayName ?: strings.artist1, modifier = Modifier.weight(1f)) { viewModel.vote(id, voteAmount); showVotePanel = false }
+                    }
+                    duel?.artist2Id?.let { id ->
+                        DMButton(duel?.artist2?.displayName ?: strings.artist2, style = DMButtonStyle.SECONDARY, modifier = Modifier.weight(1f)) { viewModel.vote(id, voteAmount); showVotePanel = false }
+                    }
+                }
+                Text("${strings.oneVote} = $voteAmount ${strings.credits}", color = colors.mutedForeground, fontSize = 13.sp)
             }
         }
 
@@ -555,6 +562,15 @@ private fun MediaRailButton(
         modifier = Modifier.size(48.dp).background(bg, CircleShape).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(22.dp)) }
+}
+
+/** Bouton rond translucide de la barre du bas (like / emoji / classement / vote). */
+@Composable
+private fun BottomBarIcon(icon: ImageVector, tint: Color, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier.size(44.dp).background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) }
 }
 
 /** Panneau de contrôle de l'arbitre (manager) : minuteur de parole, vainqueur, fin du duel. */
