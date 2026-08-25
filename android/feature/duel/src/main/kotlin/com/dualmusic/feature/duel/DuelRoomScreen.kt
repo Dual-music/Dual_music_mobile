@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -264,12 +265,16 @@ fun DuelRoomScreen(
                     },
                     onReport = { showReport = true },
                     onClose = onLeave,
-                    // Quand JE diffuse : mon état micro/caméra dans la barre (parité web) + participants.
-                    mediaLabel = if (broadcasting) "Vous" else null,
-                    micOn = if (broadcasting) micOn else null,
-                    camOn = if (broadcasting) camOn else null,
                     onParticipants = { showDescription = true },
                 )
+                // 2ᵉ ligne (désengorge le badge) : mon état micro/caméra quand JE diffuse.
+                if (broadcasting) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Vous", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Icon(if (micOn) Icons.Filled.Mic else Icons.Filled.MicOff, contentDescription = null, tint = if (micOn) Color(0xFF22C55E) else Color(0xFFFF4D6D), modifier = Modifier.size(16.dp))
+                        Icon(if (camOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff, contentDescription = null, tint = if (camOn) Color(0xFF22C55E) else Color(0xFFFF4D6D), modifier = Modifier.size(16.dp))
+                    }
+                }
                 val a1 = duel?.artist1Id
                 val a2 = duel?.artist2Id
                 VoteBar(
@@ -322,14 +327,20 @@ fun DuelRoomScreen(
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
                 // Chat défilant (largeur ~68%) : plus récent en bas, auto-défilement (façon TikTok).
                 val chatState = rememberLazyListState()
+                // Défilement PRIORITAIRE au plus récent (en bas), MAIS sans forcer si l'utilisateur
+                // a tiré vers le haut pour lire les anciens (on ne le ramène pas de force en bas).
                 LaunchedEffect(messages.size) {
-                    if (messages.isNotEmpty()) chatState.animateScrollToItem(messages.size - 1)
+                    if (messages.isNotEmpty()) {
+                        val info = chatState.layoutInfo.visibleItemsInfo
+                        val atBottom = info.isEmpty() || (info.lastOrNull()?.index ?: -1) >= messages.size - 2
+                        if (atBottom) chatState.animateScrollToItem(messages.size - 1)
+                    }
                 }
                 LazyColumn(
                     state = chatState,
                     // Aligné à GAUCHE (au niveau du rail), largeur limitée pour NE PAS toucher les vignettes.
-                    // ~5 dernières lignes visibles ; tirer vers le haut pour voir les précédentes.
-                    modifier = Modifier.fillMaxWidth(0.62f).height(160.dp),
+                    // ~5 dernières lignes visibles (collées en bas) ; tirer vers le haut pour les précédentes.
+                    modifier = Modifier.fillMaxWidth(0.62f).heightIn(max = 160.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     items(messages) { msg ->
