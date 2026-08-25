@@ -157,6 +157,11 @@ class DuelViewModel(
     val isManager: StateFlow<Boolean> = _isManager.asStateFlow()
     private var myUserId: String? = null
 
+    /** Case épinglée par le manager (focus imposé, synchronisé via broadcast) :
+     *  "artist1" / "artist2" / "manager", ou null = pas de focus imposé (focus local libre). */
+    private val _forcedFocus = MutableStateFlow<String?>(null)
+    val forcedFocus: StateFlow<String?> = _forcedFocus.asStateFlow()
+
     /** Vrai si le caller est un PARTICIPANT (artiste 1/2 ou manager) → peut diffuser caméra/micro. */
     private val _canPublish = MutableStateFlow(false)
     val canPublish: StateFlow<Boolean> = _canPublish.asStateFlow()
@@ -344,6 +349,24 @@ class DuelViewModel(
         _emojiFeed.update { (it + (emojiCounter++ to emoji)).takeLast(12) }
     }
 
+    /**
+     * Manager : épingle (ou libère avec `null`) une case en plein écran pour TOUS. Relayé via le
+     * canal broadcast `duel-focus-<id>` (comme les likes/emojis) — retour immédiat + synchronisé.
+     */
+    fun setFocus(slot: String?) {
+        _forcedFocus.value = slot
+        liveSession?.emit(
+            "broadcast",
+            org.json.JSONObject(
+                mapOf(
+                    "channel" to "duel-focus-$duelId",
+                    "event" to "focus",
+                    "payload" to org.json.JSONObject(mapOf("slot" to (slot ?: org.json.JSONObject.NULL))),
+                ),
+            ),
+        )
+    }
+
     /** Efface l'erreur affichée. */
     fun clearError() { _error.value = null }
 
@@ -396,6 +419,7 @@ class DuelViewModel(
                 live.join(Realtime.RoomType.DUEL, duelId)
                 live.emit("broadcast:join", "duel-emojis-$duelId")
                 live.emit("broadcast:join", "duel-likes-$duelId")
+                live.emit("broadcast:join", "duel-focus-$duelId")
             }
             chat.onConnect { chat.join(Realtime.RoomType.DUEL, duelId) }
 
@@ -427,6 +451,8 @@ class DuelViewModel(
                 when (env.event) {
                     "emoji_reaction" -> env.payload?.emoji?.let { pushEmoji(it) }
                     "like" -> env.payload?.count?.let { if (it > _likes.value) _likes.value = it }
+                    // Focus imposé par le manager (null = libéré) → tous mettent cette case en grand.
+                    "focus" -> _forcedFocus.value = env.payload?.slot
                 }
             }
             // Présence (spectateurs).

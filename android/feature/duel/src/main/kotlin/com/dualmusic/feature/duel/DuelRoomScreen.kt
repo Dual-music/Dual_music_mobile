@@ -64,6 +64,7 @@ import androidx.compose.material.icons.filled.Mood
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Videocam
@@ -137,6 +138,9 @@ fun DuelRoomScreen(
     val broadcasting by viewModel.broadcasting.collectAsStateWithLifecycle()
     val micOn by viewModel.micOn.collectAsStateWithLifecycle()
     val camOn by viewModel.camOn.collectAsStateWithLifecycle()
+    // Focus : imposé par le manager (synchronisé) et/ou choix local du spectateur (tap sur une case).
+    val forcedFocus by viewModel.forcedFocus.collectAsStateWithLifecycle()
+    var localFocus by remember { mutableStateOf<String?>(null) }
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     val context = LocalContext.current
@@ -176,16 +180,18 @@ fun DuelRoomScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         // --- Multi-cam (parité web) : chaque slot est rendu avec la room de SON client LiveKit ---
-        val slotTiles: List<Triple<String, VideoTrack, LiveRoomClient>> = buildList {
-            a1Video?.let { add(Triple(duel?.artist1?.displayName ?: strings.artist1, it, viewModel.mediaA1)) }
-            a2Video?.let { add(Triple(duel?.artist2?.displayName ?: strings.artist2, it, viewModel.mediaA2)) }
-            mgrVideo?.let { add(Triple("Manager", it, viewModel.mediaMgr)) }
+        val slotTiles: List<SlotTile> = buildList {
+            a1Video?.let { add(SlotTile("artist1", duel?.artist1?.displayName ?: strings.artist1, it, viewModel.mediaA1)) }
+            a2Video?.let { add(SlotTile("artist2", duel?.artist2?.displayName ?: strings.artist2, it, viewModel.mediaA2)) }
+            mgrVideo?.let { add(SlotTile("manager", "Manager", it, viewModel.mediaMgr)) }
         }
-        val mainTile = slotTiles.firstOrNull()
+        // Case en grand : focus imposé par le manager (prioritaire) > choix local (tap) > 1re case.
+        val effectiveFocus = forcedFocus ?: localFocus
+        val mainTile = slotTiles.find { it.slot == effectiveFocus } ?: slotTiles.firstOrNull()
         // --- Couche vidéo principale (décodage matériel, zero-copy) ---
         if (mainTile != null) {
-            val mainTrack = mainTile.second
-            val mainClient = mainTile.third
+            val mainTrack = mainTile.track
+            val mainClient = mainTile.client
             // key(piste) : au flip la piste est RECRÉÉE → on veut un renderer neuf (sinon écran noir local).
             key(mainTrack) {
                 AndroidView(
@@ -444,19 +450,23 @@ fun DuelRoomScreen(
         }
 
         // Vignettes multi-cam = les slots autres que celui affiché en grand (parité web).
-        val thumbTiles = slotTiles.drop(1)
+        val thumbTiles = slotTiles.filter { it !== mainTile }
         if (thumbTiles.isNotEmpty() && !overlaysHidden && !thumbnailsHidden) {
             Column(
                 modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 8.dp, bottom = 160.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                thumbTiles.forEach { (label, t, client) ->
-                    key(t) {
-                        Box(Modifier.width(84.dp).height(112.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black)) {
+                thumbTiles.forEach { tile ->
+                    key(tile.track) {
+                        Box(
+                            Modifier.width(84.dp).height(112.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black)
+                                // Tap = agrandir cette case (focus LOCAL) — sauf si le manager a imposé un focus.
+                                .clickable(enabled = forcedFocus == null) { localFocus = tile.slot },
+                        ) {
                             AndroidView(
                                 modifier = Modifier.fillMaxSize(),
-                                factory = { ctx -> SurfaceViewRenderer(ctx).apply { client.room.initVideoRenderer(this) } },
-                                update = { renderer -> t.addRenderer(renderer) },
+                                factory = { ctx -> SurfaceViewRenderer(ctx).apply { tile.client.room.initVideoRenderer(this) } },
+                                update = { renderer -> tile.track.addRenderer(renderer) },
                             )
                             // Libellé : pastille signal verte + nom (parité web « Papou Koné »).
                             Row(
@@ -464,11 +474,32 @@ fun DuelRoomScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Box(Modifier.size(6.dp).background(Color(0xFF22C55E), CircleShape))
-                                Text("  $label", color = Color.White, fontSize = 9.sp, maxLines = 1)
+                                Text("  ${tile.label}", color = Color.White, fontSize = 9.sp, maxLines = 1)
+                            }
+                            // Manager : épingle cette case en plein écran pour TOUS.
+                            if (isManager) {
+                                Box(
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(3.dp).size(22.dp)
+                                        .background(Color.Black.copy(alpha = 0.55f), CircleShape)
+                                        .clickable { viewModel.setFocus(tile.slot) },
+                                    contentAlignment = Alignment.Center,
+                                ) { Icon(Icons.Filled.PushPin, contentDescription = "Épingler pour tous", tint = Color.White, modifier = Modifier.size(13.dp)) }
                             }
                         }
                     }
                 }
+            }
+        }
+        // Manager : bouton « libérer le focus » quand une case est épinglée (rend le focus libre à tous).
+        if (isManager && forcedFocus != null && !overlaysHidden) {
+            Row(
+                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp)
+                    .clip(RoundedCornerShape(999.dp)).background(colors.primary).clickable { viewModel.setFocus(null) }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.PushPin, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                Text("  Libérer", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -725,6 +756,14 @@ private fun SettingsRow(icon: ImageVector, label: String, danger: Boolean = fals
         Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
 }
+
+/** Case vidéo d'un slot (artiste 1/2 ou manager) : clé de focus + libellé + piste + son client LiveKit. */
+private data class SlotTile(
+    val slot: String,
+    val label: String,
+    val track: VideoTrack,
+    val client: LiveRoomClient,
+)
 
 /** Bouton rond translucide de la barre du bas (like / emoji / classement / vote). */
 @Composable
