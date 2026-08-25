@@ -151,7 +151,7 @@ private const val API_BASE_URL = "http://10.0.2.2:4000"
 // Le PC et le téléphone doivent être sur le MÊME réseau WiFi. Mettre à jour cette IP si elle
 // change (DHCP) — la voir avec `ipconfig` (Adresse IPv4). Le backend écoute sur 0.0.0.0:4000.
 // En USB : repasser à "http://127.0.0.1:4000" + `adb reverse tcp:4000 tcp:4000`.
-private const val API_BASE_URL = "http://172.17.10.149:4000"
+private const val API_BASE_URL = "http://172.17.10.135:4000"
 
 
 
@@ -422,11 +422,14 @@ class AppContainer(context: Context) {
      * Le vote payant est délégué au portefeuille (procédure atomique serveur).
      */
     fun makeDuelViewModel(duel: Duel): DuelViewModel {
+        // UN SEUL contexte EGL partagé par les 3 clients de slot (multi-room) : sans ça, les
+        // pistes distantes sont souscrites mais ne s'affichent pas (cases transparentes).
+        val sharedEgl = livekit.org.webrtc.EglBase.create()
         return DuelViewModel(
             duelId = duel.id,
             // Format identique au web (`duel-<id>`) ; les rooms de slot sont `<base>-artist1/2/manager`.
             baseRoom = duel.roomId ?: "duel-${duel.id}",
-            mediaFactory = { LiveRoomClient(appContext, tokenService, appScope) },
+            mediaFactory = { LiveRoomClient(appContext, tokenService, appScope, sharedEgl) },
             realtime = realtimeClient,
             repository = duelRepository,
             wallet = walletRepository,

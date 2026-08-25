@@ -50,9 +50,14 @@ class LiveRoomClient(
     context: Context,
     private val tokenService: LiveKitTokenService,
     private val scope: CoroutineScope,
+    // EGL partagé (multi-room : duel = 3 clients). Un contexte EGL COMMUN aux 3 rooms + leurs
+    // renderers est indispensable, sinon les pistes distantes sont souscrites mais NE S'AFFICHENT
+    // PAS (case transparente). Null → contexte propre (room unique : concert/compétition/live).
+    sharedEglBase: EglBase? = null,
 ) {
     private val appContext = context.applicationContext
-    private val eglBase: EglBase = EglBase.create()
+    private val ownsEgl: Boolean = sharedEglBase == null
+    private val eglBase: EglBase = sharedEglBase ?: EglBase.create()
 
     /** Room LiveKit sous-jacente (créée avec notre EglBase pour le processor vidéo). */
     val room: Room = LiveKit.create(appContext, overrides = LiveKitOverrides(eglBase = eglBase))
