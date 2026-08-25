@@ -147,6 +147,12 @@ fun DuelRoomScreen(
     LaunchedEffect(giftReceived) {
         if (giftReceived != null) { kotlinx.coroutines.delay(3500); viewModel.clearGiftReceived() }
     }
+    // Célébration du vainqueur TEMPORAIRE (~7 s) → ne reste pas en permanence sur le direct.
+    var winnerCelebration by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(duel?.winnerId) {
+        val wid = duel?.winnerId
+        if (wid != null) { winnerCelebration = wid; kotlinx.coroutines.delay(7000); winnerCelebration = null }
+    }
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     val context = LocalContext.current
@@ -589,9 +595,9 @@ fun DuelRoomScreen(
             }
         }
 
-        // Célébration du vainqueur : dès que l'arbitre l'annonce (event `status` → winnerId),
-        // tous les spectateurs voient les confettis + la carte. Non bloquant pour « Terminer ».
-        duel?.winnerId?.let { wid ->
+        // Célébration du vainqueur : dès que l'arbitre l'annonce (event `status` → winnerId), tous
+        // les spectateurs voient les confettis + la carte, puis ça s'estompe (~7 s) → vue dégagée.
+        winnerCelebration?.let { wid ->
             val name = when (wid) {
                 duel?.artist1Id -> duel?.artist1?.displayName
                 duel?.artist2Id -> duel?.artist2?.displayName
