@@ -141,6 +141,11 @@ fun DuelRoomScreen(
     // Focus : imposé par le manager (synchronisé) et/ou choix local du spectateur (tap sur une case).
     val forcedFocus by viewModel.forcedFocus.collectAsStateWithLifecycle()
     var localFocus by remember { mutableStateOf<String?>(null) }
+    // Bannière « vous avez reçu un cadeau » (destinataire) — auto-effacée après quelques secondes.
+    val giftReceived by viewModel.giftReceived.collectAsStateWithLifecycle()
+    LaunchedEffect(giftReceived) {
+        if (giftReceived != null) { kotlinx.coroutines.delay(3500); viewModel.clearGiftReceived() }
+    }
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     val context = LocalContext.current
@@ -220,6 +225,14 @@ fun DuelRoomScreen(
 
         // --- Réactions flottantes (cœurs/emojis) montantes, vues par tous ---
         FloatingReactionsLayer(reactions = emojiFeed, reduceAnimations = uiPrefs.reduceAnimations)
+
+        // --- Bannière « vous avez reçu un cadeau » (destinataire uniquement, transitoire) ---
+        giftReceived?.let { msg ->
+            Box(
+                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 132.dp)
+                    .clip(RoundedCornerShape(999.dp)).background(Color(0xF2FF4FA3)).padding(horizontal = 16.dp, vertical = 8.dp),
+            ) { Text(msg, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+        }
 
         // (Le meilleur donateur est désormais une LIGNE dans la zone haute « navbar » ci-dessous,
         //  pour être masquée avec le reste via ✕ et ne pas flotter sur la vidéo.)

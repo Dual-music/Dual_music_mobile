@@ -114,6 +114,11 @@ class DuelViewModel(
     private val _giftFeed = MutableStateFlow<List<DuelGift>>(emptyList())
     val giftFeed: StateFlow<List<DuelGift>> = _giftFeed.asStateFlow()
 
+    /** Message éphémère « vous avez reçu un cadeau » (destinataire uniquement) → bannière in-app. */
+    private val _giftReceived = MutableStateFlow<String?>(null)
+    val giftReceived: StateFlow<String?> = _giftReceived.asStateFlow()
+    fun clearGiftReceived() { _giftReceived.value = null }
+
     /** Compteur local de J'aime (le cœur flotte pour tous via le relais). */
     private val _likes = MutableStateFlow(0)
     val likes: StateFlow<Int> = _likes.asStateFlow()
@@ -441,6 +446,11 @@ class DuelViewModel(
             live.on(Realtime.RealtimeEvent.GIFT, GiftPayload.serializer()) { p ->
                 _giftFeed.update { it + DuelGift(giftCounter++, p.fromUserId, p.giftName, p.giftImage, p.value) }
                 loadTopDonor()
+                // Si le cadeau m'est destiné → bannière « vous avez reçu un cadeau » (en plus de la
+                // notification durable créée côté backend).
+                if (p.toUserId != null && p.toUserId == myUserId) {
+                    _giftReceived.value = "🎁 Vous avez reçu un cadeau (${p.value.toInt()} crédits) !"
+                }
             }
             // Chat.
             chat.on(Realtime.RealtimeEvent.CHAT_MESSAGE, ChatMessagePayload.serializer()) { p ->
