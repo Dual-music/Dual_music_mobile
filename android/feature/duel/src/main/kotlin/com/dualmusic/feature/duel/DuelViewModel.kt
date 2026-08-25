@@ -234,6 +234,10 @@ class DuelViewModel(
         viewModelScope.launch {
             client.connectionState.collect { st -> android.util.Log.i("DuelVM", "conn room=$baseRoom-$slot publish=$publish -> $st") }
         }
+        // Log des pistes distantes reçues (0 = le web ne publie pas ici OU souscription KO).
+        viewModelScope.launch {
+            client.remoteVideos.collect { v -> android.util.Log.i("DuelVM", "tracks room=$baseRoom-$slot remoteVideos=${v.size}") }
+        }
         viewModelScope.launch {
             runCatching { client.join(roomName = "$baseRoom-$slot", isHost = publish, canPublish = publish) }
         }
