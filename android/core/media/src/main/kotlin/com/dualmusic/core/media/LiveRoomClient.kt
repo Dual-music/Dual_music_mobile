@@ -222,12 +222,27 @@ class LiveRoomClient(
         _micEnabled.value = enabled
     }
 
-    /** Active/désactive la caméra (mode hôte) : suspend/reprend la capture de la piste. */
+    /**
+     * Active/désactive la caméra (mode hôte).
+     *
+     * On **dépublie** la piste quand la caméra est coupée (au lieu d'un simple `stopCapture` qui
+     * laisse la dernière image FIGÉE chez les spectateurs) : les autres ne reçoivent alors plus
+     * rien → la case redevient « sans caméra ». On republie à la réactivation. Ma preview locale
+     * est vidée/rétablie immédiatement pour ne jamais montrer une image gelée.
+     */
     fun setCamEnabled(enabled: Boolean) {
         val t = cameraTrack ?: return
-        if (enabled) t.startCapture() else t.stopCapture()
-        _camEnabled.value = enabled
-        refreshLocalTrack()
+        if (enabled) {
+            t.startCapture()
+            scope.launch { runCatching { room.localParticipant.publishVideoTrack(t) } }
+            _camEnabled.value = true
+            _localVideoTrack.value = t
+        } else {
+            scope.launch { runCatching { room.localParticipant.unpublishTrack(t) } }
+            t.stopCapture()
+            _camEnabled.value = false
+            _localVideoTrack.value = null
+        }
     }
 
     /**
