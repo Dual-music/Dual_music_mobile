@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -83,7 +84,6 @@ import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.gifts.GiftBurst
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.overlay.FloatingReactionsLayer
-import com.dualmusic.core.ui.overlay.TopDonorBubble
 import com.dualmusic.core.ui.prefs.UiPreferencesStore
 import com.dualmusic.core.ui.theme.DualMusicTheme
 import com.dualmusic.feature.sponsor.SponsorAdLayer
@@ -158,6 +158,8 @@ fun DuelRoomScreen(
     var showEmojiBar by remember { mutableStateOf(false) }
     var showVotePanel by remember { mutableStateOf(false) }
     var showCommentPopup by remember { mutableStateOf(false) }
+    // Message auquel on répond (tap sur un message du chat) — parité web.
+    var replyingTo by remember { mutableStateOf<DuelChatMessage?>(null) }
 
     // Permission caméra/micro avant de diffuser (participant) — on lance la diffusion au retour.
     val camMicPerms = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
@@ -184,11 +186,14 @@ fun DuelRoomScreen(
         if (mainTile != null) {
             val mainTrack = mainTile.second
             val mainClient = mainTile.third
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { ctx -> SurfaceViewRenderer(ctx).apply { mainClient.room.initVideoRenderer(this) } },
-                update = { renderer -> mainTrack.addRenderer(renderer) },
-            )
+            // key(piste) : au flip la piste est RECRÉÉE → on veut un renderer neuf (sinon écran noir local).
+            key(mainTrack) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { ctx -> SurfaceViewRenderer(ctx).apply { mainClient.room.initVideoRenderer(this) } },
+                    update = { renderer -> mainTrack.addRenderer(renderer) },
+                )
+            }
         } else {
             Box(Modifier.fillMaxSize().background(DualMusicTheme.gradients.hero))
         }
@@ -210,8 +215,8 @@ fun DuelRoomScreen(
         // --- Réactions flottantes (cœurs/emojis) montantes, vues par tous ---
         FloatingReactionsLayer(reactions = emojiFeed, reduceAnimations = uiPrefs.reduceAnimations)
 
-        // Bulle du meilleur donateur (parité web), pilotée par les préférences visuelles.
-        TopDonorBubble(donor = topDonor, mode = uiPrefs.topDonorMode, animation = uiPrefs.topDonorAnimation)
+        // (Le meilleur donateur est désormais une LIGNE dans la zone haute « navbar » ci-dessous,
+        //  pour être masquée avec le reste via ✕ et ne pas flotter sur la vidéo.)
 
         // --- Overlays (zones sûres) — masquables via l'œil du rail gauche (vidéo plein cadre) ---
         if (!overlaysHidden) Column(
@@ -223,8 +228,12 @@ fun DuelRoomScreen(
                 .padding(DualMusicTheme.spacing.lg),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            // Haut : header live unifié (mêmes icônes que le web), barre de votes + minuteur.
-            Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+            // Haut : zone « navbar » (fond opaque) → la vidéo ne bave pas dessus ; masquée par ✕.
+            Column(
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xF21A0B2E)).padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 com.dualmusic.core.ui.live.LiveHeader(
                     eventLabel = "",
                     badgeText = "DUEL",
@@ -250,6 +259,20 @@ fun DuelRoomScreen(
                     leftTotal = a1?.let { totals[it] } ?: 0.0,
                     rightTotal = a2?.let { totals[it] } ?: 0.0,
                 )
+                // Meilleur donateur : ligne défilante droite→gauche (pause entre les tours), dans la navbar.
+                topDonor?.let { d ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(999.dp))
+                            .background(Color(0x33FFFFFF)).padding(horizontal = 10.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "👑  ${d.name}  ·  ${d.amount} 🎁",
+                            color = Color(0xFFFFD54A), fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                            modifier = Modifier.fillMaxWidth().basicMarquee(),
+                        )
+                    }
+                }
                 if (timer.isRunning) {
                     // Décompte visuel MM:SS (parité web) avec le nom de l'artiste qui a la parole.
                     val speaker = when (timer.targetId) {
@@ -285,22 +308,29 @@ fun DuelRoomScreen(
                 }
                 LazyColumn(
                     state = chatState,
-                    // Décalé à droite du rail gauche (le rail est centré et chevauche cette zone).
-                    modifier = Modifier.fillMaxWidth(0.86f).height(170.dp).padding(start = 50.dp),
+                    // Aligné à GAUCHE (au niveau du rail), largeur limitée pour NE PAS toucher les vignettes.
+                    // ~5 dernières lignes visibles ; tirer vers le haut pour voir les précédentes.
+                    modifier = Modifier.fillMaxWidth(0.62f).height(160.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     items(messages) { msg ->
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.background(Color.Black.copy(alpha = 0.28f), RoundedCornerShape(12.dp)).padding(horizontal = 6.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.Top,
+                            // Tap sur un message → y répondre (parité web).
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                                .background(Color.Black.copy(alpha = 0.28f)).clickable { replyingTo = msg; showCommentPopup = true }
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
                         ) {
                             // Avatar rond (initiale) — parité web.
                             Box(
                                 modifier = Modifier.size(22.dp).background(colors.primary.copy(alpha = 0.55f), CircleShape),
                                 contentAlignment = Alignment.Center,
                             ) { Text(msg.authorName.take(1).uppercase(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                            Text("  ${msg.authorName}", color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            Text("  ${msg.content}", color = Color.White, fontSize = 12.sp)
+                            // Nom + contenu en COLONNE → le message long revient à la ligne.
+                            Column(modifier = Modifier.padding(start = 6.dp)) {
+                                Text(msg.authorName, color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text(msg.content, color = Color.White, fontSize = 12.sp)
+                            }
                         }
                     }
                 }
@@ -318,8 +348,12 @@ fun DuelRoomScreen(
                         }
                     }
                 }
-                // Barre du bas UNIQUE (parité web capture 1) : Message… · ❤️ · 😊 · 🎁 · 🏆 · vote.
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // Barre du bas UNIQUE (parité web capture 1) : fond « navbar » → la vidéo ne bave pas dessus.
+                Row(
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xF21A0B2E)).padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     // « Message... » = pill déclencheur ; la vraie saisie s'ouvre en pop-up (capture 2).
                     Row(
                         modifier = Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(999.dp))
@@ -344,10 +378,10 @@ fun DuelRoomScreen(
             }
         }
 
-        // --- Rail vertical GAUCHE (parité web capture 4) — masqué avec le reste via ✕ ---
+        // --- Rail vertical GAUCHE (parité web capture 4) — remonté sous la navbar, masqué via ✕ ---
         if (!overlaysHidden) {
             Column(
-                modifier = Modifier.align(Alignment.CenterStart).statusBarsPadding().padding(start = 6.dp),
+                modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(top = 128.dp, start = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 // ✕ : masque TOUT sauf la vidéo (œil flottant en haut pour restaurer).
@@ -476,16 +510,23 @@ fun DuelRoomScreen(
 
         // Pop-up de saisie « Commenter » (capture 2) — ouvert depuis le pill « Message... ».
         if (showCommentPopup) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showCommentPopup = false })
-            fun send() { if (draft.isNotBlank()) { viewModel.sendMessage(draft); draft = "" }; showCommentPopup = false }
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showCommentPopup = false; replyingTo = null })
+            fun send() {
+                if (draft.isNotBlank()) {
+                    // Réponse : on préfixe par @auteur (le web thread ; ici on garde la mention).
+                    val text = replyingTo?.let { "@${it.authorName} $draft" } ?: draft
+                    viewModel.sendMessage(text); draft = ""
+                }
+                showCommentPopup = false; replyingTo = null
+            }
             Column(
                 modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(colors.background)
                     .navigationBarsPadding().imePadding().padding(DualMusicTheme.spacing.md),
                 verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
             ) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Commenter", color = colors.foreground, fontWeight = FontWeight.Bold)
-                    Icon(Icons.Filled.Close, contentDescription = "Fermer", tint = colors.mutedForeground, modifier = Modifier.size(20.dp).clickable { showCommentPopup = false })
+                    Text(if (replyingTo != null) "Répondre à ${replyingTo?.authorName}" else "Commenter", color = colors.foreground, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Filled.Close, contentDescription = "Fermer", tint = colors.mutedForeground, modifier = Modifier.size(20.dp).clickable { showCommentPopup = false; replyingTo = null })
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
