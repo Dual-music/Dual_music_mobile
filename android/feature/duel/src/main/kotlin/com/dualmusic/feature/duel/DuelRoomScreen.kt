@@ -199,9 +199,13 @@ fun DuelRoomScreen(
             duel?.artist2Id?.let { add(SlotTile("artist2", duel?.artist2?.displayName ?: strings.artist2, a2Video, viewModel.mediaA2)) }
             duel?.managerId?.let { add(SlotTile("manager", "Manager", mgrVideo, viewModel.mediaMgr)) }
         }
-        // Case en grand : focus imposé par le manager (prioritaire) > choix local (tap) > 1re case.
+        // Case en grand : focus imposé manager > choix local (tap) > 1re case EN DIRECT (souvent
+        // l'adversaire) > 1re case. Sans ça, on s'affichait SOI-MÊME (placeholder) en grand et le
+        // web se retrouvait en petite vignette → "je ne vois pas le web".
         val effectiveFocus = forcedFocus ?: localFocus
-        val mainTile = slotTiles.find { it.slot == effectiveFocus } ?: slotTiles.firstOrNull()
+        val mainTile = slotTiles.find { it.slot == effectiveFocus }
+            ?: slotTiles.firstOrNull { it.track != null }
+            ?: slotTiles.firstOrNull()
         // --- Couche principale : vidéo (ou placeholder caméra off) du slot en grand ---
         if (mainTile != null) {
             SlotContent(mainTile, Modifier.fillMaxSize())
