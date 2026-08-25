@@ -186,26 +186,19 @@ fun DuelRoomScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         // --- Multi-cam (parité web) : chaque slot est rendu avec la room de SON client LiveKit ---
+        // Les cases ATTENDUES (participants du duel) sont TOUJOURS présentes : vidéo si dispo, sinon
+        // placeholder « caméra off » (la case ne disparaît pas et ne fige jamais la dernière image).
         val slotTiles: List<SlotTile> = buildList {
-            a1Video?.let { add(SlotTile("artist1", duel?.artist1?.displayName ?: strings.artist1, it, viewModel.mediaA1)) }
-            a2Video?.let { add(SlotTile("artist2", duel?.artist2?.displayName ?: strings.artist2, it, viewModel.mediaA2)) }
-            mgrVideo?.let { add(SlotTile("manager", "Manager", it, viewModel.mediaMgr)) }
+            duel?.artist1Id?.let { add(SlotTile("artist1", duel?.artist1?.displayName ?: strings.artist1, a1Video, viewModel.mediaA1)) }
+            duel?.artist2Id?.let { add(SlotTile("artist2", duel?.artist2?.displayName ?: strings.artist2, a2Video, viewModel.mediaA2)) }
+            duel?.managerId?.let { add(SlotTile("manager", "Manager", mgrVideo, viewModel.mediaMgr)) }
         }
         // Case en grand : focus imposé par le manager (prioritaire) > choix local (tap) > 1re case.
         val effectiveFocus = forcedFocus ?: localFocus
         val mainTile = slotTiles.find { it.slot == effectiveFocus } ?: slotTiles.firstOrNull()
-        // --- Couche vidéo principale (décodage matériel, zero-copy) ---
+        // --- Couche principale : vidéo (ou placeholder caméra off) du slot en grand ---
         if (mainTile != null) {
-            val mainTrack = mainTile.track
-            val mainClient = mainTile.client
-            // key(piste) : au flip la piste est RECRÉÉE → on veut un renderer neuf (sinon écran noir local).
-            key(mainTrack) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { ctx -> SurfaceViewRenderer(ctx).apply { mainClient.room.initVideoRenderer(this) } },
-                    update = { renderer -> mainTrack.addRenderer(renderer) },
-                )
-            }
+            SlotContent(mainTile, Modifier.fillMaxSize())
         } else {
             Box(Modifier.fillMaxSize().background(DualMusicTheme.gradients.hero))
         }
@@ -481,23 +474,19 @@ fun DuelRoomScreen(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 thumbTiles.forEach { tile ->
-                    key(tile.track) {
+                    key(tile.slot) {
                         Box(
                             Modifier.width(84.dp).height(112.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black)
                                 // Tap = agrandir cette case (focus LOCAL) — sauf si le manager a imposé un focus.
                                 .clickable(enabled = forcedFocus == null) { localFocus = tile.slot },
                         ) {
-                            AndroidView(
-                                modifier = Modifier.fillMaxSize(),
-                                factory = { ctx -> SurfaceViewRenderer(ctx).apply { tile.client.room.initVideoRenderer(this) } },
-                                update = { renderer -> tile.track.addRenderer(renderer) },
-                            )
+                            SlotContent(tile, Modifier.fillMaxSize())
                             // Libellé : pastille signal verte + nom (parité web « Papou Koné »).
                             Row(
                                 modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 4.dp, vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Box(Modifier.size(6.dp).background(Color(0xFF22C55E), CircleShape))
+                                Box(Modifier.size(6.dp).background(if (tile.track != null) Color(0xFF22C55E) else Color(0xFF888888), CircleShape))
                                 Text("  ${tile.label}", color = Color.White, fontSize = 9.sp, maxLines = 1)
                             }
                             // Manager : épingle cette case en plein écran pour TOUS.
@@ -781,13 +770,41 @@ private fun SettingsRow(icon: ImageVector, label: String, danger: Boolean = fals
     }
 }
 
-/** Case vidéo d'un slot (artiste 1/2 ou manager) : clé de focus + libellé + piste + son client LiveKit. */
+/** Case d'un slot (artiste 1/2 ou manager) : clé de focus + libellé + piste (null = caméra off) + client. */
 private data class SlotTile(
     val slot: String,
     val label: String,
-    val track: VideoTrack,
+    val track: VideoTrack?,
     val client: LiveRoomClient,
 )
+
+/** Rend une case de slot : la vidéo si la piste existe, sinon un placeholder « caméra off ». */
+@Composable
+private fun SlotContent(tile: SlotTile, modifier: Modifier) {
+    val colors = DualMusicTheme.colors
+    val track = tile.track
+    if (track != null) {
+        // key(piste) : au flip la piste est recréée → renderer neuf (sinon écran noir).
+        key(track) {
+            AndroidView(
+                modifier = modifier,
+                factory = { ctx -> SurfaceViewRenderer(ctx).apply { tile.client.room.initVideoRenderer(this) } },
+                update = { renderer -> track.addRenderer(renderer) },
+            )
+        }
+    } else {
+        // Placeholder « comme si la caméra n'avait jamais été activée » : avatar initiale + caméra barrée.
+        Box(modifier = modifier.background(Color(0xFF241338)), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(
+                    modifier = Modifier.size(44.dp).background(colors.primary.copy(alpha = 0.45f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { Text(tile.label.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.Bold) }
+                Icon(Icons.Filled.VideocamOff, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
 
 /** Bouton rond translucide de la barre du bas (like / emoji / classement / vote). */
 @Composable
