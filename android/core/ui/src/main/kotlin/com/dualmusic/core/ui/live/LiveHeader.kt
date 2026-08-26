@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Groups
@@ -57,6 +58,8 @@ fun LiveHeader(
     onShare: (() -> Unit)? = null,
     onReport: (() -> Unit)? = null,
     onClose: (() -> Unit)? = null,
+    // Bouton QUITTER rouge (remplace le ✕ pour un direct : tout utilisateur peut quitter).
+    onQuit: (() -> Unit)? = null,
     // Optionnels (parité web) : nom du diffuseur + état micro/caméra + bouton participants.
     mediaLabel: String? = null,
     micOn: Boolean? = null,
@@ -64,6 +67,8 @@ fun LiveHeader(
     onParticipants: (() -> Unit)? = null,
     // Texte du badge rouge (ex. "DUEL" pour un duel, "LIVE" par défaut).
     badgeText: String = "LIVE",
+    // Afficher le compteur de spectateurs sur cette ligne (false = déplacé sur une 2ᵉ ligne).
+    showViewers: Boolean = true,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -94,7 +99,7 @@ fun LiveHeader(
                     Text(eventLabel, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 }
             }
-            StatPill(icon = Icons.Filled.Visibility, text = compact(viewerCount))
+            if (showViewers) StatPill(icon = Icons.Filled.Visibility, text = compact(viewerCount))
             if (likes > 0) StatPill(icon = Icons.Filled.Favorite, text = compact(likes), tint = Color(0xFFFF4D6D))
             // Diffuseur : nom + état micro/caméra (vert = actif, rouge = coupé) — parité web.
             if (!mediaLabel.isNullOrBlank()) {
@@ -121,6 +126,7 @@ fun LiveHeader(
             onParticipants?.let { IconPill(icon = Icons.Filled.Groups, contentDescription = "Participants", onClick = it) }
             onReport?.let { IconPill(icon = Icons.Outlined.Flag, contentDescription = "Signaler", onClick = it) }
             onClose?.let { IconPill(icon = Icons.Filled.Close, contentDescription = "Fermer", onClick = it) }
+            onQuit?.let { IconPill(icon = Icons.AutoMirrored.Filled.Logout, contentDescription = "Quitter", onClick = it, bg = Color(0xFFDC2626)) }
         }
     }
 }
@@ -140,13 +146,13 @@ private fun StatPill(icon: ImageVector, text: String, tint: Color = Color.White)
     }
 }
 
-/** Bouton d'action circulaire translucide (partage / signaler / fermer). */
+/** Bouton d'action circulaire (partage / signaler / fermer / quitter). `bg` colore le fond. */
 @Composable
-private fun IconPill(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
+private fun IconPill(icon: ImageVector, contentDescription: String, onClick: () -> Unit, bg: Color = Color.Black.copy(alpha = 0.4f)) {
     Box(
         modifier = Modifier
             .size(36.dp)
-            .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+            .background(bg, CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

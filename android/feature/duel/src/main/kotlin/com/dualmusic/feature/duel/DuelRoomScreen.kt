@@ -78,6 +78,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideocamOff
@@ -277,28 +278,40 @@ fun DuelRoomScreen(
                 .padding(DualMusicTheme.spacing.lg),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            // Haut : zone « navbar » (fond opaque) → la vidéo ne bave pas dessus ; masquée par ✕.
+            // Haut : infos TRANSPARENTES (les pastilles badge/spectateurs/likes ont leur propre fond
+            // translucide) ; masquée avec le reste via ✕.
             Column(
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xF21A0B2E)).padding(horizontal = 10.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                // Ligne 1 (allégée) : badge DUEL + likes + signaler + QUITTER rouge (tout le monde).
                 com.dualmusic.core.ui.live.LiveHeader(
                     eventLabel = "",
                     badgeText = "DUEL",
                     viewerCount = viewerCount,
                     likes = likes,
-                    onShare = {
-                        val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, strings.shareLiveText) }
-                        context.startActivity(Intent.createChooser(send, null))
-                    },
+                    showViewers = false,
                     onReport = { showReport = true },
-                    onClose = onLeave,
-                    onParticipants = { showDescription = true },
+                    onParticipants = { showDescription = true }, // infos (remplace l'ancienne icône doc du rail)
+                    onQuit = onLeave,
                 )
-                // 2ᵉ ligne (désengorge le badge) : mon état micro/caméra quand JE diffuse.
-                if (broadcasting) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Ligne 2 (désengorge le badge) : spectateurs + partage + mon état micro/caméra.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(Color.Black.copy(alpha = 0.4f)).padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(Icons.Filled.Visibility, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                        Text("$viewerCount", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Box(
+                        modifier = Modifier.size(32.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)).clickable {
+                            val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, strings.shareLiveText) }
+                            context.startActivity(Intent.createChooser(send, null))
+                        },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.Filled.Share, contentDescription = "Partager", tint = Color.White, modifier = Modifier.size(16.dp)) }
+                    if (broadcasting) {
                         Text("Vous", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         Icon(if (micOn) Icons.Filled.Mic else Icons.Filled.MicOff, contentDescription = null, tint = if (micOn) Color(0xFF22C55E) else Color(0xFFFF4D6D), modifier = Modifier.size(16.dp))
                         Icon(if (camOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff, contentDescription = null, tint = if (camOn) Color(0xFF22C55E) else Color(0xFFFF4D6D), modifier = Modifier.size(16.dp))
@@ -322,7 +335,9 @@ fun DuelRoomScreen(
                         Text(
                             "👑  ${d.name}  ·  ${d.amount} 🎁",
                             color = Color(0xFFFFD54A), fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1,
-                            modifier = Modifier.fillMaxWidth().basicMarquee(),
+                            // PAS de fillMaxWidth : sinon le texte remplit la largeur et basicMarquee
+                            // ne défile jamais. Ici il défile droite→gauche avec pause entre les tours.
+                            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, repeatDelayMillis = 1500, initialDelayMillis = 600),
                         )
                     }
                 }
@@ -409,13 +424,13 @@ fun DuelRoomScreen(
                 }
                 // Barre du bas UNIQUE (parité web capture 1) : fond « navbar » → la vidéo ne bave pas dessus.
                 Row(
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xF21A0B2E)).padding(horizontal = 8.dp, vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     // « Message... » = pill déclencheur ; la vraie saisie s'ouvre en pop-up (capture 2).
                     Row(
-                        modifier = Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(999.dp))
+                        modifier = Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(999.dp))
                             .background(Color.Black.copy(alpha = 0.35f)).clickable { showCommentPopup = true }
                             .padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -428,9 +443,9 @@ fun DuelRoomScreen(
                     BottomBarIcon(Icons.Filled.Mood, Color.White) { showEmojiBar = !showEmojiBar }
                     // Cadeau : bouton principal (violet) — parité web.
                     Box(
-                        modifier = Modifier.size(44.dp).background(DualMusicTheme.gradients.primary, CircleShape).clickable { showGiftPanel = true },
+                        modifier = Modifier.size(40.dp).background(DualMusicTheme.gradients.primary, CircleShape).clickable { showGiftPanel = true },
                         contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Filled.CardGiftcard, contentDescription = strings.sendGift, tint = Color.White, modifier = Modifier.size(20.dp)) }
+                    ) { Icon(Icons.Filled.CardGiftcard, contentDescription = strings.sendGift, tint = Color.White, modifier = Modifier.size(19.dp)) }
                     BottomBarIcon(Icons.Filled.EmojiEvents, Color(0xFFFFC107)) { showLeaderboard = true; viewModel.loadGiftLeaderboard() }
                     BottomBarIcon(Icons.Filled.HowToVote, colors.accent) { showVotePanel = true }
                 }
@@ -444,10 +459,8 @@ fun DuelRoomScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 // ✕ : masque TOUT sauf la vidéo (œil flottant en haut pour restaurer).
+                // (Le bouton QUITTER rouge et les Infos sont désormais dans le header, en haut.)
                 MediaRailButton(Icons.Filled.Close, "Masquer tout") { overlaysHidden = true }
-                // Rouge : QUITTER le direct (ne termine pas le direct).
-                MediaRailButton(Icons.AutoMirrored.Filled.Logout, "Quitter", danger = true) { onLeave() }
-                MediaRailButton(Icons.Filled.Description, "Infos") { showDescription = true }
                 // Œil : masque/affiche seulement les petites cases (vignettes).
                 MediaRailButton(if (thumbnailsHidden) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, "Petites cases") { thumbnailsHidden = !thumbnailsHidden }
                 // Participant : Démarrer, puis ⚙️ regroupe les contrôles direct dans un pop-up.
@@ -875,13 +888,13 @@ private fun GiftReceivedCard(g: DuelGift) {
     }
 }
 
-/** Bouton rond translucide de la barre du bas (like / emoji / classement / vote). */
+/** Bouton rond translucide de la barre du bas (like / emoji / classement / vote). Compact. */
 @Composable
 private fun BottomBarIcon(icon: ImageVector, tint: Color, onClick: () -> Unit) {
     Box(
-        modifier = Modifier.size(44.dp).background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable(onClick = onClick),
+        modifier = Modifier.size(38.dp).background(Color.Black.copy(alpha = 0.35f), CircleShape).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) }
+    ) { Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp)) }
 }
 
 /** Panneau de contrôle de l'arbitre (manager) : minuteur de parole, vainqueur, fin du duel. */
