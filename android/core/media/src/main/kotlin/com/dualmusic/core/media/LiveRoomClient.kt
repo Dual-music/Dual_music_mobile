@@ -272,7 +272,10 @@ class LiveRoomClient(
         cameraTrack = newTrack
         currentPosition = newPos
         _camEnabled.value = true
-        refreshLocalTrack()
+        // On pose DIRECTEMENT la nouvelle piste (au lieu de refreshLocalTrack qui lit les
+        // publications de façon asynchrone → il récupérait null/ancienne piste juste après le
+        // flip → la preview locale se fermait). Le renderer est keyé sur la piste → il se recrée.
+        _localVideoTrack.value = newTrack
     }
 
     /** Active/désactive le flou d'arrière-plan (sans republier la piste). */
