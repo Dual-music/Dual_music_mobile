@@ -64,6 +64,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Close
@@ -155,6 +156,7 @@ fun DuelRoomScreen(
     val forcedFocus by viewModel.forcedFocus.collectAsStateWithLifecycle()
     // Prix d'un vote configuré par l'admin (synchronisé avec le web) — remplace le 10 codé en dur.
     val votePrice by viewModel.votePrice.collectAsStateWithLifecycle()
+    val activeFilter by viewModel.activeFilter.collectAsStateWithLifecycle()
     var localFocus by remember { mutableStateOf<String?>(null) }
     // Bannière « vous avez reçu un cadeau » (destinataire) — auto-effacée après quelques secondes.
     val giftReceived by viewModel.giftReceived.collectAsStateWithLifecycle()
@@ -183,6 +185,7 @@ fun DuelRoomScreen(
     var overlaysHidden by remember { mutableStateOf(false) }
     var thumbnailsHidden by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showFilters by remember { mutableStateOf(false) }
     var showDescription by remember { mutableStateOf(false) }
     // Barre du bas condensée (parité web) : emojis repliables + panneau de vote + pop-up saisie.
     var showEmojiBar by remember { mutableStateOf(false) }
@@ -472,6 +475,8 @@ fun DuelRoomScreen(
                             if (hasCamMic()) viewModel.startBroadcast() else camMicLauncher.launch(camMicPerms)
                         }
                     } else {
+                        // Filtres vidéo (parité web) — juste avant Réglages, pour le publieur.
+                        MediaRailButton(Icons.Filled.AutoAwesome, "Filtres", accent = true) { showFilters = true }
                         MediaRailButton(Icons.Filled.Settings, "Réglages", accent = true) { showSettings = true }
                     }
                 }
@@ -517,6 +522,29 @@ fun DuelRoomScreen(
                 // quitte via le bouton rouge (il ne termine pas l'événement).
                 if (isManager) {
                     SettingsRow(Icons.Filled.Stop, "Arrêter le direct", danger = true) { showSettings = false; viewModel.endDuel(onLeave) }
+                }
+            }
+        }
+
+        // Pop-up FILTRES vidéo (icône Filtres du rail) — presets partagés avec le web.
+        if (showFilters && broadcasting && !overlaysHidden) {
+            Box(Modifier.fillMaxSize().clickable { showFilters = false })
+            Column(
+                modifier = Modifier.align(Alignment.CenterStart).statusBarsPadding().padding(start = 62.dp)
+                    .width(250.dp).background(Color(0xFF1C1C1E), RoundedCornerShape(12.dp)).padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text("Filtres", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    com.dualmusic.core.media.VideoFilterPresets.all.forEach { f ->
+                        val selected = activeFilter == f.id
+                        Box(
+                            modifier = Modifier.size(42.dp).clip(RoundedCornerShape(10.dp))
+                                .background(if (selected) colors.primary else Color.Black.copy(alpha = 0.45f))
+                                .clickable { viewModel.setColorFilter(f.id, f.matrix); showFilters = false },
+                            contentAlignment = Alignment.Center,
+                        ) { Text(f.emoji, fontSize = 18.sp) }
+                    }
                 }
             }
         }

@@ -92,6 +92,10 @@ class DuelViewModel(
     private val _camOn = MutableStateFlow(true)
     val camOn: StateFlow<Boolean> = _camOn.asStateFlow()
 
+    /** Filtre couleur actif (id) appliqué à MA caméra (publieur) — parité web. */
+    private val _activeFilter = MutableStateFlow("none")
+    val activeFilter: StateFlow<String> = _activeFilter.asStateFlow()
+
     /** État + actions de diffusion pub sponsor (overlay vidéo + contrôle hôte/manager). */
     val sponsor = com.dualmusic.feature.sponsor.SponsorAdHolder("duel", duelId, sponsorAds, viewModelScope)
 
@@ -263,6 +267,12 @@ class DuelViewModel(
     fun flipCamera() {
         val m = myMedia ?: return
         viewModelScope.launch { runCatching { m.switchCamera() } }
+    }
+
+    /** Applique un filtre couleur à MA caméra (publieur). `matrix = null` = aucun filtre. */
+    fun setColorFilter(id: String, matrix: FloatArray?) {
+        myMedia?.setColorFilter(id, matrix)
+        _activeFilter.value = id
     }
 
     /** Participant : Pause (coupe caméra + micro) / Reprendre (les réactive). */
