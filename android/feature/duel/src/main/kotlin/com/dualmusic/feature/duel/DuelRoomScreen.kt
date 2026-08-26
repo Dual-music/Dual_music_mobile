@@ -861,7 +861,13 @@ private fun GiftReceivedCard(g: DuelGift) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("🎁", fontSize = 26.sp, modifier = Modifier.scale(scale))
+        // Image RÉELLE du cadeau (URL) — sinon l'emoji du cadeau — sinon 🎁 (parité web).
+        com.dualmusic.core.ui.components.DMRemoteImage(
+            url = g.image?.takeIf { it.startsWith("http") },
+            contentDescription = g.name,
+            modifier = Modifier.size(34.dp).scale(scale),
+            fallbackEmoji = g.image?.takeIf { it.isNotBlank() && !it.startsWith("http") } ?: "🎁",
+        )
         Column {
             Text(g.name ?: "Cadeau reçu", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1)
             Text("+${g.value.toInt()} crédits", color = Color.White.copy(alpha = 0.9f), fontSize = 11.sp)
