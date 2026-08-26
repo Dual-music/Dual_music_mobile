@@ -5,6 +5,16 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -46,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -222,20 +233,24 @@ fun DuelRoomScreen(
             ),
         )
 
-        // --- Cadeau animé (halo GPU) TEMPORAIRE : apparaît à chaque nouveau cadeau puis DISPARAÎT
-        // après ~3,5s (avant, il restait bloqué car giftFeed.lastOrNull() renvoyait toujours le
-        // dernier cadeau → burst monté en permanence). ---
-        val lastGiftKey = giftFeed.lastOrNull()?.key
-        var giftBurstKey by remember { mutableStateOf<Long?>(null) }
-        LaunchedEffect(lastGiftKey) {
-            if (lastGiftKey != null) {
-                giftBurstKey = lastGiftKey
-                kotlinx.coroutines.delay(3500)
-                giftBurstKey = null
+        // --- Cadeau reçu : carte animée façon TikTok (glisse depuis la gauche, au-dessus du chat,
+        // NON-intrusive) puis ressort après ~3,2s. Ne bloque pas le centre du direct. ---
+        val lastGift = giftFeed.lastOrNull()
+        var shownGift by remember { mutableStateOf<DuelGift?>(null) }
+        var giftVisible by remember { mutableStateOf(false) }
+        LaunchedEffect(lastGift?.key) {
+            if (lastGift != null) {
+                shownGift = lastGift; giftVisible = true
+                kotlinx.coroutines.delay(3200); giftVisible = false
             }
         }
-        if (!uiPrefs.reduceAnimations && giftBurstKey != null) {
-            key(giftBurstKey) { GiftBurst(symbol = "🎁", modifier = Modifier.align(Alignment.Center)) }
+        AnimatedVisibility(
+            visible = giftVisible && !uiPrefs.reduceAnimations,
+            enter = slideInHorizontally { -it } + fadeIn(),
+            exit = slideOutHorizontally { -it } + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 10.dp, bottom = 214.dp),
+        ) {
+            shownGift?.let { GiftReceivedCard(it) }
         }
 
         // --- Réactions flottantes (cœurs/emojis) montantes, vues par tous ---
@@ -827,6 +842,29 @@ private fun SlotContent(tile: SlotTile, modifier: Modifier) {
                 ) { Text(tile.label.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.Bold) }
                 Icon(Icons.Filled.VideocamOff, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
             }
+        }
+    }
+}
+
+/** Carte « cadeau reçu » animée (façon TikTok) : emoji qui rebondit + nom + valeur. Non-intrusive. */
+@Composable
+private fun GiftReceivedCard(g: DuelGift) {
+    val infinite = rememberInfiniteTransition(label = "gift")
+    val scale by infinite.animateFloat(
+        initialValue = 1f, targetValue = 1.18f,
+        animationSpec = infiniteRepeatable(tween(550), RepeatMode.Reverse), label = "giftScale",
+    )
+    Row(
+        modifier = Modifier.clip(RoundedCornerShape(999.dp))
+            .background(Brush.horizontalGradient(listOf(Color(0xF2FF4FA3), Color(0xF27C3AED))))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("🎁", fontSize = 26.sp, modifier = Modifier.scale(scale))
+        Column {
+            Text(g.name ?: "Cadeau reçu", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1)
+            Text("+${g.value.toInt()} crédits", color = Color.White.copy(alpha = 0.9f), fontSize = 11.sp)
         }
     }
 }
