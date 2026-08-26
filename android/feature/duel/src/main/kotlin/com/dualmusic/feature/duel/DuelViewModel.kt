@@ -105,6 +105,10 @@ class DuelViewModel(
     private val _voteTotals = MutableStateFlow<Map<String, Double>>(emptyMap())
     val voteTotals: StateFlow<Map<String, Double>> = _voteTotals.asStateFlow()
 
+    /** Prix d'un vote (crédits) — configuré par l'admin, synchronisé avec le web (défaut 1). */
+    private val _votePrice = MutableStateFlow(1.0)
+    val votePrice: StateFlow<Double> = _votePrice.asStateFlow()
+
     private val _timer = MutableStateFlow(DuelTimer())
     val timer: StateFlow<DuelTimer> = _timer.asStateFlow()
 
@@ -213,6 +217,7 @@ class DuelViewModel(
             runCatching { repository.chatHistory(duelId) }.getOrNull()?.let { _messages.value = it }
         }
         loadTopDonor()
+        viewModelScope.launch { _votePrice.value = repository.votePricePerVote() }
         viewModelScope.launch { runCatching { repository.giftCatalog() }.getOrNull()?.let { _giftCatalog.value = it } }
         loadInventory()
         loadGiftLeaderboard()

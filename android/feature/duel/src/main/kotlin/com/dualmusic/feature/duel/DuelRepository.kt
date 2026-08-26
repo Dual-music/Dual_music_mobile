@@ -30,6 +30,13 @@ data class DuelChatMessage(
  * repository couvre le chargement initial + les actions non-financières.
  * ⚠️ Le **vote payant** n'est pas ici : c'est un débit, géré par `feature:wallet`.
  */
+/** Enveloppe de `GET /settings/public/vote_config` → `{ key, value: { price_per_vote } }`. */
+@Serializable
+private data class VoteConfigSetting(val value: VoteConfigValue? = null)
+
+@Serializable
+private data class VoteConfigValue(@SerialName("price_per_vote") val pricePerVote: Double = 1.0)
+
 class DuelRepository(private val api: ApiClient) {
 
     /**
@@ -39,6 +46,16 @@ class DuelRepository(private val api: ApiClient) {
     suspend fun reportLive(liveId: String, reason: String) {
         api.request<Unit>(Endpoint.post("moderation/reports/live", """{"liveId":"$liveId","reason":"$reason"}"""))
     }
+
+    /**
+     * Prix d'UN vote en crédits — configuré par l'admin (`platform_settings.vote_config`), lu via
+     * l'endpoint PUBLIC (parité web, défaut 1). `GET /settings/public/vote_config`.
+     */
+    suspend fun votePricePerVote(): Double =
+        runCatching {
+            api.request(Endpoint.get("/settings/public/vote_config"), VoteConfigSetting.serializer())
+                .value?.pricePerVote ?: 1.0
+        }.getOrDefault(1.0)
 
     /**
      * Liste des duels.

@@ -141,6 +141,8 @@ fun DuelRoomScreen(
     val camOn by viewModel.camOn.collectAsStateWithLifecycle()
     // Focus : imposé par le manager (synchronisé) et/ou choix local du spectateur (tap sur une case).
     val forcedFocus by viewModel.forcedFocus.collectAsStateWithLifecycle()
+    // Prix d'un vote configuré par l'admin (synchronisé avec le web) — remplace le 10 codé en dur.
+    val votePrice by viewModel.votePrice.collectAsStateWithLifecycle()
     var localFocus by remember { mutableStateOf<String?>(null) }
     // Bannière « vous avez reçu un cadeau » (destinataire) — auto-effacée après quelques secondes.
     val giftReceived by viewModel.giftReceived.collectAsStateWithLifecycle()
@@ -472,7 +474,11 @@ fun DuelRoomScreen(
                 SettingsRow(if (camOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff, if (camOn) "Caméra ON" else "Caméra OFF") { viewModel.toggleCamera() }
                 SettingsRow(if (micOn) Icons.Filled.Mic else Icons.Filled.MicOff, if (micOn) "Micro ON" else "Micro OFF") { viewModel.toggleMic() }
                 SettingsRow(Icons.Filled.Cameraswitch, "Retourner caméra") { viewModel.flipCamera() }
-                SettingsRow(Icons.Filled.Stop, "Arrêter", danger = true) { showSettings = false; onLeave() }
+                // « Arrêter » = METTRE FIN au direct → réservé au MANAGER (parité web). Un artiste
+                // quitte via le bouton rouge (il ne termine pas l'événement).
+                if (isManager) {
+                    SettingsRow(Icons.Filled.Stop, "Arrêter le direct", danger = true) { showSettings = false; viewModel.endDuel(onLeave) }
+                }
             }
         }
 
@@ -552,13 +558,13 @@ fun DuelRoomScreen(
                 Text("⚔️ ${strings.vote}", color = colors.foreground, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
                     duel?.artist1Id?.let { id ->
-                        DMButton(duel?.artist1?.displayName ?: strings.artist1, modifier = Modifier.weight(1f)) { viewModel.vote(id, voteAmount); showVotePanel = false }
+                        DMButton(duel?.artist1?.displayName ?: strings.artist1, modifier = Modifier.weight(1f)) { viewModel.vote(id, votePrice); showVotePanel = false }
                     }
                     duel?.artist2Id?.let { id ->
-                        DMButton(duel?.artist2?.displayName ?: strings.artist2, style = DMButtonStyle.SECONDARY, modifier = Modifier.weight(1f)) { viewModel.vote(id, voteAmount); showVotePanel = false }
+                        DMButton(duel?.artist2?.displayName ?: strings.artist2, style = DMButtonStyle.SECONDARY, modifier = Modifier.weight(1f)) { viewModel.vote(id, votePrice); showVotePanel = false }
                     }
                 }
-                Text("${strings.oneVote} = $voteAmount ${strings.credits}", color = colors.mutedForeground, fontSize = 13.sp)
+                Text("${strings.oneVote} = ${votePrice.toInt()} ${strings.credits}", color = colors.mutedForeground, fontSize = 13.sp)
             }
         }
 
