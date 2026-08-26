@@ -222,11 +222,20 @@ fun DuelRoomScreen(
             ),
         )
 
-        // --- Cadeau animé (halo GPU) — masqué si « Réduire les animations » ---
-        if (!uiPrefs.reduceAnimations) {
-            giftFeed.lastOrNull()?.let { gift ->
-                key(gift.key) { GiftBurst(symbol = "🎁", modifier = Modifier.align(Alignment.Center)) }
+        // --- Cadeau animé (halo GPU) TEMPORAIRE : apparaît à chaque nouveau cadeau puis DISPARAÎT
+        // après ~3,5s (avant, il restait bloqué car giftFeed.lastOrNull() renvoyait toujours le
+        // dernier cadeau → burst monté en permanence). ---
+        val lastGiftKey = giftFeed.lastOrNull()?.key
+        var giftBurstKey by remember { mutableStateOf<Long?>(null) }
+        LaunchedEffect(lastGiftKey) {
+            if (lastGiftKey != null) {
+                giftBurstKey = lastGiftKey
+                kotlinx.coroutines.delay(3500)
+                giftBurstKey = null
             }
+        }
+        if (!uiPrefs.reduceAnimations && giftBurstKey != null) {
+            key(giftBurstKey) { GiftBurst(symbol = "🎁", modifier = Modifier.align(Alignment.Center)) }
         }
 
         // --- Réactions flottantes (cœurs/emojis) montantes, vues par tous ---

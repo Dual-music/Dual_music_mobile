@@ -201,12 +201,7 @@ class DuelViewModel(
                     else -> null
                 }
                 _canPublish.value = myMedia != null
-                android.util.Log.i(
-                    "DuelVM",
-                    "role myUserId=$myUserId a1=${d.artist1Id} a2=${d.artist2Id} mgr=${d.managerId} canPublish=${_canPublish.value} base=$baseRoom",
-                )
             }
-            if (_duel.value == null) android.util.Log.e("DuelVM", "duel() a renvoye NULL (pas de bouton demarrer)")
             // Rejoint les 3 rooms de slot (parité web) : publieur sur MA room, spectateur sur les 2 autres.
             joinSlot(mediaA1, "artist1")
             joinSlot(mediaA2, "artist2")
@@ -235,14 +230,6 @@ class DuelViewModel(
     /** Rejoint la room d'un slot : publieur si c'est MON slot, spectateur sinon. */
     private fun joinSlot(client: LiveRoomClient, slot: String) {
         val publish = client === myMedia
-        // Log de l'ETAT de connexion réel (le join capture ses erreurs en interne → état Failed).
-        viewModelScope.launch {
-            client.connectionState.collect { st -> android.util.Log.i("DuelVM", "conn room=$baseRoom-$slot publish=$publish -> $st") }
-        }
-        // Log des pistes distantes reçues (0 = le web ne publie pas ici OU souscription KO).
-        viewModelScope.launch {
-            client.remoteVideos.collect { v -> android.util.Log.i("DuelVM", "tracks room=$baseRoom-$slot remoteVideos=${v.size}") }
-        }
         viewModelScope.launch {
             runCatching { client.join(roomName = "$baseRoom-$slot", isHost = publish, canPublish = publish) }
         }
@@ -444,7 +431,7 @@ class DuelViewModel(
                 live.emit("broadcast:join", "duel-likes-$duelId")
                 live.emit("broadcast:join", "duel-focus-$duelId")
             }
-            chat.onConnect { android.util.Log.i("DuelChat", "chat CONNECTED -> join duel:$duelId"); chat.join(Realtime.RoomType.DUEL, duelId) }
+            chat.onConnect { chat.join(Realtime.RoomType.DUEL, duelId) }
 
             // Vote payant enregistré → on cumule le tally de l'artiste visé.
             live.on(Realtime.RealtimeEvent.VOTE, VotePayload.serializer()) { p ->
@@ -472,7 +459,6 @@ class DuelViewModel(
             }
             // Chat.
             chat.on(Realtime.RealtimeEvent.CHAT_MESSAGE, ChatMessagePayload.serializer()) { p ->
-                android.util.Log.i("DuelChat", "RECV message user=${p.userId} content=${p.content}")
                 _messages.update { it + DuelChatMessage(id = p.id, userId = p.userId, content = p.content, user = p.user) }
             }
             // Réactions emojis (duel-emojis-<id>) + compteur de likes partagé (duel-likes-<id>).
