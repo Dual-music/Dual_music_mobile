@@ -53,6 +53,14 @@ class NamespaceSession internal constructor(
 ) {
     private var socket: Socket? = null
 
+    // Handlers mémorisés AVANT que le socket existe. Indispensable : le VM appelle
+    // onConnect{}/on{} AVANT connect(), donc `socket` est null à ce moment-là. On les
+    // (ré)enregistre sur le socket dans connect() (et à chaque reconnexion/re-création),
+    // sinon les callbacks sont perdus (bug: le /chat ne rejoignait jamais sa room).
+    private val connectHandlers = mutableListOf<() -> Unit>()
+    private val disconnectHandlers = mutableListOf<() -> Unit>()
+    private val eventHandlers = mutableListOf<Pair<String, (Array<out Any?>) -> Unit>>()
+
     /** Construit les options avec le JWT en handshake (`auth.token`) + reconnexion. */
     private fun options(token: String?): IO.Options = IO.Options.builder()
         .setTransports(arrayOf("websocket"))
@@ -63,16 +71,29 @@ class NamespaceSession internal constructor(
         .setAuth(token?.let { mapOf("token" to it) } ?: emptyMap())
         .build()
 
-    /** Connecte le socket du namespace après injection du JWT. */
+    /** Connecte le socket du namespace après injection du JWT + (ré)applique tous les handlers. */
     suspend fun connect() {
         val token = jwtProvider()
         val uri = URI.create(baseUrl.trimEnd('/') + namespace)
+        socket?.disconnect() // ferme l'ancien socket avant d'en créer un nouveau (pas de doublon)
         val s = IO.socket(uri, options(token))
+        // (Ré)enregistre TOUS les handlers mémorisés sur ce nouveau socket, peu importe l'ordre
+        // des appels onConnect/on par rapport à connect().
+        connectHandlers.forEach { h -> s.on(Socket.EVENT_CONNECT) { h() } }
+        disconnectHandlers.forEach { h -> s.on(Socket.EVENT_DISCONNECT) { h() } }
+        eventHandlers.forEach { (event, raw) -> s.on(event) { args -> raw(args) } }
         socket = s
         s.connect()
     }
 
-    fun disconnect() { socket?.disconnect(); socket = null }
+    /** Déconnecte + oublie les handlers (session partagée : évite l'accumulation entre écrans). */
+    fun disconnect() {
+        socket?.disconnect()
+        socket = null
+        connectHandlers.clear()
+        disconnectHandlers.clear()
+        eventHandlers.clear()
+    }
 
     /** Rejoint une room `type:id`. */
     fun join(type: Realtime.RoomType, id: String) {
@@ -94,28 +115,35 @@ class NamespaceSession internal constructor(
         if (payload == null) socket?.emit(event) else socket?.emit(event, payload)
     }
 
-    /** Callback de connexion établie (pour (re)join les rooms). */
+    /** Callback de connexion établie (pour (re)join les rooms). Mémorisé + posé si socket prêt. */
     fun onConnect(handler: () -> Unit) {
+        connectHandlers += handler
         socket?.on(Socket.EVENT_CONNECT) { handler() }
     }
 
-    /** Callback de déconnexion. */
+    /** Callback de déconnexion. Mémorisé + posé si socket prêt. */
     fun onDisconnect(handler: () -> Unit) {
+        disconnectHandlers += handler
         socket?.on(Socket.EVENT_DISCONNECT) { handler() }
     }
 
     /**
      * Écoute un événement serveur et décode son premier argument JSON en [T].
+     * Le handler est mémorisé (et réappliqué à chaque connect) pour survivre à l'ordre des appels.
      * @param event nom d'événement (voir [Realtime.RealtimeEvent]).
      * @param deserializer serializer kotlinx du payload.
      */
     fun <T> on(event: String, deserializer: DeserializationStrategy<T>, handler: (T) -> Unit) {
-        socket?.on(event) { args ->
-            val first = args.firstOrNull() as? JSONObject ?: return@on
-            runCatching { json.decodeFromString(deserializer, first.toString()) }
-                .getOrNull()
-                ?.let(handler)
+        val raw: (Array<out Any?>) -> Unit = { args ->
+            val first = args.firstOrNull() as? JSONObject
+            if (first != null) {
+                runCatching { json.decodeFromString(deserializer, first.toString()) }
+                    .getOrNull()
+                    ?.let(handler)
+            }
         }
+        eventHandlers += event to raw
+        socket?.on(event) { args -> raw(args) }
     }
 
     /** Variante reified : `session.on<VotePayload>(VOTE) { ... }`. */
