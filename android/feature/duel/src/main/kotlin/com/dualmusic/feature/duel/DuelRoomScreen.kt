@@ -248,7 +248,7 @@ fun DuelRoomScreen(
             visible = giftVisible && !uiPrefs.reduceAnimations,
             enter = slideInHorizontally { -it } + fadeIn(),
             exit = slideOutHorizontally { -it } + fadeOut(),
-            modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 10.dp, bottom = 214.dp),
+            modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 10.dp, bottom = 300.dp),
         ) {
             shownGift?.let { GiftReceivedCard(it) }
         }
