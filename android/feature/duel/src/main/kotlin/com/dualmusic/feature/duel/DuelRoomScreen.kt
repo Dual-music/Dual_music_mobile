@@ -190,6 +190,8 @@ fun DuelRoomScreen(
     var showCommentPopup by remember { mutableStateOf(false) }
     // Message auquel on répond (tap sur un message du chat) — parité web.
     var replyingTo by remember { mutableStateOf<DuelChatMessage?>(null) }
+    // Emoji picker dans le pop-up de saisie.
+    var showPopupEmojis by remember { mutableStateOf(false) }
 
     // Permission caméra/micro avant de diffuser (participant) — on lance la diffusion au retour.
     val camMicPerms = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
@@ -610,11 +612,12 @@ fun DuelRoomScreen(
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showCommentPopup = false; replyingTo = null })
             fun send() {
                 if (draft.isNotBlank()) {
-                    // Réponse : on préfixe par @auteur (le web thread ; ici on garde la mention).
-                    val text = replyingTo?.let { "@${it.authorName} $draft" } ?: draft
+                    // Réponse « façon TikTok » : on cite l'auteur + un extrait du message d'origine,
+                    // puis la réponse (le message reste plat mais la citation indexe clairement).
+                    val text = replyingTo?.let { "↩️ @${it.authorName}: \"${it.content.take(50)}\" — $draft" } ?: draft
                     viewModel.sendMessage(text); draft = ""
                 }
-                showCommentPopup = false; replyingTo = null
+                showCommentPopup = false; replyingTo = null; showPopupEmojis = false
             }
             Column(
                 modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(colors.background)
@@ -622,10 +625,38 @@ fun DuelRoomScreen(
                 verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
             ) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (replyingTo != null) "Répondre à ${replyingTo?.authorName}" else "Commenter", color = colors.foreground, fontWeight = FontWeight.Bold)
-                    Icon(Icons.Filled.Close, contentDescription = "Fermer", tint = colors.mutedForeground, modifier = Modifier.size(20.dp).clickable { showCommentPopup = false; replyingTo = null })
+                    Text(if (replyingTo != null) "Répondre" else "Commenter", color = colors.foreground, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Filled.Close, contentDescription = "Fermer", tint = colors.mutedForeground, modifier = Modifier.size(20.dp).clickable { showCommentPopup = false; replyingTo = null; showPopupEmojis = false })
+                }
+                // Carte de CITATION du message auquel on répond (indexation façon TikTok).
+                replyingTo?.let { r ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = 0.18f)).padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.width(3.dp).height(30.dp).background(colors.accent))
+                        Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                            Text("↩ ${r.authorName}", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text(r.content, color = colors.mutedForeground, fontSize = 12.sp, maxLines = 1)
+                        }
+                        Icon(Icons.Filled.Close, contentDescription = "Annuler la réponse", tint = colors.mutedForeground, modifier = Modifier.size(18.dp).clickable { replyingTo = null })
+                    }
+                }
+                // Emoji picker (repliable) : insère l'emoji dans le message.
+                if (showPopupEmojis) {
+                    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        DuelReactionEmojis.forEach { e ->
+                            Box(
+                                modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.12f)).clickable { draft += e }.padding(horizontal = 8.dp, vertical = 6.dp),
+                            ) { Text(e, fontSize = 18.sp) }
+                        }
+                    }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(
+                        modifier = Modifier.size(40.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.12f)).clickable { showPopupEmojis = !showPopupEmojis },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.Filled.Mood, contentDescription = "Emojis", tint = colors.foreground, modifier = Modifier.size(20.dp)) }
                     OutlinedTextField(
                         value = draft,
                         onValueChange = { draft = it },
