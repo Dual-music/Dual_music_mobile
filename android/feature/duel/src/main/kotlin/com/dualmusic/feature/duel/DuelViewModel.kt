@@ -282,11 +282,14 @@ class DuelViewModel(
         }
     }
 
-    /** Achète un cadeau (boutique) puis recharge l'inventaire. */
+    /** Achète un cadeau (boutique) puis recharge l'inventaire + confirme (visible dès le 1er achat). */
     fun purchaseGift(giftId: String) {
         viewModelScope.launch {
             runCatching { repository.purchaseGift(giftId, 1) }
-                .onSuccess { loadInventory() }
+                .onSuccess {
+                    loadInventory() // re-fetch → le cadeau (même le tout premier) apparaît dans « Mes cadeaux »
+                    _giftReceived.value = "🎁 Cadeau acheté ! Disponible dans « Mes cadeaux »."
+                }
                 .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
         }
     }
