@@ -15,11 +15,17 @@ data class VideoFilter(val id: String, val emoji: String, val matrix: FloatArray
 
 object VideoFilterPresets {
 
-    /** Liste ordonnée identique à la grille web (Aucun, Beauté, Lumineux, Chaud, Froid, Vif, Vintage, N&B, Studio, Néon). */
+    /**
+     * Liste ordonnée IDENTIQUE à la grille web (`videoFilters.ts`) : Aucun, Beauté, Lissé, Lumineux,
+     * Chaud, Froid, Vif, Vintage, N&B, Studio, Néon, Rêve. Les filtres web `smooth`/`dream`/`beauty`
+     * incluent un `blur()` (spatial) impossible en matrice couleur → on reproduit leur partie
+     * couleur (le lissé est approximé via un contraste plus doux).
+     */
     val all: List<VideoFilter> by lazy {
         listOf(
             VideoFilter("none", "🚫", null),
             VideoFilter("beauty", "✨", colMajor(compose(saturate(1.15f), brightness(1.08f), contrast(1.05f)))),
+            VideoFilter("smooth", "💆", colMajor(compose(saturate(1.05f), brightness(1.05f), contrast(0.95f)))),
             VideoFilter("glow", "💡", colMajor(compose(brightness(1.18f), contrast(1.05f), saturate(1.1f)))),
             VideoFilter("warm", "🌅", colMajor(compose(sepia(0.25f), saturate(1.3f), hueRotate(-10f), brightness(1.05f)))),
             VideoFilter("cool", "❄️", colMajor(compose(saturate(1.1f), hueRotate(15f), brightness(1.02f), contrast(1.05f)))),
@@ -28,6 +34,7 @@ object VideoFilterPresets {
             VideoFilter("noir", "🎞️", colMajor(compose(grayscale(1f), contrast(1.15f), brightness(1.05f)))),
             VideoFilter("studio", "🎬", colMajor(compose(contrast(1.2f), brightness(1.05f), saturate(1.1f)))),
             VideoFilter("neon", "🌈", colMajor(compose(saturate(1.8f), hueRotate(20f), contrast(1.2f), brightness(1.1f)))),
+            VideoFilter("dream", "🌙", colMajor(compose(saturate(1.1f), brightness(1.1f), contrast(0.95f)))),
         )
     }
 
