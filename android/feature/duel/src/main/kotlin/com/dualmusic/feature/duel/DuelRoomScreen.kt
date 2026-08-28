@@ -240,6 +240,13 @@ fun DuelRoomScreen(
         // --- Couche principale : vidéo (ou placeholder caméra off) du slot en grand ---
         if (mainTile != null) {
             SlotContent(mainTile, Modifier.fillMaxSize())
+            // Chrono du performeur sur la GRANDE case si c'est lui qui a la parole (parité web).
+            val mainArtistId = when (mainTile.slot) { "artist1" -> duel?.artist1Id; "artist2" -> duel?.artist2Id; else -> duel?.managerId }
+            if (timer.isRunning && mainArtistId != null && mainArtistId == timer.targetId) {
+                Box(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 104.dp)) {
+                    com.dualmusic.core.ui.live.LiveCountdown(endsAtIso = timer.endsAt)
+                }
+            }
         } else {
             Box(Modifier.fillMaxSize().background(DualMusicTheme.gradients.hero))
         }
@@ -577,6 +584,13 @@ fun DuelRoomScreen(
                                 .clickable(enabled = forcedFocus == null) { localFocus = tile.slot },
                         ) {
                             SlotContent(tile, Modifier.fillMaxSize())
+                            // Chrono du performeur AFFICHÉ SUR SA CASE (parité web) — même en petit.
+                            val thumbArtistId = when (tile.slot) { "artist1" -> duel?.artist1Id; "artist2" -> duel?.artist2Id; else -> duel?.managerId }
+                            if (timer.isRunning && thumbArtistId != null && thumbArtistId == timer.targetId) {
+                                Box(Modifier.align(Alignment.TopCenter).padding(top = 3.dp)) {
+                                    com.dualmusic.core.ui.live.LiveCountdown(endsAtIso = timer.endsAt)
+                                }
+                            }
                             // Libellé : icônes MICRO + CAMÉRA (ON vert / OFF rouge) + nom TRONQUÉ (…).
                             val tileMicOn = when {
                                 tile.slot == mySlot -> broadcasting && micOn   // ma case : micro ON seulement si je diffuse
@@ -1064,12 +1078,13 @@ private fun ManagerDuelControls(
         modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(12.dp)).padding(DualMusicTheme.spacing.sm),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs),
     ) {
-        Text("🎛 ${s.speakingTime} : ${minutes.toInt()} min", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        val mm = minutes.toInt()
+        val durLabel = if (mm >= 60) "${mm / 60}h${(mm % 60).toString().padStart(2, '0')}" else "$mm min"
+        Text("🎛 ${s.speakingTime} : $durLabel", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
         Slider(
             value = minutes,
             onValueChange = { minutes = it },
-            valueRange = 1f..10f,
-            steps = 8, // 1,2,…,10 minutes
+            valueRange = 1f..120f, // 1 min → 2 h
             modifier = Modifier.fillMaxWidth(),
         )
         if (timerRunning) {
