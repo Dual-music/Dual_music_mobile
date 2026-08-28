@@ -243,17 +243,13 @@ class LiveRoomClient(
      */
     fun setCamEnabled(enabled: Boolean) {
         val t = cameraTrack ?: return
-        if (enabled) {
-            t.startCapture()
-            scope.launch { runCatching { room.localParticipant.publishVideoTrack(t) } }
-            _camEnabled.value = true
-            _localVideoTrack.value = t
-        } else {
-            scope.launch { runCatching { room.localParticipant.unpublishTrack(t) } }
-            t.stopCapture()
-            _camEnabled.value = false
-            _localVideoTrack.value = null
-        }
+        // `setCameraEnabled` = mute/unmute LiveKit de la caméra (comme `setMicrophoneEnabled` pour
+        // le micro) : SIGNALE l'état aux autres (TrackMuted/Unmuted) ET reprend proprement les frames
+        // à la réactivation (fini l'écran noir de l'ancien cycle unpublish/stopCapture). La piste
+        // reste publiée ; les distants excluent les pistes mutées → case placeholder, pas figée.
+        scope.launch { runCatching { room.localParticipant.setCameraEnabled(enabled) } }
+        _camEnabled.value = enabled
+        _localVideoTrack.value = if (enabled) t else null
     }
 
     /**
@@ -332,7 +328,11 @@ class LiveRoomClient(
     private fun refreshPrimaryTrack() {
         val tiles = room.remoteParticipants.values.flatMap { p ->
             val id = p.identity?.value ?: ""
-            p.videoTrackPublications.mapNotNull { pub -> (pub.second as? VideoTrack)?.let { id to it } }
+            // On EXCLUT les pistes vidéo MUTÉES (caméra coupée) → la case redevient placeholder au
+            // lieu de figer la dernière image. TrackMuted/Unmuted déclenche ce refresh.
+            p.videoTrackPublications
+                .filter { !it.first.muted }
+                .mapNotNull { pub -> (pub.second as? VideoTrack)?.let { id to it } }
         }
         _remoteTiles.value = tiles
         val videos = tiles.map { it.second }
