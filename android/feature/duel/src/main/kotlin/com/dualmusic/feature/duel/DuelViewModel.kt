@@ -228,6 +228,8 @@ class DuelViewModel(
                 _voteTotals.value = totals.associate { it.artistId to it.total }
             }
             runCatching { repository.chatHistory(duelId) }.getOrNull()?.let { _messages.value = it }
+            // Charge le compteur de j'aime PERSISTÉ (ne repart plus de 0 au retour sur le direct).
+            _likes.value = runCatching { repository.likesCount(duelId) }.getOrDefault(0)
         }
         loadTopDonor()
         viewModelScope.launch { _votePrice.value = repository.votePricePerVote() }
@@ -401,6 +403,8 @@ class DuelViewModel(
             ),
         )
         sendReaction("❤️")
+        // Persiste côté serveur → le compteur ne se réinitialise plus au retour sur le direct.
+        viewModelScope.launch { runCatching { repository.likeDuel(duelId) } }
     }
 
     /** Envoie une réaction emoji : effet local + relais aux autres membres du canal. */

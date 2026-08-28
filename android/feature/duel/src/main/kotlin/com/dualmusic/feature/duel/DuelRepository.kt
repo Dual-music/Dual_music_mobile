@@ -10,6 +10,10 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 
+/** Réponse de `GET /lives/:id/likes` (réutilisé pour les duels). */
+@Serializable
+private data class DuelLikesResponse(val likes: Int = 0)
+
 /** Message de chat d'un duel (auteur hydraté par le backend). */
 @Serializable
 data class DuelChatMessage(
@@ -113,6 +117,15 @@ class DuelRepository(private val api: ApiClient) {
     suspend fun postMessage(duelId: String, content: String, parentId: String? = null) {
         val parent = parentId?.let { ""","parentId":"$it"""" } ?: ""
         api.request<Unit>(Endpoint.post(DuelEndpoints.messages(duelId), """{"message":${content.jsonQuoted()}$parent}"""))
+    }
+
+    /** Compteur de j'aime PERSISTÉ (les duels partagent l'endpoint des lives) → ne se réinitialise plus. */
+    suspend fun likesCount(duelId: String): Int =
+        runCatching { api.request(Endpoint.get("/lives/$duelId/likes"), DuelLikesResponse.serializer()).likes }.getOrDefault(0)
+
+    /** Incrémente + persiste le j'aime côté serveur. `POST /lives/:id/likes`. */
+    suspend fun likeDuel(duelId: String) {
+        runCatching { api.request<Unit>(Endpoint.post("/lives/$duelId/likes")) }
     }
 
     /** Classement des donateurs du duel (`GET /leaderboards/gifts?contextType=duel`). */
