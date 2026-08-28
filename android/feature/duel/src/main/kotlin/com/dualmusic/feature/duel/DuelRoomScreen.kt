@@ -222,9 +222,9 @@ fun DuelRoomScreen(
         // Les cases ATTENDUES (participants du duel) sont TOUJOURS présentes : vidéo si dispo, sinon
         // placeholder « caméra off » (la case ne disparaît pas et ne fige jamais la dernière image).
         val slotTiles: List<SlotTile> = buildList {
-            duel?.artist1Id?.let { add(SlotTile("artist1", duel?.artist1?.displayName ?: strings.artist1, a1Video, viewModel.mediaA1)) }
-            duel?.artist2Id?.let { add(SlotTile("artist2", duel?.artist2?.displayName ?: strings.artist2, a2Video, viewModel.mediaA2)) }
-            duel?.managerId?.let { add(SlotTile("manager", "Manager", mgrVideo, viewModel.mediaMgr)) }
+            duel?.artist1Id?.let { add(SlotTile("artist1", duel?.artist1?.displayName ?: strings.artist1, a1Video, viewModel.mediaA1, duel?.artist1?.avatarUrl)) }
+            duel?.artist2Id?.let { add(SlotTile("artist2", duel?.artist2?.displayName ?: strings.artist2, a2Video, viewModel.mediaA2, duel?.artist2?.avatarUrl)) }
+            duel?.managerId?.let { add(SlotTile("manager", duel?.manager?.displayName ?: "Manager", mgrVideo, viewModel.mediaMgr, duel?.manager?.avatarUrl)) }
         }
         // Case en grand : focus imposé manager > choix local (tap) > 1re case EN DIRECT (souvent
         // l'adversaire) > 1re case. Sans ça, on s'affichait SOI-MÊME (placeholder) en grand et le
@@ -926,6 +926,7 @@ private data class SlotTile(
     val label: String,
     val track: VideoTrack?,
     val client: LiveRoomClient,
+    val avatarUrl: String? = null,
 )
 
 /** Rend une case de slot : la vidéo si la piste existe, sinon un placeholder « caméra off ». */
@@ -943,13 +944,17 @@ private fun SlotContent(tile: SlotTile, modifier: Modifier) {
             )
         }
     } else {
-        // Placeholder « comme si la caméra n'avait jamais été activée » : avatar initiale + caméra barrée.
+        // Placeholder « caméra off » : PHOTO DE PROFIL au centre (sinon initiale) + caméra barrée.
         Box(modifier = modifier.background(Color(0xFF241338)), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(
-                    modifier = Modifier.size(44.dp).background(colors.primary.copy(alpha = 0.45f), CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) { Text(tile.label.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.Bold) }
+                Box(modifier = Modifier.size(52.dp).clip(CircleShape).background(colors.primary.copy(alpha = 0.45f))) {
+                    com.dualmusic.core.ui.components.DMRemoteImage(
+                        url = tile.avatarUrl,
+                        contentDescription = tile.label,
+                        modifier = Modifier.fillMaxSize(),
+                        fallbackEmoji = tile.label.take(1).uppercase(),
+                    )
+                }
                 Icon(Icons.Filled.VideocamOff, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
             }
         }

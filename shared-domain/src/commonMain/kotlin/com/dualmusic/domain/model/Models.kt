@@ -81,6 +81,7 @@ data class Duel(
     /** Profils hydratés côté serveur (peuvent être absents selon l'endpoint). */
     val artist1: DisplayProfile? = null,
     val artist2: DisplayProfile? = null,
+    val manager: DisplayProfile? = null,
 )
 
 /** Total de votes (crédits) par artiste pour un duel. */
