@@ -368,15 +368,8 @@ fun DuelRoomScreen(
                         ScrollingLabel("👑  ${d.name}  ·  ${d.amount} 🎁", Modifier.weight(1f))
                     }
                 }
-                if (timer.isRunning) {
-                    // Décompte visuel MM:SS (parité web) avec le nom de l'artiste qui a la parole.
-                    val speaker = when (timer.targetId) {
-                        a1 -> duel?.artist1?.displayName ?: strings.artist1
-                        a2 -> duel?.artist2?.displayName ?: strings.artist2
-                        else -> null
-                    }
-                    com.dualmusic.core.ui.live.LiveCountdown(endsAtIso = timer.endsAt, label = speaker)
-                }
+                // (Le chrono de temps de parole n'est plus affiché ici : il apparaît directement SUR
+                //  la case de l'artiste concerné — plus de doublon surchargé en haut de l'écran.)
                 // (Contrôles arbitre/manager déplacés dans un PANNEAU dédié — bouton 🎛 du rail —
                 //  pour ne plus bloquer l'écran en permanence.)
             }
@@ -791,18 +784,20 @@ fun DuelRoomScreen(
         // Célébration du vainqueur : PLEIN ÉCRAN pour TOUS (comme une pub), acclamations d'emojis +
         // confettis, PERSISTANTE jusqu'à ce que le MANAGER l'arrête (n'arrête pas le direct).
         winnerInfo?.let { w ->
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f))) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f))) {
                 WinnerCelebration(
-                    winnerName = "${w.name}  ·  ${w.votes} 🗳️",
+                    winnerName = w.name,
                     title = strings.winnerTitle,
-                    subtitle = strings.winnerCongrats,
+                    subtitle = "${w.votes} voix · ${w.percent}% des votes",
                     reduceAnimations = uiPrefs.reduceAnimations,
                 )
-                FloatingReactionsLayer(reactions = winnerEmojis, reduceAnimations = uiPrefs.reduceAnimations)
+                // Emojis d'acclamation ÉPARPILLÉS sur tout l'écran, en mouvement, jusqu'à l'arrêt.
+                if (!uiPrefs.reduceAnimations) ScatteredEmojiLayer(winnerEmojis)
+                // Manager : bouton ARRÊTER remonté (au-dessus de la zone pub) — n'arrête pas le direct.
                 if (isManager) {
                     DMButton(
                         "Arrêter l'annonce",
-                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 40.dp),
+                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 150.dp),
                     ) { viewModel.stopWinnerAnnouncement() }
                 }
             }
@@ -812,7 +807,8 @@ fun DuelRoomScreen(
         // (masqué si l'organisateur a désactivé les pubs sur ce duel — parité web).
         SponsorAdLayer(
             activeAd = sponsorAd,
-            canTrigger = isManager && duel?.allowsSponsorAds != false,
+            // Masqué pendant l'annonce du vainqueur (pour ne pas cacher « Arrêter l'annonce »).
+            canTrigger = isManager && duel?.allowsSponsorAds != false && winnerInfo == null,
             ads = sponsorAds,
             busy = sponsorBusy,
             onLoadAds = { viewModel.sponsor.loadAds() },
@@ -1009,6 +1005,28 @@ private fun SlotContent(tile: SlotTile, modifier: Modifier) {
                     )
                 }
                 Icon(Icons.Filled.VideocamOff, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
+/** Emojis d'acclamation ÉPARPILLÉS sur tout l'écran, chacun oscillant (célébration du vainqueur). */
+@Composable
+private fun ScatteredEmojiLayer(emojis: List<Pair<Long, String>>) {
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val w = constraints.maxWidth.toFloat()
+        val h = constraints.maxHeight.toFloat()
+        emojis.forEach { (id, e) ->
+            key(id) {
+                val transition = rememberInfiniteTransition(label = "sc")
+                val drift by transition.animateFloat(
+                    initialValue = 0f, targetValue = -36f,
+                    animationSpec = infiniteRepeatable(tween(1300, easing = androidx.compose.animation.core.LinearEasing), RepeatMode.Reverse),
+                    label = "scy",
+                )
+                val bx = ((id * 73) % 100).toFloat() / 100f * (w - 40f)
+                val by = ((id * 137) % 100).toFloat() / 100f * (h - 60f)
+                Text(e, fontSize = 30.sp, modifier = Modifier.graphicsLayer { translationX = bx; translationY = by + drift })
             }
         }
     }

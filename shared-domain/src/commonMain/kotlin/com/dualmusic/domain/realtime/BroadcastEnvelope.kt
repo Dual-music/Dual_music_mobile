@@ -25,4 +25,5 @@ data class BroadcastPayload(
     val name: String? = null,
     val avatar: String? = null,
     val votes: Int? = null,
+    val percent: Int? = null,
 )

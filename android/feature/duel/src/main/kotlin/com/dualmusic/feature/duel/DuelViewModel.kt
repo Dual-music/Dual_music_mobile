@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /** Vainqueur annoncé (célébration plein écran synchronisée pour tous les spectateurs). */
-data class DuelWinner(val name: String, val avatar: String?, val votes: Int)
+data class DuelWinner(val name: String, val avatar: String?, val votes: Int, val percent: Int = 0)
 
 /** Cadeau reçu en direct dans le duel (pour l'animation GPU). */
 data class DuelGift(
@@ -481,10 +481,13 @@ class DuelViewModel(
         val v2 = _voteTotals.value[a2] ?: 0.0
         val winnerId = if (v1 >= v2) a1 else a2
         val profile = if (winnerId == a1) d.artist1 else d.artist2
-        val votes = (if (winnerId == a1) v1 else v2).toInt()
+        val winnerVotes = if (winnerId == a1) v1 else v2
+        val total = v1 + v2
+        val votes = winnerVotes.toInt()
+        val percent = if (total > 0) ((winnerVotes / total) * 100).toInt() else 100
         val name = profile?.displayName ?: "Vainqueur"
         patchDuel("""{"winnerId":"$winnerId"}""")
-        _winnerInfo.value = DuelWinner(name, profile?.avatarUrl, votes)
+        _winnerInfo.value = DuelWinner(name, profile?.avatarUrl, votes, percent)
         liveSession?.emit(
             "broadcast",
             org.json.JSONObject(
@@ -492,7 +495,7 @@ class DuelViewModel(
                     "channel" to "duel-winner-$duelId",
                     "event" to "winner_announced",
                     "payload" to org.json.JSONObject(
-                        mapOf("name" to name, "avatar" to (profile?.avatarUrl ?: ""), "votes" to votes),
+                        mapOf("name" to name, "avatar" to (profile?.avatarUrl ?: ""), "votes" to votes, "percent" to percent),
                     ),
                 ),
             ),
@@ -578,7 +581,7 @@ class DuelViewModel(
                     // Focus imposé par le manager (null = libéré) → tous mettent cette case en grand.
                     "focus" -> _forcedFocus.value = env.payload?.slot
                     // Vainqueur annoncé par le manager → célébration PLEIN ÉCRAN persistante pour tous.
-                    "winner_announced" -> _winnerInfo.value = env.payload?.let { DuelWinner(it.name ?: "Vainqueur", it.avatar, it.votes ?: 0) }
+                    "winner_announced" -> _winnerInfo.value = env.payload?.let { DuelWinner(it.name ?: "Vainqueur", it.avatar, it.votes ?: 0, it.percent ?: 0) }
                     "winner_stopped" -> _winnerInfo.value = null
                 }
             }
