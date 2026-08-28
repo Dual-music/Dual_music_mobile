@@ -311,8 +311,10 @@ class DuelViewModel(
                             "slot" to slot,
                             "state" to org.json.JSONObject(
                                 mapOf(
-                                    "isMicOn" to _micOn.value,
-                                    "isCameraOn" to _camOn.value,
+                                    // Micro/caméra ON seulement si JE diffuse (sinon OFF → cases rouges/barrées,
+                                    // pas vertes par défaut avant le démarrage).
+                                    "isMicOn" to (_broadcasting.value && _micOn.value),
+                                    "isCameraOn" to (_broadcasting.value && _camOn.value),
                                     "isStreaming" to _broadcasting.value,
                                     "isPaused" to paused,
                                 ),

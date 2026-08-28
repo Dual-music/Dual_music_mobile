@@ -584,7 +584,7 @@ fun DuelRoomScreen(
                             SlotContent(tile, Modifier.fillMaxSize())
                             // Libellé : icônes MICRO + CAMÉRA (ON vert / OFF rouge) + nom TRONQUÉ (…).
                             val tileMicOn = when {
-                                tile.slot == mySlot -> micOn                 // ma case → mon micro local
+                                tile.slot == mySlot -> broadcasting && micOn   // ma case : micro ON seulement si je diffuse
                                 tile.slot == "artist1" -> a1Mic
                                 tile.slot == "artist2" -> a2Mic
                                 else -> mgrMic
