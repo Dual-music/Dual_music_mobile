@@ -173,11 +173,21 @@ fun DuelRoomScreen(
     LaunchedEffect(giftReceived) {
         if (giftReceived != null) { kotlinx.coroutines.delay(3500); viewModel.clearGiftReceived() }
     }
-    // Célébration du vainqueur TEMPORAIRE (~7 s) → ne reste pas en permanence sur le direct.
-    var winnerCelebration by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(duel?.winnerId) {
-        val wid = duel?.winnerId
-        if (wid != null) { winnerCelebration = wid; kotlinx.coroutines.delay(7000); winnerCelebration = null }
+    // Célébration du vainqueur : PLEIN ÉCRAN persistante pour TOUS, pilotée par le broadcast du
+    // manager (winner_announced / winner_stopped) — reste jusqu'à ce que le manager l'arrête.
+    val winnerInfo by viewModel.winnerInfo.collectAsStateWithLifecycle()
+    // Pluie d'emojis d'acclamation tant que la célébration est active.
+    var winnerEmojis by remember { mutableStateOf<List<Pair<Long, String>>>(emptyList()) }
+    LaunchedEffect(winnerInfo) {
+        winnerEmojis = emptyList()
+        if (winnerInfo != null) {
+            val acc = listOf("👏", "🎉", "🔥", "🎊", "⭐", "💜", "🏆", "😍", "🙌")
+            var i = 0L
+            while (true) {
+                winnerEmojis = (winnerEmojis + (i to acc[(i % acc.size).toInt()])).takeLast(24); i++
+                kotlinx.coroutines.delay(220)
+            }
+        }
     }
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
@@ -705,7 +715,7 @@ fun DuelRoomScreen(
                     timerRunning = timer.isRunning,
                     onGiveTurn = { id, sec -> viewModel.startTimer(id, sec) },
                     onStopTimer = { viewModel.stopTimer() },
-                    onWinner = { id -> viewModel.announceWinner(id); showManagerPanel = false },
+                    onAnnounceWinner = { viewModel.announceWinnerAuto(); showManagerPanel = false },
                     onEnd = { viewModel.endDuel(onLeave) },
                 )
                 // Gestion de l'enregistrement (parité web) : off / auto / manuel.
@@ -778,20 +788,24 @@ fun DuelRoomScreen(
             }
         }
 
-        // Célébration du vainqueur : dès que l'arbitre l'annonce (event `status` → winnerId), tous
-        // les spectateurs voient les confettis + la carte, puis ça s'estompe (~7 s) → vue dégagée.
-        winnerCelebration?.let { wid ->
-            val name = when (wid) {
-                duel?.artist1Id -> duel?.artist1?.displayName
-                duel?.artist2Id -> duel?.artist2?.displayName
-                else -> null
+        // Célébration du vainqueur : PLEIN ÉCRAN pour TOUS (comme une pub), acclamations d'emojis +
+        // confettis, PERSISTANTE jusqu'à ce que le MANAGER l'arrête (n'arrête pas le direct).
+        winnerInfo?.let { w ->
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f))) {
+                WinnerCelebration(
+                    winnerName = "${w.name}  ·  ${w.votes} 🗳️",
+                    title = strings.winnerTitle,
+                    subtitle = strings.winnerCongrats,
+                    reduceAnimations = uiPrefs.reduceAnimations,
+                )
+                FloatingReactionsLayer(reactions = winnerEmojis, reduceAnimations = uiPrefs.reduceAnimations)
+                if (isManager) {
+                    DMButton(
+                        "Arrêter l'annonce",
+                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 40.dp),
+                    ) { viewModel.stopWinnerAnnouncement() }
+                }
             }
-            WinnerCelebration(
-                winnerName = name ?: strings.winnerGeneric,
-                title = strings.winnerTitle,
-                subtitle = strings.winnerCongrats,
-                reduceAnimations = uiPrefs.reduceAnimations,
-            )
         }
 
         // Diffusion pub sponsor : overlay vidéo pour tous + contrôle pour le manager
@@ -1067,7 +1081,7 @@ private fun ManagerDuelControls(
     timerRunning: Boolean,
     onGiveTurn: (String, Int) -> Unit,
     onStopTimer: () -> Unit,
-    onWinner: (String) -> Unit,
+    onAnnounceWinner: () -> Unit,
     onEnd: () -> Unit,
 ) {
     val colors = DualMusicTheme.colors
@@ -1096,12 +1110,10 @@ private fun ManagerDuelControls(
             artist1Id?.let { DMButton("🎤 $artist1Name", modifier = Modifier.weight(1f), onClick = { onGiveTurn(it, (minutes * 60).toInt()) }) }
             artist2Id?.let { DMButton("🎤 $artist2Name", style = DMButtonStyle.SECONDARY, modifier = Modifier.weight(1f), onClick = { onGiveTurn(it, (minutes * 60).toInt()) }) }
         }
-        Text("🏆 ${s.announceWinner}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-            artist1Id?.let { DMButton(artist1Name, style = DMButtonStyle.OUTLINE, modifier = Modifier.weight(1f), onClick = { onWinner(it) }) }
-            artist2Id?.let { DMButton(artist2Name, style = DMButtonStyle.OUTLINE, modifier = Modifier.weight(1f), onClick = { onWinner(it) }) }
-        }
-        DMButton(s.endDuelBtn, modifier = Modifier.fillMaxWidth(), onClick = onEnd)
+        // UN SEUL bouton : le vainqueur est calculé AUTOMATIQUEMENT selon les votes (parité web),
+        // puis la célébration s'affiche en plein écran chez tous les spectateurs.
+        DMButton("🏆 ${s.announceWinner}", modifier = Modifier.fillMaxWidth(), onClick = onAnnounceWinner)
+        DMButton(s.endDuelBtn, style = DMButtonStyle.OUTLINE, modifier = Modifier.fillMaxWidth(), onClick = onEnd)
     }
 }
 

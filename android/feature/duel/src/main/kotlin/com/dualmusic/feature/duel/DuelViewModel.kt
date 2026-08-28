@@ -24,6 +24,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** Vainqueur annoncé (célébration plein écran synchronisée pour tous les spectateurs). */
+data class DuelWinner(val name: String, val avatar: String?, val votes: Int)
+
 /** Cadeau reçu en direct dans le duel (pour l'animation GPU). */
 data class DuelGift(
     val key: Long,
@@ -174,6 +177,10 @@ class DuelViewModel(
      *  "artist1" / "artist2" / "manager", ou null = pas de focus imposé (focus local libre). */
     private val _forcedFocus = MutableStateFlow<String?>(null)
     val forcedFocus: StateFlow<String?> = _forcedFocus.asStateFlow()
+
+    /** Vainqueur annoncé (broadcast) → célébration plein écran persistante ; null = aucune/arrêtée. */
+    private val _winnerInfo = MutableStateFlow<DuelWinner?>(null)
+    val winnerInfo: StateFlow<DuelWinner?> = _winnerInfo.asStateFlow()
 
     /** Vrai si le caller est un PARTICIPANT (artiste 1/2 ou manager) → peut diffuser caméra/micro. */
     private val _canPublish = MutableStateFlow(false)
@@ -459,6 +466,44 @@ class DuelViewModel(
         patchDuel("""{"winnerId":"$artistId"}""")
     }
 
+    /**
+     * Annonce AUTOMATIQUEMENT le vainqueur = artiste avec le PLUS de votes (parité web) : sauve
+     * `winnerId` SANS terminer le duel + diffuse une célébration PLEIN ÉCRAN à tous les spectateurs.
+     */
+    fun announceWinnerAuto() {
+        val d = _duel.value ?: return
+        val a1 = d.artist1Id; val a2 = d.artist2Id
+        val v1 = _voteTotals.value[a1] ?: 0.0
+        val v2 = _voteTotals.value[a2] ?: 0.0
+        val winnerId = if (v1 >= v2) a1 else a2
+        val profile = if (winnerId == a1) d.artist1 else d.artist2
+        val votes = (if (winnerId == a1) v1 else v2).toInt()
+        val name = profile?.displayName ?: "Vainqueur"
+        patchDuel("""{"winnerId":"$winnerId"}""")
+        _winnerInfo.value = DuelWinner(name, profile?.avatarUrl, votes)
+        liveSession?.emit(
+            "broadcast",
+            org.json.JSONObject(
+                mapOf(
+                    "channel" to "duel-winner-$duelId",
+                    "event" to "winner_announced",
+                    "payload" to org.json.JSONObject(
+                        mapOf("name" to name, "avatar" to (profile?.avatarUrl ?: ""), "votes" to votes),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    /** Manager : arrête la célébration du vainqueur pour TOUS (ne termine PAS le direct — parité web). */
+    fun stopWinnerAnnouncement() {
+        _winnerInfo.value = null
+        liveSession?.emit(
+            "broadcast",
+            org.json.JSONObject(mapOf("channel" to "duel-winner-$duelId", "event" to "winner_stopped")),
+        )
+    }
+
     /** Termine le duel puis notifie l'appelant (sortie d'écran). */
     fun endDuel(onEnded: () -> Unit) {
         viewModelScope.launch {
@@ -487,6 +532,7 @@ class DuelViewModel(
                 live.emit("broadcast:join", "duel-likes-$duelId")
                 live.emit("broadcast:join", "duel-focus-$duelId")
                 live.emit("broadcast:join", "duel-media-$duelId")
+                live.emit("broadcast:join", "duel-winner-$duelId")
                 // Re-diffuse mon état média à (re)connexion → les arrivants (web) le voient.
                 broadcastMediaState()
             }
@@ -527,6 +573,9 @@ class DuelViewModel(
                     "like" -> env.payload?.count?.let { if (it > _likes.value) _likes.value = it }
                     // Focus imposé par le manager (null = libéré) → tous mettent cette case en grand.
                     "focus" -> _forcedFocus.value = env.payload?.slot
+                    // Vainqueur annoncé par le manager → célébration PLEIN ÉCRAN persistante pour tous.
+                    "winner_announced" -> _winnerInfo.value = env.payload?.let { DuelWinner(it.name ?: "Vainqueur", it.avatar, it.votes ?: 0) }
+                    "winner_stopped" -> _winnerInfo.value = null
                 }
             }
             // Présence (spectateurs).

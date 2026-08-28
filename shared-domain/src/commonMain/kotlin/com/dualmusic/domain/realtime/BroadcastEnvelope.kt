@@ -21,4 +21,8 @@ data class BroadcastPayload(
     val emoji: String? = null,
     val count: Int? = null,
     val slot: String? = null,
+    // `winner_announced` : vainqueur annoncé par le manager (célébration plein écran synchronisée).
+    val name: String? = null,
+    val avatar: String? = null,
+    val votes: Int? = null,
 )
