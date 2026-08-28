@@ -330,10 +330,10 @@ class DuelViewModel(
     }
 
     /** Envoie un message de chat (le serveur diffuse ensuite). */
-    fun sendMessage(text: String) {
+    fun sendMessage(text: String, parentId: String? = null) {
         val content = text.trim()
         if (content.isEmpty()) return
-        viewModelScope.launch { runCatching { repository.postMessage(duelId, content) } }
+        viewModelScope.launch { runCatching { repository.postMessage(duelId, content, parentId) } }
     }
 
     /** J'aime : incrémente le compteur, fait flotter un cœur, et diffuse le compteur (parité web). */

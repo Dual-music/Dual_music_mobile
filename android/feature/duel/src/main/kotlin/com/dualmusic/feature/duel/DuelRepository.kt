@@ -19,6 +19,8 @@ data class DuelChatMessage(
     @SerialName("message") val content: String,
     // Le backend renvoie l'auteur sous la clé `author` (REST + temps réel).
     @SerialName("author") val user: DisplayProfile? = null,
+    // Réponse à un message : id du message parent (thread). Résolu côté UI pour la citation.
+    @SerialName("parent_id") val parentId: String? = null,
 ) {
     val authorName: String get() = user?.displayName ?: com.dualmusic.core.ui.i18n.appStrings.fan
 }
@@ -107,9 +109,10 @@ class DuelRepository(private val api: ApiClient) {
             ListSerializer(DuelChatMessage.serializer()),
         )
 
-    /** Poste un message (le backend diffuse ensuite via Socket.IO). */
-    suspend fun postMessage(duelId: String, content: String) {
-        api.request<Unit>(Endpoint.post(DuelEndpoints.messages(duelId), """{"message":${content.jsonQuoted()}}"""))
+    /** Poste un message (ou une RÉPONSE si parentId) ; le backend diffuse ensuite via Socket.IO. */
+    suspend fun postMessage(duelId: String, content: String, parentId: String? = null) {
+        val parent = parentId?.let { ""","parentId":"$it"""" } ?: ""
+        api.request<Unit>(Endpoint.post(DuelEndpoints.messages(duelId), """{"message":${content.jsonQuoted()}$parent}"""))
     }
 
     /** Classement des donateurs du duel (`GET /leaderboards/gifts?contextType=duel`). */

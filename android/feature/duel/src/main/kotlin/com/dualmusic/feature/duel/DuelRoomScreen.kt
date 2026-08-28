@@ -389,6 +389,8 @@ fun DuelRoomScreen(
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     items(messages) { msg ->
+                        // Résolution du message parent (réponse) → citation grisée façon TikTok.
+                        val parent = msg.parentId?.let { pid -> messages.find { it.id == pid } }
                         Row(
                             verticalAlignment = Alignment.Top,
                             // Tap sur un message → y répondre (parité web).
@@ -403,6 +405,20 @@ fun DuelRoomScreen(
                             ) { Text(msg.authorName.take(1).uppercase(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                             // Nom + contenu en COLONNE → le message long revient à la ligne.
                             Column(modifier = Modifier.padding(start = 6.dp)) {
+                                // Citation GRISÉE du message auquel on répond (le différencie de la réponse).
+                                if (parent != null) {
+                                    Row(
+                                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.10f)).padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Box(Modifier.width(2.dp).height(13.dp).background(colors.mutedForeground))
+                                        Text(
+                                            "  ↩ ${parent.authorName} : ${parent.content}",
+                                            color = colors.mutedForeground, fontSize = 10.sp,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
                                 Text(msg.authorName, color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                 Text(msg.content, color = Color.White, fontSize = 12.sp)
                             }
@@ -646,10 +662,8 @@ fun DuelRoomScreen(
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showCommentPopup = false; replyingTo = null })
             fun send() {
                 if (draft.isNotBlank()) {
-                    // Réponse « façon TikTok » : on cite l'auteur + un extrait du message d'origine,
-                    // puis la réponse (le message reste plat mais la citation indexe clairement).
-                    val text = replyingTo?.let { "↩️ @${it.authorName}: \"${it.content.take(50)}\" — $draft" } ?: draft
-                    viewModel.sendMessage(text); draft = ""
+                    // Vraie RÉPONSE liée (parent_id) — la citation grisée est rendue côté affichage.
+                    viewModel.sendMessage(draft, replyingTo?.id); draft = ""
                 }
                 showCommentPopup = false; replyingTo = null; showPopupEmojis = false
             }
