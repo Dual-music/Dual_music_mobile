@@ -43,6 +43,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -84,6 +85,7 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material.icons.filled.Visibility
@@ -195,6 +197,8 @@ fun DuelRoomScreen(
     var showSettings by remember { mutableStateOf(false) }
     var showFilters by remember { mutableStateOf(false) }
     var showDescription by remember { mutableStateOf(false) }
+    // Panneau MANAGER (arbitre) : temps de parole (slider min), vainqueur, fin, enregistrement.
+    var showManagerPanel by remember { mutableStateOf(false) }
     // Barre du bas condensée (parité web) : emojis repliables + panneau de vote + pop-up saisie.
     var showEmojiBar by remember { mutableStateOf(false) }
     var showVotePanel by remember { mutableStateOf(false) }
@@ -356,21 +360,8 @@ fun DuelRoomScreen(
                     }
                     com.dualmusic.core.ui.live.LiveCountdown(endsAtIso = timer.endsAt, label = speaker)
                 }
-                // Contrôles de l'arbitre (manager) : minuteur de parole, vainqueur, fin.
-                if (isManager) {
-                    ManagerDuelControls(
-                        artist1Name = duel?.artist1?.displayName ?: strings.artist1,
-                        artist2Name = duel?.artist2?.displayName ?: strings.artist2,
-                        artist1Id = duel?.artist1Id,
-                        artist2Id = duel?.artist2Id,
-                        timerRunning = timer.isRunning,
-                        onGiveTurn = { id, sec -> viewModel.startTimer(id, sec) },
-                        onStopTimer = { viewModel.stopTimer() },
-                        onWinner = { id -> viewModel.announceWinner(id) },
-                        onEnd = { viewModel.endDuel(onLeave) },
-                    )
-                    com.dualmusic.feature.sponsor.RecordingHostButton(mode = recMode, active = recActive, busy = recBusy, onToggle = { viewModel.recordingCtl.toggle() })
-                }
+                // (Contrôles arbitre/manager déplacés dans un PANNEAU dédié — bouton 🎛 du rail —
+                //  pour ne plus bloquer l'écran en permanence.)
             }
 
             // Bas : chat + panneau de vote + saisie message.
@@ -496,6 +487,10 @@ fun DuelRoomScreen(
                         MediaRailButton(Icons.Filled.AutoAwesome, "Filtres", accent = true) { showFilters = true }
                         MediaRailButton(Icons.Filled.Settings, "Réglages", accent = true) { showSettings = true }
                     }
+                }
+                // Manager (arbitre) : panneau de gestion (temps de parole, vainqueur, fin, enregistrement).
+                if (isManager) {
+                    MediaRailButton(Icons.Filled.Tune, "Gérer le duel", accent = true) { showManagerPanel = true }
                 }
             }
         }
@@ -672,6 +667,36 @@ fun DuelRoomScreen(
                     }
                 }
                 Text("${strings.oneVote} = ${votePrice.toInt()} ${strings.credits}", color = colors.mutedForeground, fontSize = 13.sp)
+            }
+        }
+
+        // Panneau MANAGER (arbitre) : temps de parole (slider min) + vainqueur + fin + enregistrement.
+        if (showManagerPanel && isManager) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showManagerPanel = false })
+            Column(
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().fillMaxHeight(0.72f)
+                    .background(colors.background).navigationBarsPadding().padding(DualMusicTheme.spacing.lg)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
+            ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("🎛 Gestion du duel", color = colors.foreground, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Filled.Close, contentDescription = "Fermer", tint = colors.mutedForeground, modifier = Modifier.size(20.dp).clickable { showManagerPanel = false })
+                }
+                ManagerDuelControls(
+                    artist1Name = duel?.artist1?.displayName ?: strings.artist1,
+                    artist2Name = duel?.artist2?.displayName ?: strings.artist2,
+                    artist1Id = duel?.artist1Id,
+                    artist2Id = duel?.artist2Id,
+                    timerRunning = timer.isRunning,
+                    onGiveTurn = { id, sec -> viewModel.startTimer(id, sec) },
+                    onStopTimer = { viewModel.stopTimer() },
+                    onWinner = { id -> viewModel.announceWinner(id); showManagerPanel = false },
+                    onEnd = { viewModel.endDuel(onLeave) },
+                )
+                // Gestion de l'enregistrement (parité web) : off / auto / manuel.
+                Text("🔴 Enregistrement", color = colors.foreground, fontWeight = FontWeight.Bold)
+                com.dualmusic.feature.sponsor.RecordingHostButton(mode = recMode, active = recActive, busy = recBusy, onToggle = { viewModel.recordingCtl.toggle() })
             }
         }
 
@@ -1033,27 +1058,28 @@ private fun ManagerDuelControls(
 ) {
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
-    var seconds by remember { mutableStateOf(120) }
+    // Durée définie en MINUTES via un slider (1→10 min), au lieu de secondes prédéfinies.
+    var minutes by remember { mutableStateOf(2f) }
     Column(
         modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(12.dp)).padding(DualMusicTheme.spacing.sm),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs),
     ) {
-        Text("🎛 ${s.speakingTime}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-            listOf(60, 120, 180).forEach { sec ->
-                Box(
-                    modifier = Modifier.background(if (seconds == sec) colors.primary else Color.Black.copy(alpha = 0.4f), RoundedCornerShape(999.dp)).clickable { seconds = sec }.padding(horizontal = 10.dp, vertical = 4.dp),
-                ) { Text("${sec}s", color = Color.White, fontSize = 12.sp) }
-            }
-            if (timerRunning) {
-                Box(
-                    modifier = Modifier.background(colors.destructive, RoundedCornerShape(999.dp)).clickable { onStopTimer() }.padding(horizontal = 10.dp, vertical = 4.dp),
-                ) { Text(s.stopAction, color = Color.White, fontSize = 12.sp) }
-            }
+        Text("🎛 ${s.speakingTime} : ${minutes.toInt()} min", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Slider(
+            value = minutes,
+            onValueChange = { minutes = it },
+            valueRange = 1f..10f,
+            steps = 8, // 1,2,…,10 minutes
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (timerRunning) {
+            Box(
+                modifier = Modifier.background(colors.destructive, RoundedCornerShape(999.dp)).clickable { onStopTimer() }.padding(horizontal = 12.dp, vertical = 5.dp),
+            ) { Text(s.stopAction, color = Color.White, fontSize = 12.sp) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
-            artist1Id?.let { DMButton("🎤 $artist1Name", modifier = Modifier.weight(1f), onClick = { onGiveTurn(it, seconds) }) }
-            artist2Id?.let { DMButton("🎤 $artist2Name", style = DMButtonStyle.SECONDARY, modifier = Modifier.weight(1f), onClick = { onGiveTurn(it, seconds) }) }
+            artist1Id?.let { DMButton("🎤 $artist1Name", modifier = Modifier.weight(1f), onClick = { onGiveTurn(it, (minutes * 60).toInt()) }) }
+            artist2Id?.let { DMButton("🎤 $artist2Name", style = DMButtonStyle.SECONDARY, modifier = Modifier.weight(1f), onClick = { onGiveTurn(it, (minutes * 60).toInt()) }) }
         }
         Text("🏆 ${s.announceWinner}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
