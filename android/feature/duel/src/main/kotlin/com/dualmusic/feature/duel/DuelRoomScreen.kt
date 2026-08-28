@@ -133,6 +133,11 @@ fun DuelRoomScreen(
     val a1Video by viewModel.artist1Video.collectAsStateWithLifecycle()
     val a2Video by viewModel.artist2Video.collectAsStateWithLifecycle()
     val mgrVideo by viewModel.managerVideo.collectAsStateWithLifecycle()
+    // État micro distant par slot (pour l'icône micro des petites cases).
+    val a1Mic by viewModel.mediaA1.remoteMicOn.collectAsStateWithLifecycle()
+    val a2Mic by viewModel.mediaA2.remoteMicOn.collectAsStateWithLifecycle()
+    val mgrMic by viewModel.mediaMgr.remoteMicOn.collectAsStateWithLifecycle()
+    val mySlot by viewModel.mySlot.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val viewerCount by viewModel.viewerCount.collectAsStateWithLifecycle()
@@ -577,16 +582,29 @@ fun DuelRoomScreen(
                                 .clickable(enabled = forcedFocus == null) { localFocus = tile.slot },
                         ) {
                             SlotContent(tile, Modifier.fillMaxSize())
-                            // Libellé : icône caméra ON/OFF + nom TRONQUÉ (…) qui ne déborde jamais la case.
+                            // Libellé : icônes MICRO + CAMÉRA (ON vert / OFF rouge) + nom TRONQUÉ (…).
+                            val tileMicOn = when {
+                                tile.slot == mySlot -> micOn                 // ma case → mon micro local
+                                tile.slot == "artist1" -> a1Mic
+                                tile.slot == "artist2" -> a2Mic
+                                else -> mgrMic
+                            }
+                            val tileCamOn = tile.track != null
                             Row(
                                 modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 4.dp, vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
                             ) {
                                 Icon(
-                                    if (tile.track != null) Icons.Filled.Videocam else Icons.Filled.VideocamOff,
+                                    if (tileMicOn) Icons.Filled.Mic else Icons.Filled.MicOff,
                                     contentDescription = null,
-                                    tint = if (tile.track != null) Color(0xFF22C55E) else Color(0xFFEF4444),
+                                    tint = if (tileMicOn) Color(0xFF22C55E) else Color(0xFFEF4444),
+                                    modifier = Modifier.size(11.dp),
+                                )
+                                Icon(
+                                    if (tileCamOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff,
+                                    contentDescription = null,
+                                    tint = if (tileCamOn) Color(0xFF22C55E) else Color(0xFFEF4444),
                                     modifier = Modifier.size(11.dp),
                                 )
                                 Text(tile.label, color = Color.White, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))

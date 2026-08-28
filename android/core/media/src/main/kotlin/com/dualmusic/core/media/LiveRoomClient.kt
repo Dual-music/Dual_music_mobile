@@ -80,6 +80,10 @@ class LiveRoomClient(
     private val _remoteTiles = MutableStateFlow<List<Pair<String, VideoTrack>>>(emptyList())
     val remoteTiles: StateFlow<List<Pair<String, VideoTrack>>> = _remoteTiles.asStateFlow()
 
+    /** Micro du 1er participant distant activé (piste audio publiée et non coupée) — indicateur UI. */
+    private val _remoteMicOn = MutableStateFlow(false)
+    val remoteMicOn: StateFlow<Boolean> = _remoteMicOn.asStateFlow()
+
     /** Piste vidéo LOCALE (aperçu de l'hôte quand il diffuse). `null` en mode viewer. */
     private val _localVideoTrack = MutableStateFlow<VideoTrack?>(null)
     val localVideoTrack: StateFlow<VideoTrack?> = _localVideoTrack.asStateFlow()
@@ -129,6 +133,8 @@ class LiveRoomClient(
                     when (event) {
                         is RoomEvent.TrackSubscribed,
                         is RoomEvent.TrackUnsubscribed,
+                        is RoomEvent.TrackMuted,
+                        is RoomEvent.TrackUnmuted,
                         is RoomEvent.ParticipantDisconnected -> refreshPrimaryTrack()
                         is RoomEvent.Reconnecting -> _connectionState.value = LiveConnectionState.Reconnecting
                         is RoomEvent.Reconnected -> _connectionState.value = LiveConnectionState.Connected
@@ -332,6 +338,9 @@ class LiveRoomClient(
         val videos = tiles.map { it.second }
         _remoteVideos.value = videos
         _primaryVideoTrack.value = videos.firstOrNull()
+        // Micro du 1er distant : une piste audio publiée et NON coupée.
+        _remoteMicOn.value = room.remoteParticipants.values.firstOrNull()
+            ?.audioTrackPublications?.any { !it.first.muted } ?: false
     }
 
     /** Piste vidéo locale = caméra publiée par l'hôte (aperçu). */

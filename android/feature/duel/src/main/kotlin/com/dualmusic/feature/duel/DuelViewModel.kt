@@ -179,6 +179,10 @@ class DuelViewModel(
     private val _canPublish = MutableStateFlow(false)
     val canPublish: StateFlow<Boolean> = _canPublish.asStateFlow()
 
+    /** Slot du caller ("artist1"/"artist2"/"manager") ou null (spectateur) → pour l'état micro de MA case. */
+    private val _mySlot = MutableStateFlow<String?>(null)
+    val mySlot: StateFlow<String?> = _mySlot.asStateFlow()
+
     /** Diffusion caméra/micro en cours (participant). */
     private val _broadcasting = MutableStateFlow(false)
     val broadcasting: StateFlow<Boolean> = _broadcasting.asStateFlow()
@@ -205,6 +209,9 @@ class DuelViewModel(
                     else -> null
                 }
                 _canPublish.value = myMedia != null
+                _mySlot.value = when (myUserId) {
+                    d.artist1Id -> "artist1"; d.artist2Id -> "artist2"; d.managerId -> "manager"; else -> null
+                }
             }
             // Rejoint les 3 rooms de slot (parité web) : publieur sur MA room, spectateur sur les 2 autres.
             joinSlot(mediaA1, "artist1")
