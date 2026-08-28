@@ -56,8 +56,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
@@ -258,9 +261,7 @@ fun DuelRoomScreen(
         ) {
             shownGift?.let { GiftReceivedCard(it) }
         }
-
-        // --- Réactions flottantes (cœurs/emojis) montantes, vues par tous ---
-        FloatingReactionsLayer(reactions = emojiFeed, reduceAnimations = uiPrefs.reduceAnimations)
+        // (Réactions flottantes déplacées PLUS BAS, après les vignettes, pour passer AU-DESSUS d'elles.)
 
         // --- Bannière « vous avez reçu un cadeau » (destinataire uniquement, transitoire) ---
         giftReceived?.let { msg ->
@@ -330,20 +331,15 @@ fun DuelRoomScreen(
                     leftTotal = a1?.let { totals[it] } ?: 0.0,
                     rightTotal = a2?.let { totals[it] } ?: 0.0,
                 )
-                // Meilleur donateur : ligne défilante droite→gauche (pause entre les tours), dans la navbar.
+                // Meilleur donateur : ticker qui défile TOUJOURS droite→gauche (basicMarquee ne
+                // bougeait pas car le texte tenait dans la largeur → défilement manuel garanti).
                 topDonor?.let { d ->
                     Row(
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(999.dp))
                             .background(Color(0x33FFFFFF)).padding(horizontal = 10.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            "👑  ${d.name}  ·  ${d.amount} 🎁",
-                            color = Color(0xFFFFD54A), fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1,
-                            // PAS de fillMaxWidth : sinon le texte remplit la largeur et basicMarquee
-                            // ne défile jamais. Ici il défile droite→gauche avec pause entre les tours.
-                            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, repeatDelayMillis = 1500, initialDelayMillis = 600),
-                        )
+                        ScrollingLabel("👑  ${d.name}  ·  ${d.amount} 🎁", Modifier.weight(1f))
                     }
                 }
                 if (timer.isRunning) {
@@ -553,7 +549,8 @@ fun DuelRoomScreen(
         val thumbTiles = slotTiles.filter { it !== mainTile }
         if (thumbTiles.isNotEmpty() && !overlaysHidden && !thumbnailsHidden) {
             Column(
-                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 8.dp, bottom = 160.dp),
+                // Descendues au niveau des commentaires (à droite), sans toucher la ligne de saisie.
+                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 8.dp, bottom = 84.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 thumbTiles.forEach { tile ->
@@ -564,13 +561,19 @@ fun DuelRoomScreen(
                                 .clickable(enabled = forcedFocus == null) { localFocus = tile.slot },
                         ) {
                             SlotContent(tile, Modifier.fillMaxSize())
-                            // Libellé : pastille signal verte + nom (parité web « Papou Koné »).
+                            // Libellé : icône caméra ON/OFF + nom TRONQUÉ (…) qui ne déborde jamais la case.
                             Row(
-                                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 4.dp, vertical = 2.dp),
+                                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 4.dp, vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
                             ) {
-                                Box(Modifier.size(6.dp).background(if (tile.track != null) Color(0xFF22C55E) else Color(0xFF888888), CircleShape))
-                                Text("  ${tile.label}", color = Color.White, fontSize = 9.sp, maxLines = 1)
+                                Icon(
+                                    if (tile.track != null) Icons.Filled.Videocam else Icons.Filled.VideocamOff,
+                                    contentDescription = null,
+                                    tint = if (tile.track != null) Color(0xFF22C55E) else Color(0xFFEF4444),
+                                    modifier = Modifier.size(11.dp),
+                                )
+                                Text(tile.label, color = Color.White, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                             }
                             // Manager : épingle cette case en plein écran pour TOUS.
                             if (isManager) {
@@ -586,6 +589,9 @@ fun DuelRoomScreen(
                 }
             }
         }
+        // --- Réactions flottantes (cœurs/emojis) — rendues APRÈS les vignettes → passent AU-DESSUS d'elles.
+        FloatingReactionsLayer(reactions = emojiFeed, reduceAnimations = uiPrefs.reduceAnimations)
+
         // Manager : bouton « libérer le focus » quand une case est épinglée (rend le focus libre à tous).
         if (isManager && forcedFocus != null && !overlaysHidden) {
             Row(
@@ -915,6 +921,25 @@ private fun SlotContent(tile: SlotTile, modifier: Modifier) {
                 Icon(Icons.Filled.VideocamOff, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
             }
         }
+    }
+}
+
+/** Libellé qui défile en continu droite→gauche (ticker), quelle que soit sa longueur. */
+@Composable
+private fun ScrollingLabel(text: String, modifier: Modifier = Modifier) {
+    val infinite = rememberInfiniteTransition(label = "mq")
+    val p by infinite.animateFloat(
+        initialValue = 1f, targetValue = -1.3f,
+        animationSpec = infiniteRepeatable(tween(9000, easing = androidx.compose.animation.core.LinearEasing)),
+        label = "mqx",
+    )
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier.clipToBounds()) {
+        val w = constraints.maxWidth.toFloat()
+        Text(
+            text, color = Color(0xFFFFD54A), fontSize = 12.sp, fontWeight = FontWeight.Bold,
+            maxLines = 1, softWrap = false,
+            modifier = Modifier.graphicsLayer { translationX = p * w },
+        )
     }
 }
 
