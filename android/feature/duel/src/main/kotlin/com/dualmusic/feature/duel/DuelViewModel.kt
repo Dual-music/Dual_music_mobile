@@ -252,6 +252,7 @@ class DuelViewModel(
         viewModelScope.launch {
             runCatching { m.startBroadcast() }.onSuccess {
                 _broadcasting.value = true; _micOn.value = true; _camOn.value = true
+                broadcastMediaState()
             }
         }
     }
@@ -261,13 +262,14 @@ class DuelViewModel(
         val m = myMedia ?: return
         val next = !m.camEnabled.value
         m.setCamEnabled(next); _camOn.value = next
+        broadcastMediaState()
     }
 
     /** Participant : coupe/rétablit le micro. */
     fun toggleMic() {
         val m = myMedia ?: return
         val next = !m.micEnabled.value
-        viewModelScope.launch { runCatching { m.setMicEnabled(next) }; _micOn.value = next }
+        viewModelScope.launch { runCatching { m.setMicEnabled(next) }; _micOn.value = next; broadcastMediaState() }
     }
 
     /** Participant : bascule caméra avant/arrière. */
@@ -287,7 +289,39 @@ class DuelViewModel(
         val m = myMedia ?: return
         val resume = !m.camEnabled.value && !m.micEnabled.value
         m.setCamEnabled(resume); _camOn.value = resume
-        viewModelScope.launch { runCatching { m.setMicEnabled(resume) }; _micOn.value = resume }
+        viewModelScope.launch { runCatching { m.setMicEnabled(resume) }; _micOn.value = resume; broadcastMediaState() }
+    }
+
+    /**
+     * Diffuse MON état média (micro/caméra/streaming/pause) sur le canal `duel-media-<id>`, au
+     * format attendu par le web (`{slot, state:{isMicOn,isCameraOn,isStreaming,isPaused}}`) → les
+     * petites cases du web reflètent enfin mes ouvertures/fermetures caméra & micro.
+     */
+    private fun broadcastMediaState() {
+        val slot = _mySlot.value ?: return
+        val paused = _broadcasting.value && !_camOn.value && !_micOn.value
+        liveSession?.emit(
+            "broadcast",
+            org.json.JSONObject(
+                mapOf(
+                    "channel" to "duel-media-$duelId",
+                    "event" to "media-state",
+                    "payload" to org.json.JSONObject(
+                        mapOf(
+                            "slot" to slot,
+                            "state" to org.json.JSONObject(
+                                mapOf(
+                                    "isMicOn" to _micOn.value,
+                                    "isCameraOn" to _camOn.value,
+                                    "isStreaming" to _broadcasting.value,
+                                    "isPaused" to paused,
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
     }
 
     /** Envoie un cadeau possédé à un artiste/manager du duel (débit atomique serveur). */
@@ -450,6 +484,9 @@ class DuelViewModel(
                 live.emit("broadcast:join", "duel-emojis-$duelId")
                 live.emit("broadcast:join", "duel-likes-$duelId")
                 live.emit("broadcast:join", "duel-focus-$duelId")
+                live.emit("broadcast:join", "duel-media-$duelId")
+                // Re-diffuse mon état média à (re)connexion → les arrivants (web) le voient.
+                broadcastMediaState()
             }
             chat.onConnect { chat.join(Realtime.RoomType.DUEL, duelId) }
 
