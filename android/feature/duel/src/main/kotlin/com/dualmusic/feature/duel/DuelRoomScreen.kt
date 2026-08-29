@@ -76,6 +76,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.HowToVote
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Mood
 import androidx.compose.material.icons.filled.MicOff
@@ -209,6 +210,8 @@ fun DuelRoomScreen(
     var showDescription by remember { mutableStateOf(false) }
     // Panneau MANAGER (arbitre) : temps de parole (slider min), vainqueur, fin, enregistrement.
     var showManagerPanel by remember { mutableStateOf(false) }
+    // Sélecteur de pub sponsor (déclenché par l'icône 📢 du rail, plus par un bouton bas).
+    var showAdPicker by remember { mutableStateOf(false) }
     // Barre du bas condensée (parité web) : emojis repliables + panneau de vote + pop-up saisie.
     var showEmojiBar by remember { mutableStateOf(false) }
     var showVotePanel by remember { mutableStateOf(false) }
@@ -247,16 +250,13 @@ fun DuelRoomScreen(
         val mainTile = slotTiles.find { it.slot == effectiveFocus }
             ?: slotTiles.firstOrNull { it.track != null }
             ?: slotTiles.firstOrNull()
+        // Le performeur est-il la GRANDE case ? → son chrono s'affiche sous le top-donateur (navbar),
+        // pas en overlay. (Sur les petites cases, le chrono reste sur la vignette, cf. plus bas.)
+        val mainArtistId = when (mainTile?.slot) { "artist1" -> duel?.artist1Id; "artist2" -> duel?.artist2Id; "manager" -> duel?.managerId; else -> null }
+        val mainPerformerActive = timer.isRunning && mainArtistId != null && mainArtistId == timer.targetId
         // --- Couche principale : vidéo (ou placeholder caméra off) du slot en grand ---
         if (mainTile != null) {
             SlotContent(mainTile, Modifier.fillMaxSize())
-            // Chrono du performeur sur la GRANDE case si c'est lui qui a la parole (parité web).
-            val mainArtistId = when (mainTile.slot) { "artist1" -> duel?.artist1Id; "artist2" -> duel?.artist2Id; else -> duel?.managerId }
-            if (timer.isRunning && mainArtistId != null && mainArtistId == timer.targetId) {
-                Box(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 104.dp)) {
-                    com.dualmusic.core.ui.live.LiveCountdown(endsAtIso = timer.endsAt)
-                }
-            }
         } else {
             Box(Modifier.fillMaxSize().background(DualMusicTheme.gradients.hero))
         }
@@ -367,6 +367,16 @@ fun DuelRoomScreen(
                     ) {
                         ScrollingLabel("👑  ${d.name}  ·  ${d.amount} 🎁", Modifier.weight(1f))
                     }
+                }
+                // Chrono du performeur JUSTE SOUS le top-donateur — uniquement quand SA case est en
+                // grand (sur une petite case, le chrono reste sur la vignette).
+                if (mainPerformerActive) {
+                    val perfName = when (timer.targetId) {
+                        duel?.artist1Id -> duel?.artist1?.displayName ?: strings.artist1
+                        duel?.artist2Id -> duel?.artist2?.displayName ?: strings.artist2
+                        else -> "Manager"
+                    }
+                    com.dualmusic.core.ui.live.LiveCountdown(endsAtIso = timer.endsAt, label = perfName)
                 }
                 // (Le chrono de temps de parole n'est plus affiché ici : il apparaît directement SUR
                 //  la case de l'artiste concerné — plus de doublon surchargé en haut de l'écran.)
@@ -501,6 +511,18 @@ fun DuelRoomScreen(
                 // Manager (arbitre) : panneau de gestion (temps de parole, vainqueur, fin, enregistrement).
                 if (isManager) {
                     MediaRailButton(Icons.Filled.Tune, "Gérer le duel", accent = true) { showManagerPanel = true }
+                }
+                // 📢 Pub sponsor (manager) — EN BAS du rail : lance/arrête la pub (ne masque plus la
+                //    ligne de message). Masqué pendant l'annonce du vainqueur.
+                if (isManager && duel?.allowsSponsorAds != false && winnerInfo == null) {
+                    MediaRailButton(
+                        Icons.Filled.Campaign,
+                        if (sponsorAd != null) "Arrêter la pub" else "Lancer une pub",
+                        accent = true,
+                    ) {
+                        if (sponsorAd != null) viewModel.sponsor.stop()
+                        else { viewModel.sponsor.loadAds(); showAdPicker = true }
+                    }
                 }
             }
         }
@@ -803,6 +825,28 @@ fun DuelRoomScreen(
             }
         }
 
+        // Sélecteur de pub (ouvert par l'icône 📢 du rail) : choisir la pub à diffuser.
+        if (showAdPicker) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showAdPicker = false })
+            Column(
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(colors.background).navigationBarsPadding().padding(DualMusicTheme.spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text("📢 Lancer une pub", color = colors.foreground, fontWeight = FontWeight.Bold)
+                if (sponsorAds.isEmpty()) Text("Aucune pub disponible.", color = colors.mutedForeground, fontSize = 13.sp)
+                sponsorAds.forEach { ad ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.15f))
+                            .clickable { viewModel.sponsor.play(ad.id); showAdPicker = false }.padding(DualMusicTheme.spacing.md),
+                        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(ad.title, color = colors.foreground)
+                        Text("${ad.durationSeconds}s", color = colors.accent, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
         // Diffusion pub sponsor : overlay vidéo pour tous + contrôle pour le manager
         // (masqué si l'organisateur a désactivé les pubs sur ce duel — parité web).
         SponsorAdLayer(
@@ -814,6 +858,9 @@ fun DuelRoomScreen(
             onLoadAds = { viewModel.sponsor.loadAds() },
             onPlay = { viewModel.sponsor.play(it) },
             onStop = { viewModel.sponsor.stop() },
+            // Le déclencheur est désormais une ICÔNE du rail (voir 📢), pas un bouton bas qui
+            // masquait la ligne de message. L'overlay + l'arrêt restent gérés ici.
+            showTriggerButton = false,
         )
 
         // --- Panneau cadeaux : destinataire (Artiste 1 / Artiste 2 / Manager) + Mes cadeaux / Boutique ---

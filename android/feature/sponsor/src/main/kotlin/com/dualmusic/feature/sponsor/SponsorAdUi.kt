@@ -57,9 +57,12 @@ fun BoxScope.SponsorAdLayer(
     onLoadAds: () -> Unit,
     onPlay: (String) -> Unit,
     onStop: () -> Unit,
+    // Quand false, le bouton intégré « Démarrer pub » n'est PAS rendu (déclenché ailleurs, ex. rail).
+    // L'overlay vidéo + l'arrêt (pour l'hôte) restent actifs.
+    showTriggerButton: Boolean = true,
 ) {
     // Contrôle hôte : bouton discret en bas-gauche (au-dessus de la barre système).
-    if (canTrigger) {
+    if (canTrigger && showTriggerButton) {
         SponsorAdControl(
             active = activeAd != null,
             ads = ads,
