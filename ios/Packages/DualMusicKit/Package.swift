@@ -37,7 +37,12 @@ import PackageDescription
 let package = Package(
     name: "DualMusicKit",
     defaultLocalization: "fr",
-    platforms: [.iOS(.v17)],
+    // Le paquet est iOS-only, mais SwiftPM valide quand même la compatibilité de TOUTE la
+    // chaîne de dépendances sur chaque plateforme connue lors de la résolution — sans cette
+    // déclaration explicite, macOS retombe sur un minimum implicite (10.13) trop bas pour
+    // `client-sdk-swift` (LiveKit), qui exige 10.15+. Ça fait échouer la résolution même si
+    // seul iOS est réellement construit (`-destination "platform=iOS Simulator"` en CI).
+    platforms: [.iOS(.v17), .macOS(.v13)],
     products: [
         .library(
             name: "DualMusicKit",
