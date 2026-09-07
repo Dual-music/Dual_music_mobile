@@ -14,11 +14,12 @@ final class DesignSystemTests: XCTestCase {
     /// La conversion HSL→sRGB doit reproduire exactement celle du CSS : c'est ce qui garantit
     /// qu'un violet de marque est le même pixel sur iOS, Android et le web.
     func testWebHSLMatchesCSSConversion() throws {
-        // hsl(280 70% 55%) → rgb(166, 61, 217) d'après la formule CSS.
+        // hsl(280 70% 55%) → rgb(167, 60, 221) d'après la formule CSS (m1/m2 de la spec
+        // CSS Color : m2 = l+s-l*s = 0.865, m1 = 2l-m2 = 0.235 ; R=0.655, G=0.235, B=0.865).
         let components = try XCTUnwrap(rgbComponents(of: Color(webHSL: 280, 0.70, 0.55)))
-        XCTAssertEqual(components.r, 166.0 / 255.0, accuracy: 0.01)
-        XCTAssertEqual(components.g, 61.0 / 255.0, accuracy: 0.01)
-        XCTAssertEqual(components.b, 217.0 / 255.0, accuracy: 0.01)
+        XCTAssertEqual(components.r, 167.0 / 255.0, accuracy: 0.01)
+        XCTAssertEqual(components.g, 60.0 / 255.0, accuracy: 0.01)
+        XCTAssertEqual(components.b, 221.0 / 255.0, accuracy: 0.01)
     }
 
     func testHexInitializer() throws {
