@@ -381,6 +381,15 @@ public struct DMStrings: Sendable {
     public let passwordChanged: String
     public let purchased: String
     public let fan: String
+    // Modération : signalement + bannissement.
+    public let reportAction: String
+    public let reportInappropriate: String
+    public let reportHarassment: String
+    public let reportSpam: String
+    public let reportViolence: String
+    public let reportSent: String
+    public let banAction: String
+    public let banConfirmMessage: String
 }
 
 // MARK: - Tables de traduction
@@ -731,7 +740,15 @@ public extension DMStrings {
         profileUpdated: "✅ Profil mis à jour.",
         passwordChanged: "✅ Mot de passe changé.",
         purchased: "acheté !",
-        fan: "Fan"
+        fan: "Fan",
+        reportAction: "Signaler",
+        reportInappropriate: "Contenu inapproprié",
+        reportHarassment: "Harcèlement",
+        reportSpam: "Spam",
+        reportViolence: "Violence",
+        reportSent: "Signalement envoyé",
+        banAction: "Bannir",
+        banConfirmMessage: "Cette personne ne pourra plus écrire ni rejoindre, et ses messages seront masqués pour tout le monde."
     )
 
     /// Chaînes **anglaises**.
@@ -1078,7 +1095,15 @@ public extension DMStrings {
         profileUpdated: "✅ Profile updated.",
         passwordChanged: "✅ Password changed.",
         purchased: "purchased!",
-        fan: "Fan"
+        fan: "Fan",
+        reportAction: "Report",
+        reportInappropriate: "Inappropriate content",
+        reportHarassment: "Harassment",
+        reportSpam: "Spam",
+        reportViolence: "Violence",
+        reportSent: "Report sent",
+        banAction: "Ban",
+        banConfirmMessage: "This person won't be able to write or rejoin anymore, and their messages will be hidden for everyone."
     )
 
     /// Renvoie la table de chaînes d'une langue.

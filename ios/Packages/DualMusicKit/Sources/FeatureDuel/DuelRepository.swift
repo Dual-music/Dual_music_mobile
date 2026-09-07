@@ -47,6 +47,21 @@ struct DuelMessageBody: Encodable, Sendable {
     let content: String
 }
 
+/// Corps de `POST /moderation/reports/live` (live/duel/concert, distingués par `streamType`).
+struct ReportStreamBody: Encodable, Sendable {
+    let liveId: String
+    let streamType: String
+    let reason: String
+}
+
+/// Corps de `POST /moderation/stream-bans` (live/duel/concert, distingués par `streamType`).
+struct StreamBanBody: Encodable, Sendable {
+    let streamId: String
+    let streamType: String
+    let bannedUserId: String
+    let reason: String?
+}
+
 /// Accès REST au catalogue et à l'état d'un duel.
 ///
 /// Le temps réel (votes, minuteur, statut, cadeaux, chat) arrive par Socket.IO ; ce
@@ -91,5 +106,25 @@ public struct DuelRepository: Sendable {
     /// Poste un message (le backend le diffuse ensuite via Socket.IO).
     public func postMessage(duelId: String, content: String) async throws {
         try await http.send(.post(DuelEndpoints.messages(duelId), body: DuelMessageBody(content: content)))
+    }
+
+    /// Signale ce duel à la modération.
+    public func reportLive(liveId: String, reason: ReportReason) async throws {
+        try await http.send(
+            .post(
+                ModerationReportEndpoints.reportsLive,
+                body: ReportStreamBody(liveId: liveId, streamType: "duel", reason: reason.rawValue)
+            )
+        )
+    }
+
+    /// Bannit un spectateur (manager uniquement) : il ne peut plus écrire ni rejoindre.
+    public func createStreamBan(streamId: String, bannedUserId: String, reason: String?) async throws {
+        try await http.send(
+            .post(
+                ModerationReportEndpoints.streamBans,
+                body: StreamBanBody(streamId: streamId, streamType: "duel", bannedUserId: bannedUserId, reason: reason)
+            )
+        )
     }
 }

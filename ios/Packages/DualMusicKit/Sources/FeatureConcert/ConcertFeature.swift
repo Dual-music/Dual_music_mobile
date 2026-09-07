@@ -52,6 +52,45 @@ public struct ConcertRepository: Sendable {
             )
         )
     }
+
+    /// Signale ce concert à la modération.
+    ///
+    /// ⚠️ Couche données seulement : il n'existe pas encore d'écran de room/direct pour les
+    /// concerts côté iOS (voir `TODO-IOS.md`) — rien n'appelle cette méthode pour l'instant.
+    public func reportLive(liveId: String, reason: ReportReason) async throws {
+        try await http.send(
+            .post(
+                ModerationReportEndpoints.reportsLive,
+                body: ReportStreamBody(liveId: liveId, streamType: "concert", reason: reason.rawValue)
+            )
+        )
+    }
+
+    /// Bannit un spectateur (artiste uniquement) : il ne peut plus écrire ni rejoindre.
+    /// Couche données seulement — voir note ci-dessus.
+    public func createStreamBan(streamId: String, bannedUserId: String, reason: String?) async throws {
+        try await http.send(
+            .post(
+                ModerationReportEndpoints.streamBans,
+                body: StreamBanBody(streamId: streamId, streamType: "concert", bannedUserId: bannedUserId, reason: reason)
+            )
+        )
+    }
+}
+
+/// Corps de `POST /moderation/reports/live` (live/duel/concert, distingués par `streamType`).
+struct ReportStreamBody: Encodable, Sendable {
+    let liveId: String
+    let streamType: String
+    let reason: String
+}
+
+/// Corps de `POST /moderation/stream-bans` (live/duel/concert, distingués par `streamType`).
+struct StreamBanBody: Encodable, Sendable {
+    let streamId: String
+    let streamType: String
+    let bannedUserId: String
+    let reason: String?
 }
 
 /// ViewModel du catalogue de concerts.

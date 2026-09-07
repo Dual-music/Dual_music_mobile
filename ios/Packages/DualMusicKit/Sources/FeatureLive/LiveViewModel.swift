@@ -30,6 +30,16 @@ public final class LiveViewModel {
     public private(set) var giftFeed: [LiveGift] = []
     public private(set) var viewerCount: Int = 0
 
+    /// Spectateurs bannis de ce live (ids) — leurs messages restent en mémoire mais sont
+    /// masqués de l'affichage (``visibleMessages``), pas supprimés.
+    public private(set) var bannedUserIds: Set<String> = []
+
+    /// Messages à afficher : ceux d'un spectateur banni sont masqués pour tout le monde.
+    public var visibleMessages: [LiveChatMessage] { messages.filter { !bannedUserIds.contains($0.userId) } }
+
+    /// Vrai pour l'hôte (artiste qui diffuse) — contrôle l'accès au bannissement.
+    public let isHost: Bool
+
     private let liveId: String
     private let roomName: String
     private let realtime: RealtimeClient
@@ -47,18 +57,21 @@ public final class LiveViewModel {
     ///   - media: client média dédié à ce live.
     ///   - realtime: client Socket.IO partagé.
     ///   - repository: lectures/actions REST du live.
+    ///   - isHost: vrai pour l'artiste qui diffuse — autorise le bannissement.
     public init(
         liveId: String,
         roomName: String,
         media: LiveRoomClient,
         realtime: RealtimeClient,
-        repository: LiveRepository
+        repository: LiveRepository,
+        isHost: Bool = false
     ) {
         self.liveId = liveId
         self.roomName = roomName
         self.media = media
         self.realtime = realtime
         self.repository = repository
+        self.isHost = isHost
     }
 
     /// Démarre : vidéo, historique de chat, rooms temps réel.
@@ -105,6 +118,25 @@ public final class LiveViewModel {
     public func sendGift(giftId: String, toUserId: String) async {
         guard !giftId.isEmpty else { return }
         try? await repository.sendGift(liveId: liveId, giftId: giftId, toUserId: toUserId)
+    }
+
+    /// Signale ce live avec un motif (modération).
+    public func report(reason: ReportReason) async {
+        try? await repository.reportLive(liveId: liveId, reason: reason)
+    }
+
+    /// Hôte : bannit un spectateur (optimiste + persistant). Il ne peut plus écrire ni
+    /// rejoindre ; ses messages passés sont masqués (``visibleMessages``).
+    /// - Parameters:
+    ///   - userId: spectateur ciblé.
+    ///   - reason: motif libre (ex. le message signalé), optionnel.
+    public func banUser(userId: String, reason: String?) async {
+        bannedUserIds.insert(userId)
+        do {
+            try await repository.createStreamBan(streamId: liveId, bannedUserId: userId, reason: reason)
+        } catch {
+            bannedUserIds.remove(userId)
+        }
     }
 
     /// Retire le cadeau le plus ancien après son animation.

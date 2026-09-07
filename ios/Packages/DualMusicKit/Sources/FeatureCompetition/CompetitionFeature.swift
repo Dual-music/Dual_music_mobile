@@ -71,6 +71,44 @@ public struct CompetitionRepository: Sendable {
     public func buyTicket(competitionId: String, idempotencyKey: String = UUID().uuidString) async throws {
         try await http.send(.post(CompetitionEndpoints.tickets(competitionId), idempotencyKey: idempotencyKey))
     }
+
+    /// Signale cette compétition à la modération.
+    ///
+    /// ⚠️ Endpoint et forme de requête **différents** de Live/Duel/Concert : table dédiée
+    /// `competition_reports`, clé `competitionId` (pas `liveId`), pas de `streamType`.
+    public func reportCompetition(competitionId: String, reason: ReportReason) async throws {
+        try await http.send(
+            .post(
+                ModerationReportEndpoints.reportsCompetition,
+                body: ReportCompetitionBody(competitionId: competitionId, reason: reason.rawValue)
+            )
+        )
+    }
+
+    /// Bannit un spectateur ou un candidat (manager uniquement) — table/canal dédiés
+    /// `competition_bans` / `competition:banned`, distincts du mécanisme générique
+    /// `stream-bans` des trois autres types d'évènement.
+    public func createCompetitionBan(competitionId: String, bannedUserId: String, reason: String?) async throws {
+        try await http.send(
+            .post(
+                ModerationReportEndpoints.competitionBans,
+                body: CompetitionBanBody(competitionId: competitionId, bannedUserId: bannedUserId, reason: reason)
+            )
+        )
+    }
+}
+
+/// Corps de `POST /moderation/reports/competition`.
+struct ReportCompetitionBody: Encodable, Sendable {
+    let competitionId: String
+    let reason: String
+}
+
+/// Corps de `POST /moderation/competition-bans`.
+struct CompetitionBanBody: Encodable, Sendable {
+    let competitionId: String
+    let bannedUserId: String
+    let reason: String?
 }
 
 /// ViewModel du catalogue de compétitions.
@@ -173,6 +211,11 @@ public final class CompetitionRoomViewModel {
 
     /// Efface l'erreur affichée.
     public func clearError() { errorMessage = nil }
+
+    /// Signale cette compétition avec un motif (modération).
+    public func report(reason: ReportReason) async {
+        try? await repository.reportCompetition(competitionId: competitionId, reason: reason)
+    }
 }
 
 /// Catalogue des compétitions.
@@ -264,6 +307,8 @@ public struct CompetitionRoomView: View {
     private let viewModel: CompetitionRoomViewModel
     private let voteCredits: Int
 
+    @State private var showReport = false
+
     /// - Parameters:
     ///   - viewModel: état + actions.
     ///   - voteCredits: montant (crédits entiers) d'un vote rapide.
@@ -274,10 +319,18 @@ public struct CompetitionRoomView: View {
 
     public var body: some View {
         VStack(spacing: theme.spacing.md) {
-            Text(s.ranking)
-                .font(DMFont.pageTitle)
-                .foregroundStyle(theme.colors.foreground)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack {
+                Text(s.ranking)
+                    .font(DMFont.pageTitle)
+                    .foregroundStyle(theme.colors.foreground)
+                Spacer()
+                Button { showReport = true } label: {
+                    Image(systemName: "flag.fill")
+                        .foregroundStyle(theme.colors.mutedForeground)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(s.reportAction))
+            }
 
             if let error = viewModel.errorMessage { DMMessage(error, kind: .error) }
 
@@ -302,6 +355,24 @@ public struct CompetitionRoomView: View {
         .task { await viewModel.start() }
         .onDisappear { viewModel.stop() }
         .refreshable { await viewModel.refresh() }
+        .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
+            ForEach(ReportReason.allCases, id: \.self) { reason in
+                Button(reportLabel(reason)) {
+                    Task { await viewModel.report(reason: reason) }
+                }
+            }
+            Button(s.cancel, role: .cancel) {}
+        }
+    }
+
+    /// Libellé localisé d'un motif de signalement.
+    private func reportLabel(_ reason: ReportReason) -> String {
+        switch reason {
+        case .inappropriate: return s.reportInappropriate
+        case .harassment: return s.reportHarassment
+        case .spam: return s.reportSpam
+        case .violence: return s.reportViolence
+        }
     }
 }
 

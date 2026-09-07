@@ -20,6 +20,8 @@ public struct LiveRoomView: View {
     private let prewarmedToken: LiveKitToken?
 
     @State private var draft = ""
+    @State private var showReport = false
+    @State private var banTarget: LiveChatMessage?
 
     /// - Parameters:
     ///   - viewModel: état + actions du live.
@@ -85,11 +87,44 @@ public struct LiveRoomView: View {
         .onDisappear {
             Task { await viewModel.stop() }
         }
+        // Feuille de motifs (viewer uniquement — voir bouton drapeau de `viewerBadge`).
+        .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
+            ForEach(ReportReason.allCases, id: \.self) { reason in
+                Button(reportLabel(reason)) {
+                    Task { await viewModel.report(reason: reason) }
+                }
+            }
+            Button(s.cancel, role: .cancel) {}
+        }
+        // Confirmation de bannissement (hôte uniquement — tap sur un auteur de message).
+        .alert(
+            "🚫 \(s.banAction) \(banTarget?.authorName ?? "") ?",
+            isPresented: Binding(get: { banTarget != nil }, set: { if !$0 { banTarget = nil } }),
+            presenting: banTarget
+        ) { target in
+            Button(s.cancel, role: .cancel) {}
+            Button(s.banAction, role: .destructive) {
+                Task { await viewModel.banUser(userId: target.userId, reason: String(target.content.prefix(200))) }
+            }
+        } message: { _ in
+            Text(s.banConfirmMessage)
+        }
     }
 
-    /// Compteur de spectateurs, en haut à droite.
+    /// Compteur de spectateurs + bouton signaler, en haut.
     private var viewerBadge: some View {
         HStack {
+            if !viewModel.isHost {
+                Button { showReport = true } label: {
+                    Image(systemName: "flag.fill")
+                        .font(DMFont.caption)
+                        .foregroundStyle(.white)
+                        .padding(theme.spacing.xs)
+                        .background(.black.opacity(0.4), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(s.reportAction))
+            }
             Spacer()
             HStack(spacing: 4) {
                 Image(systemName: "eye.fill")
@@ -103,14 +138,19 @@ public struct LiveRoomView: View {
         }
     }
 
-    /// Les 6 derniers messages, du plus ancien au plus récent.
+    /// Les 6 derniers messages visibles, du plus ancien au plus récent. L'hôte peut bannir
+    /// l'auteur d'un message en tapant sur son nom.
     private var chatOverlay: some View {
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(viewModel.messages.suffix(6)) { message in
+            ForEach(viewModel.visibleMessages.suffix(6)) { message in
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(message.authorName)
                         .font(DMFont.caption).bold()
                         .foregroundStyle(theme.colors.accent)
+                        .onTapGesture {
+                            guard viewModel.isHost, message.userId != hostUserId else { return }
+                            banTarget = message
+                        }
                     Text(message.content)
                         .font(DMFont.caption)
                         .foregroundStyle(.white)
@@ -118,6 +158,16 @@ public struct LiveRoomView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Libellé localisé d'un motif de signalement.
+    private func reportLabel(_ reason: ReportReason) -> String {
+        switch reason {
+        case .inappropriate: return s.reportInappropriate
+        case .harassment: return s.reportHarassment
+        case .spam: return s.reportSpam
+        case .violence: return s.reportViolence
+        }
     }
 
     /// Barre d'action : saisie de message + bouton cadeau.

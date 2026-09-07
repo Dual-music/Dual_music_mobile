@@ -146,6 +146,11 @@ public final class DuelViewModel {
     /// Efface l'erreur affichée.
     public func clearError() { errorMessage = nil }
 
+    /// Signale ce duel avec un motif (modération).
+    public func report(reason: ReportReason) async {
+        try? await repository.reportLive(liveId: duelId, reason: reason)
+    }
+
     /// Retire le cadeau le plus ancien après son animation.
     public func consumeOldestGift() {
         if !giftFeed.isEmpty { giftFeed.removeFirst() }

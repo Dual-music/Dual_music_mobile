@@ -47,6 +47,21 @@ struct ChatMessageBody: Encodable, Sendable {
     let content: String
 }
 
+/// Corps de `POST /moderation/reports/live` (live/duel/concert, distingués par `streamType`).
+struct ReportStreamBody: Encodable, Sendable {
+    let liveId: String
+    let streamType: String
+    let reason: String
+}
+
+/// Corps de `POST /moderation/stream-bans` (live/duel/concert, distingués par `streamType`).
+struct StreamBanBody: Encodable, Sendable {
+    let streamId: String
+    let streamType: String
+    let bannedUserId: String
+    let reason: String?
+}
+
 /// Accès REST aux actions et à l'historique d'un live.
 ///
 /// Le temps réel (messages, cadeaux, présence) passe par Socket.IO ; ce repository couvre
@@ -83,6 +98,26 @@ public struct LiveRepository: Sendable {
                 WalletEndpoints.giftsSend,
                 body: SendGiftRequest(giftId: giftId, toUserId: toUserId, liveId: liveId),
                 idempotencyKey: "gift-\(liveId)-\(giftId)-\(toUserId)-\(UUID().uuidString)"
+            )
+        )
+    }
+
+    /// Signale ce live à la modération.
+    public func reportLive(liveId: String, reason: ReportReason) async throws {
+        try await http.send(
+            .post(
+                ModerationReportEndpoints.reportsLive,
+                body: ReportStreamBody(liveId: liveId, streamType: "live", reason: reason.rawValue)
+            )
+        )
+    }
+
+    /// Bannit un spectateur (hôte uniquement) : il ne peut plus écrire ni rejoindre.
+    public func createStreamBan(streamId: String, bannedUserId: String, reason: String?) async throws {
+        try await http.send(
+            .post(
+                ModerationReportEndpoints.streamBans,
+                body: StreamBanBody(streamId: streamId, streamType: "live", bannedUserId: bannedUserId, reason: reason)
             )
         )
     }

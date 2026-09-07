@@ -16,6 +16,8 @@ public struct DuelRoomView: View {
     private let viewModel: DuelViewModel
     private let voteAmount: Double
 
+    @State private var showReport = false
+
     /// - Parameters:
     ///   - viewModel: état + actions du duel.
     ///   - voteAmount: montant (crédits) d'un vote rapide.
@@ -54,11 +56,31 @@ public struct DuelRoomView: View {
         }
         .task { await viewModel.start() }
         .onDisappear { Task { await viewModel.stop() } }
+        .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
+            ForEach(ReportReason.allCases, id: \.self) { reason in
+                Button(reportLabel(reason)) {
+                    Task { await viewModel.report(reason: reason) }
+                }
+            }
+            Button(s.cancel, role: .cancel) {}
+        }
     }
 
-    /// Haut : barre de répartition des votes + minuteur.
+    /// Haut : bouton signaler + barre de répartition des votes + minuteur.
     private var header: some View {
         VStack(spacing: theme.spacing.sm) {
+            HStack {
+                Button { showReport = true } label: {
+                    Image(systemName: "flag.fill")
+                        .font(DMFont.caption)
+                        .foregroundStyle(.white)
+                        .padding(theme.spacing.xs)
+                        .background(.black.opacity(0.4), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(s.reportAction))
+                Spacer()
+            }
             VoteBar(
                 leftName: viewModel.duel?.artist1?.displayName ?? s.artist1,
                 rightName: viewModel.duel?.artist2?.displayName ?? s.artist2,
@@ -71,6 +93,16 @@ public struct DuelRoomView: View {
                     .foregroundStyle(theme.colors.accent)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+        }
+    }
+
+    /// Libellé localisé d'un motif de signalement.
+    private func reportLabel(_ reason: ReportReason) -> String {
+        switch reason {
+        case .inappropriate: return s.reportInappropriate
+        case .harassment: return s.reportHarassment
+        case .spam: return s.reportSpam
+        case .violence: return s.reportViolence
         }
     }
 
