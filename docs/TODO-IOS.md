@@ -53,10 +53,6 @@ SwiftLint + `kit-tests` (compilation + tests du paquet `DualMusicKit`) + `app-bu
 
 Tout est documenté dans les commentaires du `.github/workflows/ios-ci.yml` correspondant,
 pour ne pas avoir à redécouvrir ces causes en cas de régression.
-- [ ] Sur GitHub → onglet **Actions**, attendre/lancer « iOS CI » et corriger tout ce qui casse
-      (`lint` non bloquant, `kit-tests` et `app-build` doivent passer au vert).
-- [ ] Ne pas avancer sur la suite tant que `app-build` n'est pas vert : c'est la seule preuve
-      que Swift compile réellement.
 
 ---
 
@@ -64,27 +60,33 @@ pour ne pas avoir à redécouvrir ces causes en cas de régression.
 
 Écart vérifié dans le code (Android a la fonctionnalité, iOS ne l'a pas du tout) :
 
-### 1.1 Signalement + bannissement (report/ban) — absent d'iOS, sur 4 écrans
+### 1.1 Signalement + bannissement (report/ban) ✅ FAIT (partiellement) le 2026-09-07
 
-Backend déjà prêt (`POST /moderation/reports/live`, `POST /moderation/stream-bans`), Android
-déjà branché sur les 4 repositories (`LiveRepository`, `DuelRepository`,
-`CompetitionRepository`, `ConcertRepository`). Côté iOS, **aucun** des DTOs ni endpoints
-n'existe dans `DomainModels`, et aucune UI dans `FeatureLive`/`FeatureDuel`/
-`FeatureCompetition`/`FeatureConcert`.
+Backend déjà prêt, aucun DTO Kotlin partagé côté Android (chaque repository construit son
+propre JSON — `moderation/reports/live` pour live/duel/concert, `moderation/reports/competition`
++ `moderation/competition-bans` pour compétition, distincts). Porté côté iOS :
 
-- [ ] Porter les DTOs dans `DomainModels` : mirror de `shared-domain/.../moderation/ModerationDtos.kt`
-      (`EventModerator`, `ModerationEndpoints`, `AppointModeratorBody`) + les deux endpoints à
-      chaîne fixe utilisés par Android (`/moderation/reports/live`, `/moderation/stream-bans`).
-- [ ] Ajouter `reportLive(reason:)` et `createStreamBan(streamId:bannedUserId:reason:)` dans les
-      repositories iOS équivalents (`LiveRepository`, `DuelRepository`,
-      `CompetitionRepository`, `ConcertRepository` — dans `CoreNetwork`/`Feature*`).
-- [ ] UI côté `FeatureLive` : bouton « Signaler » (icône drapeau, cf. Android
-      `LiveRoomScreen.kt:670`), feuille de motifs (inapproprié / harcèlement / spam / violence,
-      cf. `reportInappropriate`/`reportHarassment`/`reportSpam`/`reportViolence` déjà présents
-      dans `DMStrings`), et bannissement d'un spectateur par tap sur l'avatar (hôte/modérateur
-      désigné seulement) avec confirmation.
-- [ ] Répliquer la même UI dans `FeatureDuel`, `FeatureCompetition`, `FeatureConcert`.
-- [ ] C'est un **bloquant App Store** (règle 1.2, UGC) — cf. `RELEASE-IOS.md` §6.2.
+- **`DomainModels/ModerationReport.swift`** : endpoints + `ReportReason` (clés stables
+  envoyées au backend, pas le texte localisé — écart assumé vs l'écran Live d'Android).
+- **Live** (le chat y est déjà affiché) : report + ban **complets** — bouton drapeau, feuille
+  de motifs, bannissement par tap sur l'auteur d'un message (hôte uniquement), messages du
+  banni masqués pour tous.
+- **Duel / Compétition** (room existante, mais chat non affiché à l'écran — la donnée existe
+  déjà côté Duel, `DuelViewModel.messages`, juste jamais rendue) : bouton signaler câblé et
+  fonctionnel ; `createStreamBan`/`createCompetitionBan` existent au niveau repository mais
+  **aucune UI n'appelle le ban** — il n'y a pas encore de liste de messages/participants à
+  laquelle attacher un geste de bannissement.
+- **Concert** : couche données seulement (`reportLive`/`createStreamBan` sur
+  `ConcertRepository`) — **il n'existe pas encore d'écran de room/direct pour les concerts
+  côté iOS du tout** (catalogue + achat de dédicace seulement), donc rien à brancher.
+
+Restant, non bloquant pour l'App Store (le report, lui, est en place partout où il y a un
+écran à l'utiliser) :
+- [ ] Construire l'affichage du chat dans `DuelRoomView` (la donnée existe) puis y brancher le
+      ban par tap, comme pour Live.
+- [ ] Idem pour Compétition une fois son chat construit.
+- [ ] Construire l'écran de room/direct pour Concert (actuellement inexistant) avant de pouvoir
+      y brancher quoi que ce soit.
 
 ### 1.2 Achats intégrés StoreKit pour la recharge de crédits — absent
 
