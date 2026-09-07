@@ -112,8 +112,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Sélectionner Xcode 15.4
-        run: sudo xcode-select -switch /Applications/Xcode_15.4.app
+      # Xcode 16.2 ici (pas 15.4 comme le job précédent) : `brew install xcodegen`
+      # installe la dernière version, qui génère un .xcodeproj au format 77
+      # (objectVersion), introduit par Xcode 16 — illisible par Xcode 15.4
+      # ("future Xcode project file format"). Le runner GitHub fournit les deux.
+      - name: Sélectionner Xcode 16.2
+        run: sudo xcode-select -switch /Applications/Xcode_16.2.app
 
       - name: Installer XcodeGen
         run: brew install xcodegen
