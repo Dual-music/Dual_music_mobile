@@ -207,6 +207,7 @@ public struct SponsorView: View {
 }
 
 /// Onglet « Mes demandes » : grille tarifaire + demandes (paiement si approuvée).
+@MainActor
 private struct MyRequestsTab: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
@@ -253,6 +254,7 @@ private struct MyRequestsTab: View {
 }
 
 /// Onglet « Nouvelle » : choix de l'événement + média + description + envoi.
+@MainActor
 private struct NewRequestTab: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

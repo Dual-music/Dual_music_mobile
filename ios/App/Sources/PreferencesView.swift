@@ -5,6 +5,7 @@ import CoreUI
 /// sensible « Compte » (suppression différée, annulable pendant 20 jours).
 ///
 /// Le thème et la langue sont appliqués **immédiatement** et persistés, comme sur Android.
+@MainActor
 struct PreferencesView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

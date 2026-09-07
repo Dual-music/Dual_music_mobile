@@ -203,6 +203,7 @@ public struct CreatorView: View {
 }
 
 /// Formulaire de création d'un concert (pochette optionnelle + champs).
+@MainActor
 private struct CreateConcertForm: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

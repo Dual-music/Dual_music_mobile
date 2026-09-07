@@ -10,6 +10,7 @@ import FeatureAuth
 /// - `pendingEmailVerification` → ``FeatureAuth/EmailVerifyView`` ;
 /// - `pendingProfileCompletion` → ``FeatureAuth/ProfileCompletionView`` ;
 /// - `signedIn` → ``MainShellView``.
+@MainActor
 struct RootView: View {
     @Environment(\.dmTheme) private var theme
 

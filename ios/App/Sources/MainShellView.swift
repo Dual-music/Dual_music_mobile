@@ -62,6 +62,7 @@ enum HomeDestination: Int, Identifiable {
 /// - la page Accueil donne 3 accès rapides (Lifestyle / Classement / Artistes) — ces
 ///   sections ne figurent donc pas dans le menu profil, comme sur le web ;
 /// - la cloche ouvre le centre de notifications en pleine page.
+@MainActor
 struct MainShellView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

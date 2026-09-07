@@ -44,6 +44,7 @@ enum ProfileRoute: Hashable {
 ///
 /// Lifestyle / Classement / Artistes n'y figurent pas : ils sont accessibles depuis
 /// l'accueil, comme sur le web.
+@MainActor
 struct ProfileSectionView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

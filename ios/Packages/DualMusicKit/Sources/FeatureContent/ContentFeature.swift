@@ -220,6 +220,7 @@ private struct BlogRow: View {
 }
 
 /// Lecteur plein écran d'une vidéo lifestyle (format portrait 9:16, comme le web).
+@MainActor
 private struct LifestylePlayerView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
@@ -256,6 +257,7 @@ private struct LifestylePlayerView: View {
 }
 
 /// Détail d'un article de blog (le contenu complet est chargé à l'ouverture).
+@MainActor
 private struct BlogDetailView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

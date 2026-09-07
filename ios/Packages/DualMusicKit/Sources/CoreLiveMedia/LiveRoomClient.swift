@@ -98,7 +98,58 @@ public final class LiveRoomClient {
         stopPolling()
         await room.disconnect()
         primaryVideoTrack = nil
+        localVideoTrack = nil
+        isCameraEnabled = false
+        isMicrophoneEnabled = false
         connectionState = .idle
+    }
+
+    // MARK: - Diffusion (hôte/invité qui publie)
+
+    /// Démarre la diffusion : active caméra + micro sur la room déjà rejointe (`join(isHost:
+    /// true)`). Chaque piste est activée indépendamment : un refus de permission caméra
+    /// n'empêche pas le micro de démarrer, et inversement.
+    public func startBroadcast() async {
+        await setCamera(enabled: true)
+        await setMicrophone(enabled: true)
+    }
+
+    /// Coupe caméra + micro sans quitter la room (pause du direct — `endLive` reste une
+    /// action séparée côté appelant).
+    public func stopBroadcast() async {
+        await setCamera(enabled: false)
+        await setMicrophone(enabled: false)
+    }
+
+    /// Coupe/rétablit MA caméra.
+    public func setCamera(enabled: Bool) async {
+        do {
+            let publication = try await room.localParticipant.setCamera(enabled: enabled)
+            localVideoTrack = enabled ? (publication?.track as? LocalVideoTrack) : nil
+            isCameraEnabled = enabled
+        } catch {
+            // Échec (permission refusée, appareil occupé…) : l'état affiché reste inchangé,
+            // l'utilisateur peut retenter via le même bouton.
+        }
+    }
+
+    /// Coupe/rétablit MON micro.
+    public func setMicrophone(enabled: Bool) async {
+        do {
+            _ = try await room.localParticipant.setMicrophone(enabled: enabled)
+            isMicrophoneEnabled = enabled
+        } catch {
+            // Idem : état inchangé en cas d'échec.
+        }
+    }
+
+    /// Bascule caméra avant/arrière (aucun effet si la caméra n'est pas active).
+    public func switchCamera() async {
+        guard
+            let track = room.localParticipant.localVideoTracks.first?.track as? LocalVideoTrack,
+            let camera = track.capturer as? CameraCapturer
+        else { return }
+        _ = try? await camera.switchCameraPosition()
     }
 
     // MARK: - Interne
