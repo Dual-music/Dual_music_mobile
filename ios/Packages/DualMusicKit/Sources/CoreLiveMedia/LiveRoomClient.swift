@@ -203,9 +203,10 @@ public final class LiveRoomClient {
         pollTask = nil
     }
 
-    deinit {
-        pollTask?.cancel()
-    }
+    // Pas de `deinit { pollTask?.cancel() }` : un `deinit` tourne dans un contexte non
+    // isolé et ne peut pas accéder à une propriété @MainActor de façon synchrone. Inutile
+    // de toute façon : la boucle de `startPolling()` capture `self` en `weak` et s'arrête
+    // d'elle-même (au plus 1 s) dès que l'instance est désallouée.
 }
 
 /// Événements de room simplifiés remontés à ``LiveRoomClient``.
