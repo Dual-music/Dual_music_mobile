@@ -5,6 +5,14 @@ et le code iOS réellement présent sur disque — pas seulement les docs. Chaqu
 vérifié dans le code, pas supposé. À dérouler dans l'ordre : chaque étape débloque la
 suivante.
 
+> **Correctif du 2026-09-07 (après premier passage d'implémentation)** : `PARITE-ANDROID-IOS.md`
+> marque les écrans de room temps réel (Live/Duel/Compétition/Concert) ✅, mais un comptage de
+> lignes montre qu'iOS n'a que **10 à 20 % du volume de code Android** sur ces 4 écrans — ce
+> sont des squelettes spectateur, sans mode hôte/manager. Voir **Étape 1.0** ci-dessous, ajoutée
+> avant le reste de l'étape 1. Les modules plus simples (Auth, Wallet, Profil, Créateur,
+> Sponsor) sont eux à 50-70 % du volume Android, un écart de portage normal — pas concernés par
+> ce correctif.
+
 Contexte : développement sous Windows, sans Mac ni iPhone. On ne peut donc **rien tester
 visuellement pour l'instant** — la stratégie est de coder tout ce qui est vérifiable
 statiquement/par CI, puis d'attaquer le test réel (`GUIDE-TEST-IOS.md`) une fois le plus gros

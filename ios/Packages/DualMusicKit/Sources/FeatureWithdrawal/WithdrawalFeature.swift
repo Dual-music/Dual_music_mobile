@@ -251,6 +251,15 @@ public struct WithdrawalView: View {
                     .foregroundStyle(theme.colors.mutedForeground)
             }
         } else {
+            methodsSection
+            amountSection
+            pinSection
+        }
+    }
+
+    /// Liste des méthodes de retrait enregistrées (sélection par tap).
+    private var methodsSection: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.sm) {
             DMSectionTitle(s.method)
             ForEach(viewModel.methods) { method in
                 Button { viewModel.selectMethod(id: method.id) } label: {
@@ -267,28 +276,37 @@ public struct WithdrawalView: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
 
-            DMTextField(
-                s.amountCredits,
-                text: Binding(get: { viewModel.amount }, set: { viewModel.onAmountChange($0) }),
-                keyboard: .decimalPad,
-                autocapitalization: .never
-            )
+    /// Montant à retirer + aperçu du net après frais (calculé serveur).
+    @ViewBuilder
+    private var amountSection: some View {
+        DMTextField(
+            s.amountCredits,
+            text: Binding(get: { viewModel.amount }, set: { viewModel.onAmountChange($0) }),
+            keyboard: .decimalPad,
+            autocapitalization: .never
+        )
 
-            if let net = viewModel.net {
-                DMCard {
-                    HStack {
-                        Text("\(s.fees) : \(Int(net.feePct)) %")
-                            .font(DMFont.caption)
-                            .foregroundStyle(theme.colors.mutedForeground)
-                        Spacer()
-                        Text("\(s.net) : \(formatAmount(net.net)) \(s.credits)")
-                            .font(DMFont.mono)
-                            .foregroundStyle(theme.colors.primary)
-                    }
+        if let net = viewModel.net {
+            DMCard {
+                HStack {
+                    Text("\(s.fees) : \(Int(net.feePct)) %")
+                        .font(DMFont.caption)
+                        .foregroundStyle(theme.colors.mutedForeground)
+                    Spacer()
+                    Text("\(s.net) : \(formatAmount(net.net)) \(s.credits)")
+                        .font(DMFont.mono)
+                        .foregroundStyle(theme.colors.primary)
                 }
             }
+        }
+    }
 
+    /// PIN de retrait + bouton de confirmation.
+    private var pinSection: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.sm) {
             DMSectionTitle(s.withdrawPin)
             pinField(text: $pin)
             DMButton(
