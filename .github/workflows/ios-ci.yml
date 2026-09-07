@@ -124,7 +124,8 @@ jobs:
   app-build:
     name: Build app + tests UI
     runs-on: macos-14
-    needs: kit-tests
+    # TEMP (à restaurer : needs: kit-tests) — en parallèle le temps de stabiliser ce job,
+    # pour ne pas attendre ~10 min de kit-tests à chaque itération.
     env:
       # Le runtime iOS "latest" d'Xcode 16.2 (18.2) n'a pas de simulateur "iPhone 15" par
       # défaut (seulement iPhone 16/SE) — le DESTINATION global (Xcode 15.4, runtime 17.x)
