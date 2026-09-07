@@ -79,10 +79,9 @@ jobs:
       # moindre code UIKit-only (CoreUI). `-sdk` fixe la plateforme de compilation elle-même,
       # là où `-destination` ne fait que choisir où EXÉCUTER les tests.
       #
-      # `-derivedDataPath` explicite : combiner `-sdk` et `-destination` sans lui fait
-      # chercher les bundles .xctest dans Build/Products/Debug/ alors qu'ils sont compilés
-      # dans Debug-iphonesimulator/ (chemin de DerivedData auto-hashé mal résolu). Un chemin
-      # fixe et prévisible évite l'ambiguïté — même pratique que le job `app-build` plus bas.
+      # ⚠️ NE PAS ajouter -derivedDataPath ici : testé une fois, ça déplace le checkout des
+      # dépendances SwiftPM vers un chemin local qui entre en conflit avec la résolution de
+      # paquet par défaut d'Xcode ("already open as a Swift User Managed Package Folder").
       - name: Tester le paquet sur simulateur
         working-directory: ios/Packages/DualMusicKit
         run: |
@@ -91,7 +90,6 @@ jobs:
             -scheme DualMusicKit \
             -sdk iphonesimulator \
             -destination "$DESTINATION" \
-            -derivedDataPath DerivedData \
             -resultBundlePath TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO
 
