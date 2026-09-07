@@ -91,6 +91,7 @@ jobs:
 
       - name: Publier les résultats de test
         if: always()
+        continue-on-error: true # quota de stockage Actions atteint ≠ échec des tests eux-mêmes
         uses: actions/upload-artifact@v4
         with:
           name: kit-test-results
@@ -153,6 +154,7 @@ jobs:
 
       - name: Publier les résultats des tests UI
         if: always()
+        continue-on-error: true # quota de stockage Actions atteint ≠ échec des tests eux-mêmes
         uses: actions/upload-artifact@v4
         with:
           name: ui-test-results
