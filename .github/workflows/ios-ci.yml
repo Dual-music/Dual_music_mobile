@@ -73,12 +73,18 @@ jobs:
 
       # Le paquet cible iOS uniquement (SwiftUI/UIKit) : on le teste donc sur simulateur,
       # et non avec `swift test` qui compilerait pour macOS.
+      # `-sdk iphonesimulator` en plus de `-destination` : sans lui, le schéma auto-généré
+      # pour un paquet SPM multi-plateforme (macOS déclaré à cause de LiveKit, cf.
+      # Package.swift) tente aussi de compiler tout le paquet pour macOS — et casse sur le
+      # moindre code UIKit-only (CoreUI). `-sdk` fixe la plateforme de compilation elle-même,
+      # là où `-destination` ne fait que choisir où EXÉCUTER les tests.
       - name: Tester le paquet sur simulateur
         working-directory: ios/Packages/DualMusicKit
         run: |
           set -o pipefail
           xcodebuild test \
             -scheme DualMusicKit \
+            -sdk iphonesimulator \
             -destination "$DESTINATION" \
             -resultBundlePath TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO
