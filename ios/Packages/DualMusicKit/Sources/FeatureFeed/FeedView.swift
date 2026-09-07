@@ -9,6 +9,7 @@ import FeatureLive
 /// autres affichent une affiche légère. Le jeton de la prochaine room est pré-chauffé par
 /// le ViewModel. Miroir de `FeedScreen` Android (`VerticalPager`), réalisé ici avec le
 /// défilement paginé natif d'iOS 17 (`scrollTargetBehavior(.paging)`).
+@MainActor
 public struct FeedView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

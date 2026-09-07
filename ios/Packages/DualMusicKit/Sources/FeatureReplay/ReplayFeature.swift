@@ -127,6 +127,7 @@ public final class ReplayPlayerViewModel {
 }
 
 /// Catalogue des rediffusions.
+@MainActor
 public struct ReplaysListView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
@@ -204,6 +205,7 @@ private struct ReplayRow: View {
 ///
 /// Affiche le paywall si un déblocage est requis, sinon lit la vidéo via `AVPlayer`
 /// (décodage matériel, HLS/MP4) — équivalent d'ExoPlayer côté Android.
+@MainActor
 public struct ReplayPlayerView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

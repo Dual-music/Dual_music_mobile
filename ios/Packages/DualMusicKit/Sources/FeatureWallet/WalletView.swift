@@ -60,6 +60,7 @@ public final class WalletViewModel {
 ///
 /// Tous les montants proviennent du backend (procédures atomiques) — aucun calcul d'argent
 /// n'est refait côté mobile. Miroir de `WalletScreen` Android.
+@MainActor
 public struct WalletView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

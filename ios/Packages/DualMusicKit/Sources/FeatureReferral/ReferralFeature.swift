@@ -47,6 +47,7 @@ public final class ReferralViewModel {
 }
 
 /// Écran de parrainage : code partageable, récompenses en attente, liste des filleuls.
+@MainActor
 public struct ReferralView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

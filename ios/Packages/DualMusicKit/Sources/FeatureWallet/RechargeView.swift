@@ -103,6 +103,7 @@ public final class RechargeViewModel {
 ///
 /// Miroir de `RechargeScreen` Android ; l'ouverture de l'URL utilise `openURL`
 /// (Safari View Controller système) au lieu d'un `Intent`.
+@MainActor
 public struct RechargeView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

@@ -87,6 +87,7 @@ public final class AdminViewModel {
 }
 
 /// Espace admin : ouverture des candidatures + assignation directe de rôle.
+@MainActor
 public struct AdminView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

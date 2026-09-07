@@ -135,6 +135,7 @@ public final class CreatorViewModel {
 }
 
 /// Espace créateur : Défis de duel · Mes concerts · Créer un concert.
+@MainActor
 public struct CreatorView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

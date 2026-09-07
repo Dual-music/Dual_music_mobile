@@ -100,6 +100,7 @@ public final class NotificationsViewModel {
 }
 
 /// Centre de notifications in-app.
+@MainActor
 public struct NotificationsView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

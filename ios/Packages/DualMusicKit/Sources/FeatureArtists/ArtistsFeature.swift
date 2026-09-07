@@ -53,6 +53,7 @@ public final class ArtistsViewModel {
 }
 
 /// Annuaire des artistes avec bouton suivre / ne plus suivre.
+@MainActor
 public struct ArtistsView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

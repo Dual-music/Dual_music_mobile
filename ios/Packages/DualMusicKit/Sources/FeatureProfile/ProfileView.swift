@@ -49,6 +49,7 @@ public final class ProfileViewModel {
 ///
 /// Comme sur le web, chaque profil ne voit **que** ses propres récapitulatifs : un fan ne
 /// voit pas les stats artiste/manager, et inversement. Miroir de `ProfileScreen` Android.
+@MainActor
 public struct ProfileView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

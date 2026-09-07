@@ -9,6 +9,7 @@ import DomainModels
 /// Style TikTok : la vidéo occupe tout l'écran, les overlays flottent par-dessus. Le rendu
 /// vidéo utilise `SwiftUIVideoView` (décodage matériel VideoToolbox, zéro copie vers Metal).
 /// Miroir de `LiveRoomScreen` Android.
+@MainActor
 public struct LiveRoomView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

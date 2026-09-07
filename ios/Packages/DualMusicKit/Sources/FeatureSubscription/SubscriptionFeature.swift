@@ -59,6 +59,7 @@ public final class SubscriptionViewModel {
 }
 
 /// Écran des abonnements Pro/Premium.
+@MainActor
 public struct SubscriptionView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

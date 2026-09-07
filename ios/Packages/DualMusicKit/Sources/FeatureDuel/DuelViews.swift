@@ -8,6 +8,7 @@ import DomainModels
 /// Vidéo plein écran + overlays : barre de votes (part de chaque artiste, en direct),
 /// minuteur, panneau de vote payant, cadeaux animés et chat.
 /// Miroir de `DuelRoomScreen` Android.
+@MainActor
 public struct DuelRoomView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
@@ -143,6 +144,7 @@ private struct VoteBar: View {
 }
 
 /// Liste des duels — point d'entrée vers une room de duel.
+@MainActor
 public struct DuelsListView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

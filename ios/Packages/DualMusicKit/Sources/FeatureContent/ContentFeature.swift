@@ -95,6 +95,7 @@ public final class ContentViewModel {
 ///
 /// La navigation vers le lecteur / le détail d'article se fait par `NavigationStack`
 /// (l'écran est présenté par la coque, qui fournit déjà l'en-tête de page).
+@MainActor
 public struct ContentView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

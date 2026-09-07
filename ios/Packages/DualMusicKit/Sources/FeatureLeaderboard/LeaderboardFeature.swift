@@ -39,6 +39,7 @@ public final class LeaderboardViewModel {
 }
 
 /// Écran des classements : Artistes / Donateurs / Périodique.
+@MainActor
 public struct LeaderboardView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

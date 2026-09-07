@@ -7,6 +7,7 @@ import DomainModels
 /// Reprend **à l'identique** les champs et la navigation entre modes de l'écran Android
 /// (`SignInScreen`) : logo, sous-titre contextuel, carte de formulaire, CTA, bouton Google
 /// (connexion uniquement) et liens de bascule.
+@MainActor
 public struct SignInView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

@@ -113,6 +113,7 @@ public final class EditProfileViewModel {
 }
 
 /// Écran d'édition du profil : avatar, nom, bio, pays, numéro et mot de passe.
+@MainActor
 public struct EditProfileView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

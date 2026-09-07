@@ -176,6 +176,7 @@ public final class CompetitionRoomViewModel {
 }
 
 /// Catalogue des compétitions.
+@MainActor
 public struct CompetitionsListView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
@@ -255,6 +256,7 @@ private struct CompetitionRow: View {
 }
 
 /// Room de compétition : classement en direct + vote payant par candidat.
+@MainActor
 public struct CompetitionRoomView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

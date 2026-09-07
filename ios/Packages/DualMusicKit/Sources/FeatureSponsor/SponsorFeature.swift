@@ -175,6 +175,7 @@ public final class SponsorViewModel {
 }
 
 /// Écran de sponsoring : « Mes demandes » (tarifs + demandes + paiement) et « Nouvelle ».
+@MainActor
 public struct SponsorView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

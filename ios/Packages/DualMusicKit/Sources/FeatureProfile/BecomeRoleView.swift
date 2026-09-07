@@ -84,6 +84,7 @@ public final class BecomeRoleViewModel {
 }
 
 /// Écran dédié **« Devenir artiste »** (réservé aux fans) — formulaire séparé, comme le web.
+@MainActor
 public struct BecomeArtistView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
@@ -159,6 +160,7 @@ public struct BecomeArtistView: View {
 /// Écran dédié **« Devenir manager »** (réservé aux fans).
 ///
 /// ⚠️ N'apparaît dans le menu que si l'admin a ouvert les candidatures manager.
+@MainActor
 public struct BecomeManagerView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

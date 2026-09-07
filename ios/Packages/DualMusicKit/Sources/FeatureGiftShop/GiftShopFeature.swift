@@ -96,6 +96,7 @@ public final class GiftShopViewModel {
 
 /// Boutique de cadeaux : solde en tête + grille du catalogue (visuel, nom, prix, achat)
 /// avec un badge « ×N » sur les cadeaux déjà possédés.
+@MainActor
 public struct GiftShopView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

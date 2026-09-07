@@ -7,6 +7,7 @@ import DomainModels
 /// Le code a été envoyé automatiquement à l'inscription ; l'utilisateur le saisit ici. La
 /// vérification est **non bloquante** : « Passer pour l'instant » permet d'entrer dans
 /// l'app et de valider plus tard. Miroir de `EmailVerifyScreen` Android.
+@MainActor
 public struct EmailVerifyView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
@@ -83,6 +84,7 @@ public struct EmailVerifyView: View {
 ///
 /// Enregistre via `PATCH /users/me` puis entre dans l'app. « Plus tard » permet de compléter
 /// ultérieurement depuis le profil. Miroir de `ProfileCompletionScreen` Android.
+@MainActor
 public struct ProfileCompletionView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

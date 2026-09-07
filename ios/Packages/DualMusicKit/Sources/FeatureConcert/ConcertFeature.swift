@@ -79,6 +79,7 @@ public final class ConcertsViewModel {
 }
 
 /// Catalogue des concerts d'artistes — miroir de `ConcertsListScreen` Android.
+@MainActor
 public struct ConcertsListView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s

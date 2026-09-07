@@ -38,6 +38,16 @@ public final class LiveRoomClient {
     /// Piste vidéo du host à afficher (`nil` tant qu'aucune piste n'est souscrite).
     public private(set) var primaryVideoTrack: VideoTrack?
 
+    /// MA propre piste vidéo publiée (hôte/invité qui diffuse) — pour l'auto-aperçu.
+    /// `nil` tant que la caméra n'est pas activée.
+    public private(set) var localVideoTrack: LocalVideoTrack?
+
+    /// Vrai si MA caméra est active (publiée).
+    public private(set) var isCameraEnabled = false
+
+    /// Vrai si MON micro est actif (publié).
+    public private(set) var isMicrophoneEnabled = false
+
     private let tokenService: LiveKitTokenService
     private var delegateProxy: RoomDelegateProxy?
     private var pollTask: Task<Void, Never>?
