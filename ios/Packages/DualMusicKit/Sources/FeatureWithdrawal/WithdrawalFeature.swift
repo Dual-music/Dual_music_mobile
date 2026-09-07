@@ -183,6 +183,11 @@ public final class WithdrawalViewModel {
 ///
 /// Étapes : (1) définir un PIN si absent, (2) choisir une méthode, (3) saisir un montant
 /// (net après frais affiché, calculé serveur), (4) confirmer avec le PIN. Historique en bas.
+///
+/// `@MainActor` explicite : seul `body` hérite de l'isolation via le protocole `View` — les
+/// propriétés calculées annexes (`withdrawForm`, `methodsSection`…) qui lisent
+/// ``WithdrawalViewModel`` de façon synchrone ont besoin de l'annotation sur le type entier.
+@MainActor
 public struct WithdrawalView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
