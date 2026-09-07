@@ -109,6 +109,11 @@ jobs:
     name: Build app + tests UI
     runs-on: macos-14
     needs: kit-tests
+    env:
+      # Le runtime iOS "latest" d'Xcode 16.2 (18.2) n'a pas de simulateur "iPhone 15" par
+      # défaut (seulement iPhone 16/SE) — le DESTINATION global (Xcode 15.4, runtime 17.x)
+      # ne s'applique pas ici.
+      DESTINATION: 'platform=iOS Simulator,name=iPhone 16,OS=latest'
     steps:
       - uses: actions/checkout@v4
 
