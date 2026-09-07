@@ -64,6 +64,12 @@ targets:
       - path: App/Sources
       - path: App/Resources
         buildPhase: resources
+        # Info.plist est déjà géré via `info.path` ci-dessous (build setting
+        # INFOPLIST_FILE) : le laisser aussi balayé comme ressource générique fait
+        # entrer en conflit deux étapes de build produisant le même fichier de sortie
+        # dans le bundle ("Multiple commands produce Info.plist").
+        excludes:
+          - Info.plist
     dependencies:
       - package: DualMusicKit
         product: DualMusicKit
