@@ -30,7 +30,19 @@ class RecordingRepository(private val api: ApiClient) {
     suspend fun start(sourceType: String, sourceId: String): RecordingStatus =
         api.request(Endpoint.post(RecordingEndpoints.START, body(sourceType, sourceId)), RecordingStatus.serializer())
 
-    /** L'hôte/manager arrête l'enregistrement. */
+    /** Met en pause (arrête le segment en cours ; l'egress LiveKit n'a pas de vraie pause). */
+    suspend fun pause(sourceType: String, sourceId: String): RecordingStatus =
+        api.request(Endpoint.post(RecordingEndpoints.PAUSE, body(sourceType, sourceId)), RecordingStatus.serializer())
+
+    /** Reprend un enregistrement en pause (nouveau segment sous la même session). */
+    suspend fun resume(sourceType: String, sourceId: String): RecordingStatus =
+        api.request(Endpoint.post(RecordingEndpoints.RESUME, body(sourceType, sourceId)), RecordingStatus.serializer())
+
+    /** Annule tout l'enregistrement en cours — aucun replay n'est créé. */
+    suspend fun cancel(sourceType: String, sourceId: String): RecordingStatus =
+        api.request(Endpoint.post(RecordingEndpoints.CANCEL, body(sourceType, sourceId)), RecordingStatus.serializer())
+
+    /** L'hôte/manager sauvegarde l'enregistrement (les segments sont recollés en un seul fichier). */
     suspend fun stop(sourceType: String, sourceId: String): RecordingStatus =
         api.request(Endpoint.post(RecordingEndpoints.STOP, body(sourceType, sourceId)), RecordingStatus.serializer())
 

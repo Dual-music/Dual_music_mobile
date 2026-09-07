@@ -1,0 +1,139 @@
+# =============================================================================
+#  Fastlane — Dual Music iOS
+# =============================================================================
+#  Objectif : livrer sur TestFlight / App Store **sans manipulation manuelle dans Xcode**,
+#  ce qui est indispensable quand la machine macOS est un runner CI plutôt qu'un poste de
+#  développement.
+#
+#  Prérequis (une seule fois) :
+#    - `brew install fastlane xcodegen`
+#    - une **clé API App Store Connect** (.p8) : Users and Access → Integrations → App Store
+#      Connect API. Elle remplace l'identifiant Apple + 2FA, seule méthode viable en CI.
+#      Renseigner ensuite les variables d'environnement :
+#        ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_CONTENT (contenu du .p8, sauts de ligne inclus)
+#    - `DEVELOPMENT_TEAM` renseigné dans `ios/project.yml`.
+#
+#  Utilisation :
+#    cd ios
+#    fastlane tests      # tests unitaires + UI sur simulateur
+#    fastlane beta       # build signé + envoi TestFlight
+#    fastlane release    # build signé + envoi App Store (revue manuelle)
+# =============================================================================
+
+default_platform(:ios)
+
+APP_IDENTIFIER = "com.dualmusic.app"
+SCHEME = "DualMusic"
+PROJECT = "DualMusic.xcodeproj"
+
+platform :ios do
+  # ---------------------------------------------------------------------------
+  # Régénère le projet Xcode avant toute action : le .xcodeproj n'est pas committé,
+  # il est dérivé de project.yml.
+  # ---------------------------------------------------------------------------
+  before_all do
+    sh("xcodegen generate", log: false)
+  end
+
+  desc "Tests unitaires (paquet) + tests UI (app) sur simulateur"
+  lane :tests do
+    # Le paquet cible iOS : on le teste sur simulateur, pas avec `swift test`.
+    run_tests(
+      workspace: nil,
+      project: nil,
+      scheme: "DualMusicKit",
+      package_path: "Packages/DualMusicKit",
+      devices: ["iPhone 15"],
+      clean: false,
+      result_bundle: true,
+      output_directory: "fastlane/test_output/kit"
+    )
+
+    run_tests(
+      project: PROJECT,
+      scheme: SCHEME,
+      devices: ["iPhone 15"],
+      only_testing: ["DualMusicUITests"],
+      result_bundle: true,
+      output_directory: "fastlane/test_output/app"
+    )
+  end
+
+  desc "Build signé + envoi TestFlight (testeurs internes)"
+  lane :beta do
+    authenticate
+
+    # Numéro de build = numéro TestFlight le plus élevé + 1. Évite le rejet
+    # « build number already exists », erreur la plus fréquente en livraison.
+    increment_build_number(
+      xcodeproj: PROJECT,
+      build_number: latest_testflight_build_number(app_identifier: APP_IDENTIFIER).to_i + 1
+    )
+
+    build_app(
+      project: PROJECT,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "build",
+      clean: true
+    )
+
+    upload_to_testflight(
+      app_identifier: APP_IDENTIFIER,
+      skip_waiting_for_build_processing: true,
+      # Notes de version affichées aux testeurs : reprend le dernier message de commit.
+      changelog: last_git_commit[:message]
+    )
+  end
+
+  desc "Build signé + envoi App Store (soumission à la revue faite manuellement)"
+  lane :release do
+    authenticate
+
+    build_app(
+      project: PROJECT,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "build",
+      clean: true
+    )
+
+    upload_to_app_store(
+      app_identifier: APP_IDENTIFIER,
+      submit_for_review: false,     # revue déclenchée manuellement après relecture des métadonnées
+      automatic_release: false,
+      force: true,                  # ne pas ouvrir le récapitulatif HTML (CI)
+      precheck_include_in_app_purchases: false,
+      skip_screenshots: true,
+      skip_metadata: false
+    )
+  end
+
+  desc "Incrémente la version marketing (ex. 1.0.0 → 1.1.0)"
+  lane :bump do |options|
+    increment_version_number(
+      xcodeproj: PROJECT,
+      bump_type: options[:type] || "minor"
+    )
+  end
+
+  # ---------------------------------------------------------------------------
+  # Authentification App Store Connect par clé API (aucun mot de passe, aucun 2FA).
+  # ---------------------------------------------------------------------------
+  private_lane :authenticate do
+    app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_content: ENV.fetch("ASC_KEY_CONTENT"),
+      is_key_content_base64: false,
+      in_house: false
+    )
+  end
+
+  # Journalise proprement les échecs (utile quand la sortie CI est longue).
+  error do |lane, exception|
+    UI.error("Échec de la lane #{lane} : #{exception.message}")
+  end
+end

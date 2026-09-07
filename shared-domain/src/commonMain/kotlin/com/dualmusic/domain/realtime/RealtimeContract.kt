@@ -99,6 +99,18 @@ object Realtime {
 
         /** `/notifications` — nouvelle notification in-app. Payload libre (voir feature notifications). */
         const val NOTIFICATION = "notification"
+
+        /**
+         * `/live` · room event — un réglage a changé (au minimum `chat_enabled` ; live envoie
+         * aussi `allows_dedications`/`allow_guests`). Payload [EventSettingsPayload].
+         */
+        const val SETTINGS = "settings"
+
+        /** `/live` · room event — l'hôte a désigné un spectateur modérateur. Payload [EventModeratorPayload]. */
+        const val MODERATOR_APPOINTED = "moderator:appointed"
+
+        /** `/live` · room event — l'hôte a révoqué un modérateur désigné. Payload [EventModeratorPayload]. */
+        const val MODERATOR_REVOKED = "moderator:revoked"
     }
 }
 
@@ -212,6 +224,31 @@ data class FocusPayload(
     val participantId: String? = null,
 )
 
+/**
+ * `settings` — au minimum `chatEnabled` (déduit de `chat_enabled`, présent sur les 4 types
+ * d'évènement) ; live envoie en plus `allowsDedications`/`dedicationMinPriceCredits`/`allowGuests`.
+ * Un seul champ id est renseigné selon le type d'évènement.
+ */
+@Serializable
+data class EventSettingsPayload(
+    @SerialName("duel_id") val duelId: String? = null,
+    @SerialName("live_id") val liveId: String? = null,
+    @SerialName("concert_id") val concertId: String? = null,
+    @SerialName("competition_id") val competitionId: String? = null,
+    @SerialName("chat_enabled") val chatEnabled: Boolean? = null,
+    @SerialName("allows_dedications") val allowsDedications: Boolean? = null,
+    @SerialName("dedication_min_price_credits") val dedicationMinPriceCredits: Double? = null,
+    @SerialName("allow_guests") val allowGuests: Boolean? = null,
+)
+
+/** `moderator:appointed` / `moderator:revoked` — un modérateur d'évènement a été nommé/révoqué. */
+@Serializable
+data class EventModeratorPayload(
+    @SerialName("event_type") val eventType: String,
+    @SerialName("event_id") val eventId: String,
+    @SerialName("user_id") val userId: String,
+)
+
 /** `message` — message de chat d'une room. */
 @Serializable
 data class ChatMessagePayload(
@@ -222,4 +259,6 @@ data class ChatMessagePayload(
     @SerialName("created_at") val createdAt: String? = null,
     // Le backend diffuse l'auteur sous la clé `author` (chat.service.js) — pas `user`.
     @SerialName("author") val user: com.dualmusic.domain.model.DisplayProfile? = null,
+    // Réponse à un message parent (chat en fil) — présent quand c'est une réponse.
+    @SerialName("parent_id") val parentId: String? = null,
 )

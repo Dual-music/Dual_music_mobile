@@ -35,4 +35,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    // Chargement d'images distantes avec cache mémoire + disque (voir DMRemoteImage.kt) —
+    // remplace un chargeur maison sans cache qui re-téléchargeait à chaque recomposition.
+    implementation("io.coil-kt:coil-compose:2.7.0")
 }

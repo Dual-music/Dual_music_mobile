@@ -20,6 +20,14 @@ data class Live(
     @SerialName("recording_url") val recordingUrl: String? = null,
     /** Profil d'affichage du host (nom, avatar, nom de scène). */
     val artist: DisplayProfile? = null,
+    /** Dédicaces activées pour CE live (défaut true côté backend). */
+    @SerialName("allows_dedications") val allowsDedications: Boolean = true,
+    /** Prix minimum propre à CE live (crédits) — `null` = utilise le défaut global de la plateforme. */
+    @SerialName("dedication_min_price_credits") val dedicationMinPriceCredits: Double? = null,
+    /** Demandes d'invité (« lever la main ») activées pour CE live (défaut true côté backend). */
+    @SerialName("allow_guests") val allowGuests: Boolean = true,
+    /** L'artiste (hôte) a-t-il activé le chat pour ce live (défaut true côté backend). */
+    @SerialName("chat_enabled") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val chatEnabled: Boolean = true,
 ) {
     /**
      * Room LiveKit effective. DOIT correspondre exactement à la convention du web

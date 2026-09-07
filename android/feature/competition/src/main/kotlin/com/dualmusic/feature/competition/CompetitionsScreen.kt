@@ -108,6 +108,8 @@ fun CompetitionsListScreen(
     viewModel: CompetitionsViewModel,
     onOpen: (Competition) -> Unit,
     onOpenReplay: (ReplayVideo) -> Unit = {},
+    /** Ouvre l'écran Sponsoring (Profil) avec cette compétition présélectionnée. */
+    onRequestSponsor: (eventType: String, eventId: String) -> Unit = { _, _ -> },
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
@@ -134,8 +136,8 @@ fun CompetitionsListScreen(
         }
 
         when (tab) {
-            0 -> if (ui.live.isEmpty()) EmptyComp(s.noCompetitionsLive) else ui.live.forEach { CompetitionCard(it, ui.perCreditEur, isLive = true, onOpen = onOpen) }
-            1 -> if (ui.upcoming.isEmpty()) EmptyComp(s.noCompetitionsUpcoming) else ui.upcoming.forEach { CompetitionCard(it, ui.perCreditEur, isLive = false, onOpen = onOpen) }
+            0 -> if (ui.live.isEmpty()) EmptyComp(s.noCompetitionsLive) else ui.live.forEach { CompetitionCard(it, ui.perCreditEur, isLive = true, onOpen = onOpen, onRequestSponsor = onRequestSponsor) }
+            1 -> if (ui.upcoming.isEmpty()) EmptyComp(s.noCompetitionsUpcoming) else ui.upcoming.forEach { CompetitionCard(it, ui.perCreditEur, isLive = false, onOpen = onOpen, onRequestSponsor = onRequestSponsor) }
             else -> if (ui.replays.isEmpty()) EmptyComp(s.noConcertReplays) else ui.replays.forEach { CompetitionReplayCard(it, onOpenReplay) }
         }
     }
@@ -159,7 +161,13 @@ private fun TabPill(label: String, selected: Boolean, onClick: () -> Unit) {
 
 /** Carte d'une compétition (En direct / À venir) : couverture + badges + infos + bouton. */
 @Composable
-private fun CompetitionCard(competition: Competition, perCreditEur: Double, isLive: Boolean, onOpen: (Competition) -> Unit) {
+private fun CompetitionCard(
+    competition: Competition,
+    perCreditEur: Double,
+    isLive: Boolean,
+    onOpen: (Competition) -> Unit,
+    onRequestSponsor: (String, String) -> Unit = { _, _ -> },
+) {
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     val currency = LocalCurrency.current
@@ -201,8 +209,26 @@ private fun CompetitionCard(competition: Competition, perCreditEur: Double, isLi
                 style = if (isLive) DMButtonStyle.DESTRUCTIVE else DMButtonStyle.PRIMARY,
                 modifier = Modifier.fillMaxWidth(),
             ) { onOpen(competition) }
+            if (competition.status != "ended" && competition.status != "cancelled" &&
+                competition.acceptsSponsors && !isDeadlinePassed(competition.sponsorSubmissionDeadline)
+            ) {
+                DMButton(s.requestSponsorBtn, style = DMButtonStyle.OUTLINE, modifier = Modifier.fillMaxWidth()) {
+                    onRequestSponsor("competition", competition.id)
+                }
+            }
         }
     }
+}
+
+/** `true` seulement si une date limite est fixée ET déjà dépassée (pas de date = jamais fermé). */
+private fun isDeadlinePassed(deadline: String?): Boolean {
+    if (deadline == null) return false
+    val clean = deadline.trim().replace(' ', 'T').substringBefore('.').substringBefore('+').removeSuffix("Z")
+        .let { if (it.length > 19) it.take(19) else it }
+    val fmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+        .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+    val parsed = runCatching { fmt.parse(clean) }.getOrNull() ?: return false
+    return parsed.time < System.currentTimeMillis()
 }
 
 /** Carte d'un replay de compétition : couverture + Replay disponible + Regarder. */

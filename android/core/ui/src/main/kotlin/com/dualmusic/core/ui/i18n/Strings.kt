@@ -252,6 +252,12 @@ interface Strings {
     val maxTicketsLabel: String
     val allowDedications: String
     val allowSponsorAds: String
+    val dedicationDeadlineLabel: String
+    val sponsorDeadlineLabel: String
+    val requestSponsorBtn: String
+    val requestDedicationBtn: String
+    val dedicationMessageLabel: String
+    val dedicationPriceLabel: String
     val uploadingCover: String
     val noCover: String
     val changeCover: String
@@ -549,6 +555,16 @@ interface Strings {
     val compAcceptSponsors: String
     val compPublishAction: String
     val compCandidates: String
+    val compAddCandidateBtn: String
+    val compAddCandidateTitle: String
+    val compAddCandidateSearchPlaceholder: String
+    val compAddCandidateNoResults: String
+    val compAddCandidatePitchLabel: String
+    val compAddCandidateSubmit: String
+    val compAddCandidateSuccess: String
+    val compAddCandidateDisabled: String
+    val compAddCandidateAlready: String
+    val compAddCandidateSelectRequired: String
     val compSponsorDeadline: String
     val compEditTitle: String
     val compRewardAmount: String
@@ -892,6 +908,12 @@ object FrStrings : Strings {
     override val maxTicketsLabel = "Places max (optionnel)"
     override val allowDedications = "Autoriser les dédicaces"
     override val allowSponsorAds = "Autoriser les pubs sponsors"
+    override val dedicationDeadlineLabel = "Date de fin des demandes de dédicace"
+    override val sponsorDeadlineLabel = "Date de fin des demandes de sponsor"
+    override val requestSponsorBtn = "📣 Sponsoriser"
+    override val requestDedicationBtn = "💌 Demander une dédicace"
+    override val dedicationMessageLabel = "Ton message"
+    override val dedicationPriceLabel = "Prix (crédits)"
     override val uploadingCover = "Upload de la pochette…"
     override val noCover = "Aucune pochette."
     override val changeCover = "Changer la pochette"
@@ -1174,6 +1196,16 @@ object FrStrings : Strings {
     override val compAcceptSponsors = "Accepter les sponsors"
     override val compPublishAction = "Publier la compétition"
     override val compCandidates = "Candidats"
+    override val compAddCandidateBtn = "Ajouter un candidat"
+    override val compAddCandidateTitle = "Ajouter un candidat"
+    override val compAddCandidateSearchPlaceholder = "Nom de l'artiste..."
+    override val compAddCandidateNoResults = "Aucun artiste trouvé"
+    override val compAddCandidatePitchLabel = "Note (optionnel)"
+    override val compAddCandidateSubmit = "Ajouter"
+    override val compAddCandidateSuccess = "Candidat ajouté avec succès"
+    override val compAddCandidateDisabled = "Cette fonctionnalité est désactivée par l'administrateur."
+    override val compAddCandidateAlready = "Cet artiste est déjà candidat."
+    override val compAddCandidateSelectRequired = "Sélectionnez un artiste"
     override val compSponsorDeadline = "Date limite des candidatures sponsor"
     override val compEditTitle = "Modifier la compétition"
     override val compRewardAmount = "Valeur (crédits)"
@@ -1512,6 +1544,12 @@ object EnStrings : Strings {
     override val maxTicketsLabel = "Max seats (optional)"
     override val allowDedications = "Allow dedications"
     override val allowSponsorAds = "Allow sponsor ads"
+    override val dedicationDeadlineLabel = "Dedication requests deadline"
+    override val sponsorDeadlineLabel = "Sponsor requests deadline"
+    override val requestSponsorBtn = "📣 Sponsor this"
+    override val requestDedicationBtn = "💌 Request a dedication"
+    override val dedicationMessageLabel = "Your message"
+    override val dedicationPriceLabel = "Price (credits)"
     override val uploadingCover = "Uploading cover…"
     override val noCover = "No cover."
     override val changeCover = "Change cover"
@@ -1794,6 +1832,16 @@ object EnStrings : Strings {
     override val compAcceptSponsors = "Accept sponsors"
     override val compPublishAction = "Publish competition"
     override val compCandidates = "Candidates"
+    override val compAddCandidateBtn = "Add a candidate"
+    override val compAddCandidateTitle = "Add a candidate"
+    override val compAddCandidateSearchPlaceholder = "Artist name..."
+    override val compAddCandidateNoResults = "No artist found"
+    override val compAddCandidatePitchLabel = "Note (optional)"
+    override val compAddCandidateSubmit = "Add"
+    override val compAddCandidateSuccess = "Candidate added successfully"
+    override val compAddCandidateDisabled = "This feature has been disabled by the administrator."
+    override val compAddCandidateAlready = "This artist is already a candidate."
+    override val compAddCandidateSelectRequired = "Select an artist"
     override val compSponsorDeadline = "Sponsor application deadline"
     override val compEditTitle = "Edit competition"
     override val compRewardAmount = "Value (credits)"

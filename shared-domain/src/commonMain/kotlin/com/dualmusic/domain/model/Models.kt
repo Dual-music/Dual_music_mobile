@@ -78,6 +78,11 @@ data class Duel(
     // MySQL renvoie ce booléen en 0/1 (TINYINT) : sans FlexibleBoolSerializer, kotlinx strict
     // échoue et TOUTE la liste des duels devient vide (getOrDefault(emptyList)).
     @SerialName("allows_sponsor_ads") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val allowsSponsorAds: Boolean = true,
+    /** L'admin a-t-il autorisé les DEMANDES de sponsor pour ce duel (décidé à l'approbation). */
+    @SerialName("accepts_sponsors") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val acceptsSponsors: Boolean = true,
+    @SerialName("sponsor_submission_deadline") val sponsorSubmissionDeadline: String? = null,
+    /** Le manager (hôte) a-t-il activé le chat pour ce duel (défaut true côté backend). */
+    @SerialName("chat_enabled") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val chatEnabled: Boolean = true,
     /** Profils hydratés côté serveur (peuvent être absents selon l'endpoint). */
     val artist1: DisplayProfile? = null,
     val artist2: DisplayProfile? = null,
@@ -110,6 +115,9 @@ data class Concert(
     @SerialName("scheduled_time") val scheduledTime: String? = null,
     @SerialName("ticket_price") val ticketPrice: Double = 0.0,
     @SerialName("allows_dedications") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val allowsDedications: Boolean = false,
+    @SerialName("allows_sponsor_ads") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val allowsSponsorAds: Boolean = false,
+    @SerialName("sponsor_submission_deadline") val sponsorSubmissionDeadline: String? = null,
+    @SerialName("dedication_submission_deadline") val dedicationSubmissionDeadline: String? = null,
     @SerialName("cover_image_url") val coverImageUrl: String? = null,
     @SerialName("image_url") val imageUrl: String? = null,
     val location: String? = null,
@@ -121,6 +129,8 @@ data class Concert(
     val revenue: Double = 0.0,
     @SerialName("max_tickets") val maxTickets: Int? = null,
     @SerialName("approval_status") val approvalStatus: String? = null,
+    /** L'artiste (hôte) a-t-il activé le chat pour ce concert (défaut true côté backend). */
+    @SerialName("chat_enabled") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val chatEnabled: Boolean = true,
 ) {
     /** Image de couverture effective (`cover_image_url` artiste OU `image_url` admin). */
     val cover: String? get() = coverImageUrl ?: imageUrl
@@ -160,6 +170,8 @@ data class Competition(
     @SerialName("venue_contact") val venueContact: String? = null,
     @SerialName("accepts_sponsors") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val acceptsSponsors: Boolean = true,
     @SerialName("sponsor_submission_deadline") val sponsorSubmissionDeadline: String? = null,
+    /** Le manager (hôte) a-t-il activé le chat pour cette compétition (défaut true côté backend). */
+    @SerialName("chat_enabled") @Serializable(with = com.dualmusic.domain.serialization.FlexibleBoolSerializer::class) val chatEnabled: Boolean = true,
 )
 
 /** Demande de retrait de crédits par un artiste/manager. */

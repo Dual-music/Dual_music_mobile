@@ -5,13 +5,20 @@ import androidx.lifecycle.viewModelScope
 import com.dualmusic.core.media.LiveRoomClient
 import com.dualmusic.core.realtime.NamespaceSession
 import com.dualmusic.core.realtime.RealtimeClient
+import com.dualmusic.domain.model.DisplayProfile
+import com.dualmusic.domain.moderation.EventModerator
 import com.dualmusic.domain.realtime.ChatMessagePayload
+import com.dualmusic.domain.realtime.EventModeratorPayload
+import com.dualmusic.domain.realtime.EventSettingsPayload
 import com.dualmusic.domain.realtime.GiftPayload
 import com.dualmusic.domain.realtime.PresencePayload
 import com.dualmusic.domain.realtime.Realtime
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
@@ -56,6 +63,23 @@ data class JoinEventPayload(
     val status: String? = null,
 )
 
+/** Événement de dédicace (`dedication:new` / `dedication:update`) — même live room que `join:*`. */
+@kotlinx.serialization.Serializable
+data class DedicationEventPayload(
+    @kotlinx.serialization.SerialName("dedication_id") val dedicationId: String? = null,
+    @kotlinx.serialization.SerialName("fan_id") val fanId: String? = null,
+    val status: String? = null,
+    @kotlinx.serialization.SerialName("price_credits") val priceCredits: Double? = null,
+)
+
+/** Réglages du live modifiés par l'artiste en direct (dédicaces/invités on-off + prix min). */
+@kotlinx.serialization.Serializable
+data class LiveSettingsPayload(
+    @kotlinx.serialization.SerialName("allows_dedications") val allowsDedications: Boolean = true,
+    @kotlinx.serialization.SerialName("dedication_min_price_credits") val dedicationMinPriceCredits: Double? = null,
+    @kotlinx.serialization.SerialName("allow_guests") val allowGuests: Boolean = true,
+)
+
 /** Emoji flottant à animer (réaction). */
 data class FloatingEmoji(val id: Long, val emoji: String)
 
@@ -63,6 +87,8 @@ data class FloatingEmoji(val id: Long, val emoji: String)
 data class LiveGift(
     val id: Long,
     val fromUserId: String?,
+    /** Nom de l'expéditeur (résolu via le classement des donateurs, hydraté avec les profils). */
+    val fromUserName: String?,
     val giftName: String?,
     val giftImage: String?,
     val value: Double,
@@ -79,6 +105,14 @@ class LiveViewModel(
     private val liveId: String,
     private val roomName: String,
     val media: LiveRoomClient,
+    /**
+     * Fabrique un [LiveRoomClient] SUPPLÉMENTAIRE, partageant le même contexte EGL que [media]
+     * (indispensable : sans EGL partagé, les pistes distantes d'une AUTRE room sont souscrites
+     * mais ne s'affichent pas — case transparente). Sert à publier/s'abonner aux rooms **par
+     * invité** (`live-guest-<liveId>-<userId>`), exactement comme le web (voir [guestMedia] et
+     * [reconcileGuestSubscriptions]) — la room principale [media] est réservée à l'ARTISTE.
+     */
+    private val mediaFactory: () -> LiveRoomClient,
     private val realtime: RealtimeClient,
     private val repository: LiveRepository,
     sponsorAds: com.dualmusic.feature.sponsor.SponsorAdRepository,
@@ -86,6 +120,39 @@ class LiveViewModel(
     /** Vrai pour l'artiste qui DIFFUSE (publie caméra/micro) ; faux pour un spectateur. */
     val isHost: Boolean = false,
 ) : ViewModel() {
+
+    /**
+     * Client dédié à MA PROPRE publication en tant qu'INVITÉ (room `live-guest-<liveId>-<monId>`)
+     * — parité EXACTE avec le web (`GuestVideoBox` y publie sous ce même nom de room). Créé
+     * paresseusement (jamais `.join()`é pour l'hôte ou un simple spectateur) pour que l'UI puisse
+     * l'observer dès le départ sans gérer un état nullable transitoire.
+     *
+     * AVANT ce fix, un invité publiait dans la room PRINCIPALE (`media`, la même que l'hôte) —
+     * une architecture différente de celle du web, qui isole chaque invité dans SA PROPRE room.
+     * Résultat : le web (et tout spectateur qui régarde via le mécanisme web) ne recevait JAMAIS
+     * la caméra/micro d'un invité mobile, quel que soit le réseau — elles n'étaient tout
+     * simplement pas dans la room que le web écoutait.
+     */
+    val guestMedia: LiveRoomClient by lazy { mediaFactory() }
+
+    /**
+     * Pistes vidéo des AUTRES invités actifs (identité = userId), indexées par leur id. La
+     * valeur est `null` quand l'invité est présent (abonné) mais caméra coupée — l'entrée reste
+     * dans la map (au lieu d'être retirée) pour que sa case affiche un placeholder plutôt que de
+     * disparaître : il est toujours invité, juste caméra off (parité duel `SlotContent`).
+     */
+    private val _guestVideos = MutableStateFlow<Map<String, io.livekit.android.room.track.VideoTrack?>>(emptyMap())
+    val guestVideos: StateFlow<Map<String, io.livekit.android.room.track.VideoTrack?>> = _guestVideos.asStateFlow()
+
+    /** Client LiveKit par invité (room de vue dédiée) — exposé pour lire `remoteMicOn` par tuile. */
+    private val _guestClients = MutableStateFlow<Map<String, LiveRoomClient>>(emptyMap())
+    val guestClients: StateFlow<Map<String, LiveRoomClient>> = _guestClients.asStateFlow()
+
+    private val guestViewClients = mutableMapOf<String, LiveRoomClient>()
+    private val guestViewJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
+
+    /** Client de MA diffusion : la room principale si je suis l'hôte, ma room d'invité sinon. */
+    private fun selfMedia(): LiveRoomClient = if (isHost) media else guestMedia
 
     /** État + actions de diffusion pub sponsor (overlay vidéo + contrôle hôte). */
     val sponsor = com.dualmusic.feature.sponsor.SponsorAdHolder("live", liveId, sponsorAds, viewModelScope)
@@ -152,8 +219,65 @@ class LiveViewModel(
     private val _isGuestAccepted = MutableStateFlow(false)
     val isGuestAccepted: StateFlow<Boolean> = _isGuestAccepted.asStateFlow()
 
-    /** Id du caller (résolu au démarrage) pour détecter l'acceptation de SA demande. */
-    private var myUserId: String? = null
+    /** Id du caller (résolu au démarrage) pour détecter l'acceptation de SA demande + bannissement. */
+    private val _myUserId = MutableStateFlow<String?>(null)
+    private val myUserId: String? get() = _myUserId.value
+    /** Exposé pour l'UI (ex. afficher le chrono sur SA PROPRE case quand on est l'invité minuté). */
+    val myUserIdFlow: StateFlow<String?> = _myUserId.asStateFlow()
+
+    /** Spectateurs bannis de ce direct (ids). Masque leurs messages + bloque le rejoint. */
+    private val _bannedUserIds = MutableStateFlow<Set<String>>(emptySet())
+    val bannedUserIds: StateFlow<Set<String>> = _bannedUserIds.asStateFlow()
+
+    /** Vrai si MOI je suis banni → écran de blocage plein écran. */
+    val iAmBanned: StateFlow<Boolean> =
+        combine(_bannedUserIds, _myUserId) { banned, id -> id != null && banned.contains(id) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** Bannière « vous avez reçu un cadeau » (destinataire). */
+    private val _giftReceived = MutableStateFlow<String?>(null)
+    val giftReceived: StateFlow<String?> = _giftReceived.asStateFlow()
+    fun clearGiftReceived() { _giftReceived.value = null }
+
+    /** Hôte : demandes de dédicace EN ATTENTE pour ce live (à accepter/rejeter) — alimente le badge. */
+    private val _dedications = MutableStateFlow<List<LiveDedication>>(emptyList())
+    val dedications: StateFlow<List<LiveDedication>> = _dedications.asStateFlow()
+
+    /** Hôte : dédicaces déjà ACCEPTÉES ou LIVRÉES pour ce live (historique, sous les demandes). */
+    private val _dedicationHistory = MutableStateFlow<List<LiveDedication>>(emptyList())
+    val dedicationHistory: StateFlow<List<LiveDedication>> = _dedicationHistory.asStateFlow()
+
+    /**
+     * Prix minimum EFFECTIF d'une dédicace pour CE live (crédits) : la surcharge propre au live
+     * si l'artiste en a fixé une, sinon le défaut global piloté par l'admin.
+     */
+    private val _dedicationMinPrice = MutableStateFlow(10.0)
+    val dedicationMinPrice: StateFlow<Double> = _dedicationMinPrice.asStateFlow()
+
+    /** Dédicaces activées pour CE live (réglage artiste, réactif en direct via `settings`). */
+    private val _liveAllowsDedications = MutableStateFlow(true)
+    val liveAllowsDedications: StateFlow<Boolean> = _liveAllowsDedications.asStateFlow()
+
+    /** Demandes d'invité (« lever la main ») activées pour CE live (réglage artiste). */
+    private val _liveAllowGuests = MutableStateFlow(true)
+    val liveAllowGuests: StateFlow<Boolean> = _liveAllowGuests.asStateFlow()
+
+    /** Chat activé pour CE live (réglage hôte, réactif en direct via `settings`) — jamais délégué. */
+    private val _liveChatEnabled = MutableStateFlow(true)
+    val liveChatEnabled: StateFlow<Boolean> = _liveChatEnabled.asStateFlow()
+
+    /** Modérateurs désignés de ce live (hôte + jusqu'à 2 spectateurs) — visible par tous. */
+    private val _moderators = MutableStateFlow<List<EventModerator>>(emptyList())
+    val moderators: StateFlow<List<EventModerator>> = _moderators.asStateFlow()
+
+    /** Spectateurs actuellement connectés (hôte uniquement — chargé à l'ouverture du picker). */
+    private val _viewers = MutableStateFlow<List<DisplayProfile>>(emptyList())
+    val viewers: StateFlow<List<DisplayProfile>> = _viewers.asStateFlow()
+
+    /** Confirmation « dédicace envoyée » (ou message d'échec) affichée au fan. */
+    private val _dedicationFeedback = MutableStateFlow<String?>(null)
+    val dedicationFeedback: StateFlow<String?> = _dedicationFeedback.asStateFlow()
+    fun clearDedicationFeedback() { _dedicationFeedback.value = null }
 
     private var giftCounter = 0L
     private var liveSession: NamespaceSession? = null
@@ -176,9 +300,25 @@ class LiveViewModel(
         }
         loadInventory()
         loadGiftLeaderboard() // amorce la bulle top-donateur
-        recordingCtl.refresh()
-        if (isHost) loadJoinRequests()
-        if (!isHost) viewModelScope.launch { myUserId = repository.myUserId() }
+        loadModerators()
+        recordingCtl.startPolling()
+        loadLiveSettings()
+        if (isHost) {
+            loadJoinRequests(); loadDedications()
+        } else {
+            loadAcceptedGuests()
+        }
+        // Id du caller (toujours résolu : sert au bannissement + « cadeau reçu » + acceptation invité).
+        viewModelScope.launch {
+            _myUserId.value = repository.myUserId()
+            _bannedUserIds.value = runCatching { repository.listStreamBans(liveId) }.getOrDefault(emptyList()).toSet()
+        }
+        // Réconcilie mes abonnements aux rooms des AUTRES invités actifs (hôte, spectateur ou
+        // invité — tout le monde doit les voir/entendre) à chaque changement de la liste ou
+        // dès que MON id est connu (pour ne pas s'auto-abonner à ma propre room).
+        viewModelScope.launch {
+            combine(_acceptedGuests, _myUserId) { list, _ -> list }.collect { reconcileGuestSubscriptions(it) }
+        }
         connectRealtime()
     }
 
@@ -202,11 +342,133 @@ class LiveViewModel(
         viewModelScope.launch { runCatching { repository.reportLive(liveId, reason) } }
     }
 
-    /** Envoie une dédicace (message dédié) dans le live. */
-    fun dedicate(message: String) {
+    /**
+     * Charge les réglages de CE live (dédicaces on/off + prix minimum effectif, invités on/off).
+     * Pour tout le monde (hôte, invité, spectateur) : chacun doit voir les mêmes règles.
+     */
+    private fun loadLiveSettings() {
+        viewModelScope.launch {
+            val globalDefault = repository.dedicationMinPrice()
+            runCatching { repository.getLive(liveId) }
+                .onSuccess { l ->
+                    _liveAllowsDedications.value = l.allowsDedications
+                    _liveAllowGuests.value = l.allowGuests
+                    _liveChatEnabled.value = l.chatEnabled
+                    _dedicationMinPrice.value = l.dedicationMinPriceCredits ?: globalDefault
+                }
+                .onFailure { _dedicationMinPrice.value = globalDefault }
+        }
+    }
+
+    /** Hôte : active/désactive les dédicaces pour ce live, en direct (visible par tous). */
+    fun setDedicationsEnabled(enabled: Boolean) {
+        _liveAllowsDedications.value = enabled
+        viewModelScope.launch { runCatching { repository.updateLiveSettings(liveId, allowsDedications = enabled) } }
+    }
+
+    /** Hôte : fixe le prix minimum d'une dédicace pour CE live (surcharge le défaut global). */
+    fun setDedicationMinPrice(price: Double) {
+        if (price <= 0) return
+        _dedicationMinPrice.value = price
+        viewModelScope.launch { runCatching { repository.updateLiveSettings(liveId, dedicationMinPriceCredits = price) } }
+    }
+
+    /** Hôte : active/désactive les demandes d'invité (« lever la main ») pour ce live. */
+    fun setGuestsEnabled(enabled: Boolean) {
+        _liveAllowGuests.value = enabled
+        viewModelScope.launch { runCatching { repository.updateLiveSettings(liveId, allowGuests = enabled) } }
+    }
+
+    /** Hôte : active/désactive le chat pour ce live, en direct (visible par tous). Pouvoir
+     *  EXCLUSIF de l'hôte — jamais délégué aux modérateurs désignés. */
+    fun setChatEnabled(enabled: Boolean) {
+        _liveChatEnabled.value = enabled
+        viewModelScope.launch { runCatching { repository.updateLiveSettings(liveId, chatEnabled = enabled) } }
+    }
+
+    /** Recharge les modérateurs désignés (appelé au chargement initial + sur événement temps réel). */
+    fun loadModerators() {
+        viewModelScope.launch { runCatching { repository.listEventModerators(liveId) }.getOrNull()?.let { _moderators.value = it } }
+    }
+
+    /** Hôte : (re)charge les spectateurs connectés (vivier du picker « désigner un modérateur »). */
+    fun loadViewers() {
+        viewModelScope.launch { _viewers.value = runCatching { repository.listCurrentViewers(liveId) }.getOrDefault(emptyList()) }
+    }
+
+    /** Hôte : désigne un spectateur modérateur (ban/masquer message — jamais le chat on/off). */
+    fun appointModerator(userId: String) {
+        viewModelScope.launch {
+            runCatching { repository.appointModerator(liveId, userId) }
+                .onSuccess { loadModerators() }
+                .onFailure { _dedicationFeedback.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
+
+    /** Hôte : révoque un modérateur désigné. */
+    fun revokeModerator(userId: String) {
+        viewModelScope.launch {
+            runCatching { repository.revokeModerator(liveId, userId) }
+                .onSuccess { loadModerators() }
+                .onFailure { _dedicationFeedback.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
+
+    /**
+     * Envoie une dédicace (message dédié) dans le live. `price` est choisi par le fan (≥ prix
+     * minimum effectif — le champ de saisie le clamp déjà, revalidé ici par sécurité). L'échec
+     * (ex. solde insuffisant, message trop court) est SIGNALÉ au fan plutôt que silencieux.
+     */
+    fun dedicate(message: String, price: Double) {
         val m = message.trim()
         if (m.isEmpty()) return
-        viewModelScope.launch { runCatching { repository.sendDedication(liveId, m) } }
+        val p = price.coerceAtLeast(_dedicationMinPrice.value)
+        viewModelScope.launch {
+            runCatching { repository.sendDedication(liveId, m, p) }
+                .onSuccess { _dedicationFeedback.value = "🎤 Dédicace envoyée à l'artiste !" }
+                .onFailure { _dedicationFeedback.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
+
+    /**
+     * Hôte : (re)charge les dédicaces de CE live — séparées en « en attente » (badge + actions
+     * accepter/rejeter) et « acceptées/livrées » (historique, affiché en dessous dans la même
+     * feuille). Auto-rafraîchi via realtime (`dedication:new`/`dedication:update`, voir
+     * connectRealtime) — pas besoin d'ouvrir la feuille pour que le badge se mette à jour.
+     */
+    fun loadDedications() {
+        if (!isHost) return
+        viewModelScope.launch {
+            val all = runCatching { repository.artistDedications() }.getOrDefault(emptyList())
+            val mine = all.filter { it.concertId == liveId }
+            _dedications.value = mine.filter { it.status == "pending" }
+            _dedicationHistory.value = mine.filter { it.status == "paid" || it.status == "delivered" }
+        }
+    }
+
+    /** Hôte : accepte une demande EN ATTENTE — débite le fan MAINTENANT, puis recharge. */
+    fun acceptDedication(id: String) {
+        viewModelScope.launch {
+            runCatching { repository.acceptDedication(id) }
+                .onSuccess { loadDedications() }
+                .onFailure { _dedicationFeedback.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
+
+    /** Hôte : rejette une demande EN ATTENTE — aucun débit, puis recharge. */
+    fun rejectDedication(id: String) {
+        viewModelScope.launch {
+            runCatching { repository.rejectDedication(id) }
+                .onSuccess { loadDedications() }
+                .onFailure { _dedicationFeedback.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
+
+    /** Hôte : marque une dédicace ACCEPTÉE comme livrée (interprétée) puis recharge la liste. */
+    fun deliverDedication(id: String) {
+        viewModelScope.launch {
+            runCatching { repository.deliverDedication(id) }.onSuccess { loadDedications() }
+        }
     }
 
     /** Spectateur : demande à rejoindre en invité. */
@@ -220,11 +482,56 @@ class LiveViewModel(
         viewModelScope.launch { runCatching { repository.cancelJoin(rid) }; _myJoinRequestId.value = null }
     }
 
-    /** Hôte : (re)charge les demandes en attente. */
+    /** Hôte : (re)charge les demandes en attente + les invités actifs. */
     fun loadJoinRequests() {
         viewModelScope.launch {
             _joinRequests.value = runCatching { repository.joinRequests(liveId, "pending") }.getOrDefault(emptyList())
             _acceptedGuests.value = runCatching { repository.joinRequests(liveId, "accepted") }.getOrDefault(emptyList())
+        }
+    }
+
+    /**
+     * TOUT LE MONDE (spectateur ou invité) : (re)charge la liste des invités actifs — nécessaire
+     * pour savoir à QUELLES rooms d'invités s'abonner (voir [reconcileGuestSubscriptions]).
+     * Contrairement à [loadJoinRequests] (réservé à l'hôte), ne charge pas les demandes en attente
+     * (non actionnables par un simple spectateur).
+     */
+    private fun loadAcceptedGuests() {
+        viewModelScope.launch {
+            _acceptedGuests.value = runCatching { repository.joinRequests(liveId, "accepted") }.getOrDefault(emptyList())
+        }
+    }
+
+    /**
+     * Recalcule mes connexions d'ABONNEMENT (vue seule) aux rooms des invités actifs, hors
+     * moi-même : ouvre une room `live-guest-<liveId>-<userId>` par invité et en extrait la piste
+     * vidéo primaire. Ferme/retire celles des invités qui ne sont plus actifs — c'est ce qui fait
+     * disparaître la case d'un invité qui descend ou est retiré, chez TOUT LE MONDE (y compris
+     * l'hôte, qui suit désormais la MÊME logique qu'un spectateur pour voir les invités).
+     */
+    private fun reconcileGuestSubscriptions(list: List<LiveJoinRequest>) {
+        val wanted = list.map { it.userId }.filterNot { it == myUserId }.toSet()
+        val stale = guestViewClients.keys - wanted
+        stale.forEach { uid ->
+            guestViewJobs.remove(uid)?.cancel()
+            guestViewClients.remove(uid)?.leave()
+            _guestVideos.update { it - uid }
+            _guestClients.update { it - uid }
+        }
+        val toAdd = wanted - guestViewClients.keys
+        toAdd.forEach { uid ->
+            val client = mediaFactory()
+            guestViewClients[uid] = client
+            _guestClients.update { it + (uid to client) }
+            // Case créée tout de suite (piste `null` = caméra coupée) : reste affichée en
+            // placeholder tant que l'invité est présent, au lieu de disparaître.
+            _guestVideos.update { it + (uid to null) }
+            guestViewJobs[uid] = viewModelScope.launch {
+                runCatching { client.join(roomName = "live-guest-$liveId-$uid", canPublish = false) }
+                client.primaryVideoTrack.collect { track ->
+                    _guestVideos.update { m -> m + (uid to track) }
+                }
+            }
         }
     }
 
@@ -295,11 +602,15 @@ class LiveViewModel(
             "timer_ended" -> _guestTimers.update { it - target }
             "toggle_mic" -> {
                 val mute = (p.value as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull ?: false
-                if (target == myUserId) viewModelScope.launch { runCatching { media.setMicEnabled(!mute) } }
+                if (target == myUserId) viewModelScope.launch { runCatching { selfMedia().setMicEnabled(!mute) } }
             }
             "kick" -> if (target == myUserId) {
+                // Retiré par l'artiste : j'arrête de publier dans ma room d'invité (ma tuile
+                // disparaît chez tous). Je reste connecté à la room principale (jamais quittée) →
+                // je continue de regarder le live sans interruption.
                 _isGuestAccepted.value = false
-                viewModelScope.launch { runCatching { media.leave() } }
+                _myJoinRequestId.value = null
+                viewModelScope.launch { runCatching { guestMedia.leave() } }
             }
         }
     }
@@ -331,15 +642,44 @@ class LiveViewModel(
     }
 
     /**
-     * Invité accepté : monte sur scène — rejoint la room en **publisher** (canPublish) puis
-     * publie sa caméra. La caméra locale apparaît alors à tous (multi-participant).
+     * Invité accepté : monte sur scène — publie caméra/micro dans MA PROPRE room d'invité
+     * (`live-guest-<liveId>-<monId>`, [guestMedia]), **sans jamais toucher** [media] (je reste
+     * connecté à la room principale comme spectateur, je continue donc de voir/entendre
+     * l'artiste pendant que je diffuse). C'est cette room dédiée — et non la room principale —
+     * que le web (et tout autre spectateur) écoute pour un invité, via la même convention de nom.
      * La permission caméra/micro est demandée par l'écran avant l'appel.
      */
     fun goOnStage() {
+        val uid = myUserId ?: return
         viewModelScope.launch {
-            media.leave()
-            media.join(roomName = roomName, canPublish = true)
-            media.startBroadcast()
+            runCatching { guestMedia.join(roomName = "live-guest-$liveId-$uid", canPublish = true) }
+            runCatching { guestMedia.startBroadcast() }
+            // Micro + caméra COUPÉS par défaut à l'entrée en scène (`startBroadcast` les active
+            // toujours) : c'est à l'invité d'activer consciemment ce qu'il veut montrer, pour
+            // éviter toute surprise (parité avec l'esprit « accepté ≠ diffusé publiquement »).
+            runCatching { guestMedia.setMicEnabled(false) }
+            runCatching { guestMedia.setCamEnabled(false) }
+        }
+    }
+
+    /**
+     * Invité : DESCEND du direct sans le quitter — arrête de publier dans sa room d'invité (sa
+     * caméra/tuile disparaît chez TOUS, via [reconcileGuestSubscriptions] qui suit la liste des
+     * invités actifs), clôt sa demande (l'hôte le retire de la liste). Il reste connecté à la
+     * room principale (jamais quittée) → il continue de regarder le live sans interruption.
+     */
+    fun leaveStage() {
+        _isGuestAccepted.value = false
+        val rid = _myJoinRequestId.value
+        _myJoinRequestId.value = null
+        viewModelScope.launch {
+            // `respondJoinStatus` (POST .../respond) est réservé à L'HÔTE côté backend (403 sinon,
+            // silencieusement avalé par runCatching) — un invité qui clôt SA PROPRE demande doit
+            // passer par l'endpoint d'ANNULATION (DELETE), qui autorise le demandeur lui-même quel
+            // que soit le statut courant (pending OU accepted). Sans ce bon endpoint, la demande
+            // restait "accepted" côté serveur → case fantôme chez tous, ré-acceptation au retour.
+            rid?.let { runCatching { repository.cancelJoin(it) } }
+            runCatching { guestMedia.leave() }
         }
     }
 
@@ -367,31 +707,32 @@ class LiveViewModel(
         viewModelScope.launch { runCatching { media.startBroadcast() } }
     }
 
-    /** Coupe/rétablit le micro (mode hôte). */
+    /** Coupe/rétablit le micro (hôte : room principale ; invité : sa room dédiée). */
     fun toggleMic() {
-        viewModelScope.launch { runCatching { media.setMicEnabled(!media.micEnabled.value) } }
+        viewModelScope.launch { runCatching { val m = selfMedia(); m.setMicEnabled(!m.micEnabled.value) } }
     }
 
-    /** Coupe/rétablit la caméra (mode hôte). */
+    /** Coupe/rétablit la caméra (hôte : room principale ; invité : sa room dédiée). */
     fun toggleCamera() {
-        viewModelScope.launch { runCatching { media.setCamEnabled(!media.camEnabled.value) } }
+        viewModelScope.launch { runCatching { val m = selfMedia(); m.setCamEnabled(!m.camEnabled.value) } }
     }
 
-    /** Bascule caméra avant/arrière (mode hôte). */
+    /** Bascule caméra avant/arrière (hôte : room principale ; invité : sa room dédiée). */
     fun switchCamera() {
-        viewModelScope.launch { runCatching { media.switchCamera() } }
+        viewModelScope.launch { runCatching { selfMedia().switchCamera() } }
     }
 
     /** Pause/reprise du direct : coupe (ou rétablit) caméra + micro ensemble. */
     fun setPaused(paused: Boolean) {
         viewModelScope.launch {
-            runCatching { media.setCamEnabled(!paused); media.setMicEnabled(!paused) }
+            val m = selfMedia()
+            runCatching { m.setCamEnabled(!paused); m.setMicEnabled(!paused) }
         }
     }
 
     /** Active/désactive le flou d'arrière-plan (filtre). */
     fun toggleBlur() {
-        runCatching { media.toggleBlur() }
+        runCatching { selfMedia().toggleBlur() }
     }
 
     /** Termine le live côté backend puis notifie l'appelant (mode hôte). */
@@ -403,18 +744,43 @@ class LiveViewModel(
         }
     }
 
-    /** Arrête tout (sortie d'écran). */
+    /** Arrête tout (sortie d'écran) : room principale, ma room d'invité + tous les abonnements. */
     fun stop() {
+        // Quitter le live EST une expulsion : si j'étais un invité ACCEPTÉ, ma demande passe
+        // "ended" côté serveur — sinon ma case restait visible pour tout le monde (placeholder
+        // permanent, caméra coupée = jamais retirée) et, à mon retour, j'étais ré-accepté sans
+        // nouvelle demande. Symétrique avec `leaveStage()`/le kick de l'artiste.
+        if (!isHost && _isGuestAccepted.value) {
+            _myJoinRequestId.value?.let { rid ->
+                // Même endpoint que `leaveStage()` (voir son commentaire) — `respondJoinStatus`
+                // est host-only et échouerait silencieusement pour un invité qui se retire lui-même.
+                viewModelScope.launch { runCatching { repository.cancelJoin(rid) } }
+            }
+        }
         liveSession?.disconnect()
         chatSession?.disconnect()
         media.leave()
+        runCatching { guestMedia.leave() }
+        guestViewJobs.values.forEach { it.cancel() }
+        guestViewJobs.clear()
+        guestViewClients.values.forEach { it.leave() }
+        guestViewClients.clear()
     }
 
-    /** Envoie un message de chat (le serveur diffuse ensuite). */
-    fun sendMessage(text: String) {
+    /** Envoie un message de chat (le serveur diffuse ensuite), optionnellement en réponse à `parentId`. */
+    fun sendMessage(text: String, parentId: String? = null) {
         val content = text.trim()
         if (content.isEmpty()) return
-        viewModelScope.launch { runCatching { repository.postMessage(liveId, content) } }
+        viewModelScope.launch { runCatching { repository.postMessage(liveId, content, parentId) } }
+    }
+
+    /** Hôte : bannit un spectateur (optimiste + persistant). Il ne peut plus écrire ni rejoindre. */
+    fun banUser(userId: String, reason: String?) {
+        _bannedUserIds.update { it + userId }
+        viewModelScope.launch {
+            runCatching { repository.createStreamBan(liveId, userId, reason) }
+                .onFailure { _bannedUserIds.update { ids -> ids - userId } }
+        }
     }
 
     /** Charge l'inventaire (cadeaux possédés). */
@@ -444,11 +810,15 @@ class LiveViewModel(
 
     /** Charge le classement des donateurs du live (trophée + bulle top-donateur). */
     fun loadGiftLeaderboard() {
-        viewModelScope.launch {
-            val list = runCatching { repository.giftLeaderboard(liveId) }.getOrDefault(emptyList())
-            _giftLeaderboard.value = list
-            _topDonor.value = list.firstOrNull()?.let { com.dualmusic.core.ui.overlay.TopDonor(it.displayName, it.value) }
-        }
+        viewModelScope.launch { refreshGiftLeaderboard() }
+    }
+
+    /** Recharge le classement et renvoie la liste fraîche (réutilisée pour résoudre un nom d'expéditeur). */
+    private suspend fun refreshGiftLeaderboard(): List<GiftLeaderboardEntry> {
+        val list = runCatching { repository.giftLeaderboard(liveId) }.getOrDefault(emptyList())
+        _giftLeaderboard.value = list
+        _topDonor.value = list.firstOrNull()?.let { com.dualmusic.core.ui.overlay.TopDonor(it.displayName, it.value) }
+        return list
     }
 
     // MARK: Temps réel
@@ -467,12 +837,25 @@ class LiveViewModel(
 
             // Nouveaux messages
             chat.on(Realtime.RealtimeEvent.CHAT_MESSAGE, ChatMessagePayload.serializer()) { p ->
-                _messages.update { it + LiveChatMessage(id = p.id, userId = p.userId, content = p.content, user = p.user) }
+                _messages.update { it + LiveChatMessage(id = p.id, userId = p.userId, content = p.content, user = p.user, parentId = p.parentId) }
             }
             // Cadeaux
             live.on(Realtime.RealtimeEvent.GIFT, GiftPayload.serializer()) { p ->
-                _giftFeed.update { it + LiveGift(giftCounter++, p.fromUserId, p.giftName, p.giftImage, p.value) }
-                loadGiftLeaderboard() // met à jour la bulle top-donateur en direct
+                if (p.toUserId != null && p.toUserId == myUserId) {
+                    _giftReceived.value = "🎁 Vous avez reçu un cadeau (${p.value.toInt()} crédits) !"
+                }
+                viewModelScope.launch {
+                    // Recharge le classement (met à jour la bulle top-donateur) ET en profite pour
+                    // résoudre le NOM de l'expéditeur (déjà hydraté avec les profils) → affiché
+                    // dans la carte glissante « cadeau reçu ».
+                    val list = refreshGiftLeaderboard()
+                    val senderName = list.find { it.userId == p.fromUserId }?.displayName
+                    _giftFeed.update { it + LiveGift(giftCounter++, p.fromUserId, senderName, p.giftName, p.giftImage, p.value) }
+                }
+            }
+            // Bannissement d'un spectateur poussé par le serveur (parité duel `stream:banned`).
+            live.on("stream:banned", LiveStreamBannedPayload.serializer()) { p ->
+                if (p.streamId == null || p.streamId == liveId) _bannedUserIds.update { it + p.userId }
             }
             // Présence (viewers)
             live.on(Realtime.RealtimeEvent.PRESENCE, PresencePayload.serializer()) { p ->
@@ -482,6 +865,40 @@ class LiveViewModel(
             live.on("likes", LikesPayload.serializer()) { p ->
                 if (p.likes > _likes.value) _likes.value = p.likes
             }
+            // Réglages du live modifiés par l'artiste en direct — tout le monde réagit aussitôt
+            // (masque/affiche le bouton main levée, la feuille de dédicace, etc.).
+            live.on("settings", LiveSettingsPayload.serializer()) { p ->
+                _liveAllowsDedications.value = p.allowsDedications
+                _liveAllowGuests.value = p.allowGuests
+                // `null` = pas de surcharge sur ce live → garde le prix effectif déjà chargé
+                // (défaut global) au lieu de l'écraser par une valeur absente.
+                p.dedicationMinPriceCredits?.let { _dedicationMinPrice.value = it }
+            }
+            // Chat on/off (même événement `settings` — `chat_enabled` n'existe pas sur
+            // [LiveSettingsPayload], décodé ici séparément via le DTO partagé).
+            live.on(Realtime.RealtimeEvent.SETTINGS, EventSettingsPayload.serializer()) { p ->
+                p.chatEnabled?.let { _liveChatEnabled.value = it }
+            }
+            // Modération : un modérateur a été désigné/révoqué par l'hôte → recharge pour tous.
+            live.on(Realtime.RealtimeEvent.MODERATOR_APPOINTED, EventModeratorPayload.serializer()) { loadModerators() }
+            live.on(Realtime.RealtimeEvent.MODERATOR_REVOKED, EventModeratorPayload.serializer()) { loadModerators() }
+            // Dédicaces : (a) hôte — badge + liste auto-rafraîchis SANS avoir à ouvrir la feuille
+            // (parité demandes d'invité) ; (b) fan concerné — bannière immédiate de la décision de
+            // l'artiste (accepté = montant débité MAINTENANT, rejeté = aucun débit), pour ne jamais
+            // laisser croire qu'il a encore un solde qu'il n'a plus (synchronisé, pas besoin de
+            // recharger l'écran).
+            live.on("dedication:new", DedicationEventPayload.serializer()) { if (isHost) loadDedications() }
+            live.on("dedication:update", DedicationEventPayload.serializer()) { p ->
+                if (isHost) loadDedications()
+                if (p.fanId != null && p.fanId == myUserId) {
+                    _dedicationFeedback.value = when (p.status) {
+                        "paid" -> "🎤 Ta dédicace a été acceptée — ${p.priceCredits?.toInt() ?: ""} crédits débités."
+                        "rejected" -> "Ta dédicace a été refusée — aucun crédit débité."
+                        "delivered" -> "🎉 Ta dédicace vient d'être interprétée en direct !"
+                        else -> null
+                    }
+                }
+            }
             // Relais broadcast : réactions emojis (live-emojis-<id>) + actions invités (live-controls-<id>).
             live.on("broadcast", BroadcastEnvelope.serializer()) { env ->
                 when (env.event) {
@@ -490,15 +907,18 @@ class LiveViewModel(
                     "live_status" -> if (!isHost) _liveWaiting.value = env.payload?.status == "waiting"
                 }
             }
-            // Demandes d'invités (hôte) : rafraîchir la liste à chaque nouvelle demande / MAJ.
-            live.on("join:new", JoinEventPayload.serializer()) { if (isHost) loadJoinRequests() }
+            // Demandes d'invités : rafraîchir la liste (TOUT LE MONDE — pas que l'hôte — pour que
+            // chacun sache à quelles rooms d'invités s'abonner, voir reconcileGuestSubscriptions).
+            live.on("join:new", JoinEventPayload.serializer()) { if (isHost) loadJoinRequests() else loadAcceptedGuests() }
             live.on("join:update", JoinEventPayload.serializer()) { p ->
-                if (isHost) loadJoinRequests()
+                if (isHost) loadJoinRequests() else loadAcceptedGuests()
                 // Spectateur : sa propre demande a changé d'état.
                 if (!isHost && p.userId != null && p.userId == myUserId) {
                     when (p.status) {
                         "accepted" -> _isGuestAccepted.value = true
-                        "rejected", "ended" -> _isGuestAccepted.value = false
+                        // "cancelled" = auto-retrait (leaveStage/stop, endpoint DELETE — seul autorisé
+                        // pour le demandeur lui-même) ; "ended"/"rejected" = décision de l'hôte.
+                        "rejected", "ended", "cancelled" -> _isGuestAccepted.value = false
                     }
                 }
             }

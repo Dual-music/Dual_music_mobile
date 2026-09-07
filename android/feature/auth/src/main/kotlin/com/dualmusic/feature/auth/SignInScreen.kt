@@ -54,12 +54,10 @@ import kotlinx.coroutines.launch
  * téléphone optionnel, code de parrainage optionnel, acceptation des CGU).
  *
  * @param viewModel source d'état.
- * @param onGoogle callback pour lancer le flux Google (différé).
  */
 @Composable
 fun SignInScreen(
     viewModel: AuthViewModel,
-    onGoogle: () -> Unit = {},
 ) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
@@ -106,7 +104,9 @@ fun SignInScreen(
                     onClick = viewModel::submit,
                 )
 
-                if (ui.mode == AuthMode.LOGIN) {
+                // Masqué par défaut (réglage admin `google_signin_config`, désactivé tant que
+                // l'admin ne l'a pas explicitement activé — voir `AuthViewModel.init`).
+                if (ui.mode == AuthMode.LOGIN && ui.googleSigninEnabled) {
                     DMButton(
                         title = strings.continueWithGoogle,
                         style = DMButtonStyle.OUTLINE,

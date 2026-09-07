@@ -8,22 +8,42 @@ import com.dualmusic.domain.concert.DedicationRequest
 import com.dualmusic.domain.model.Concert
 import com.dualmusic.domain.model.DisplayProfile
 import com.dualmusic.domain.model.VirtualGift
+import com.dualmusic.domain.moderation.AppointModeratorBody
+import com.dualmusic.domain.moderation.EventModerator
+import com.dualmusic.domain.moderation.ModerationEndpoints
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
-/** Message de chat d'un concert (auteur hydraté par le backend sous la clé `author`). */
+/**
+ * Message de chat d'un concert (auteur hydraté sous `author`). Le backend (chat.helper partagé)
+ * utilise la colonne `message` et supporte les réponses en fil (`parent_id`).
+ */
 @Serializable
 data class ConcertChatMessage(
     val id: String? = null,
     @SerialName("user_id") val userId: String = "",
-    val content: String = "",
+    @SerialName("message") val content: String = "",
     @SerialName("author") val user: DisplayProfile? = null,
+    @SerialName("parent_id") val parentId: String? = null,
 ) {
     val authorName: String get() = user?.displayName ?: com.dualmusic.core.ui.i18n.appStrings.fan
 }
+
+/** Ligne de bannissement (`GET /moderation/stream-bans`) — on n'extrait que l'utilisateur banni. */
+@Serializable
+data class ConcertStreamBanRow(
+    @SerialName("banned_user_id") val bannedUserId: String? = null,
+)
+
+/** Charge utile `stream:banned` — un spectateur vient d'être banni de ce direct. */
+@Serializable
+data class ConcertStreamBannedPayload(
+    @SerialName("user_id") val userId: String,
+    @SerialName("stream_id") val streamId: String? = null,
+)
 
 /** Cadeau possédé dans l'inventaire (`GET /gifts/inventory`). */
 @Serializable
@@ -70,7 +90,9 @@ class ConcertRepository(private val api: ApiClient) {
      * `POST /moderation/reports/live` — le concert est identifié par son id (`liveId`).
      */
     suspend fun reportLive(liveId: String, reason: String) {
-        api.request<Unit>(Endpoint.post("moderation/reports/live", """{"liveId":"$liveId","reason":"$reason"}"""))
+        // `streamType` distingue les 3 entités partageant `live_reports` — sans lui, ce signalement
+        // de CONCERT était enregistré par défaut comme "live", invisible/mal lié pour l'admin.
+        api.request<Unit>(Endpoint.post("moderation/reports/live", """{"liveId":"$liveId","streamType":"concert","reason":"$reason"}"""))
     }
 
     /** Catalogue public des concerts d'artistes (approuvés). */
@@ -140,22 +162,36 @@ class ConcertRepository(private val api: ApiClient) {
         api.request(Endpoint.get(ConcertEndpoints.ticketInfo(id)), ConcertTicketInfo.serializer())
 
     /**
-     * Achète une dédicace pour un concert (débit atomique + idempotent).
+     * Achète une dédicace pour un concert (débit atomique + idempotent). Uniquement possible
+     * AVANT le direct (statut `upcoming`) — contrairement au live, le serveur rejette toute
+     * demande une fois le concert passé en `live`/`ended` (voir `resolveDedicationArtist`).
      * @param message texte lu par l'artiste pendant le concert.
+     * @param priceCredits prix libre (minimum imposé par la config économique, voir [dedicationMinPrice]).
      */
     suspend fun purchaseDedication(
         concertId: String,
         message: String,
+        priceCredits: Double,
         idempotencyKey: String = UUID.randomUUID().toString(),
     ) {
         val body = json.encodeToString(
             DedicationRequest.serializer(),
-            DedicationRequest(concertId = concertId, message = message),
+            DedicationRequest(concertId = concertId, message = message, priceCredits = priceCredits),
         )
         api.request<Unit>(
             Endpoint.post(ConcertEndpoints.DEDICATIONS_PURCHASE, body, idempotencyKey = idempotencyKey),
         )
     }
+
+    /**
+     * Prix minimum d'une dédicace de CONCERT (section `economic_config.dedication` — jamais
+     * `dedication_live`, réservée aux lives — même logique que `concert.service.js#dedicationConfig`).
+     */
+    suspend fun dedicationMinPrice(): Double =
+        runCatching {
+            val v = api.request(Endpoint.get("/settings/public/economic_config"), ConcertEconomicConfigSetting.serializer()).value
+            v?.dedication?.minPriceCredits ?: 10.0
+        }.getOrDefault(10.0)
 
     // --- Room live du concert (chat, likes, cadeaux, billet, go-live) ---
 
@@ -175,10 +211,33 @@ class ConcertRepository(private val api: ApiClient) {
             ListSerializer(ConcertChatMessage.serializer()),
         )
 
-    /** Poste un message (le backend diffuse via Socket.IO). */
-    suspend fun postMessage(concertId: String, content: String) {
-        api.request<Unit>(Endpoint.post("/concerts/$concertId/messages", json.encodeToString(MessageBody.serializer(), MessageBody(content))))
+    /** Poste un message (le backend diffuse via Socket.IO), optionnellement en réponse à `parentId`. */
+    suspend fun postMessage(concertId: String, content: String, parentId: String? = null) {
+        api.request<Unit>(Endpoint.post("/concerts/$concertId/messages", json.encodeToString(MessageBody.serializer(), MessageBody(content, parentId))))
     }
+
+    /**
+     * Bannit un spectateur de ce direct (modération). `POST /moderation/stream-bans` avec
+     * `streamType: "concert"`. Il ne pourra plus écrire ni rejoindre le direct.
+     */
+    suspend fun createStreamBan(streamId: String, bannedUserId: String, reason: String?) {
+        val r = reason?.let { ""","reason":${it.jsonQuoted()}""" } ?: ""
+        api.request<Unit>(
+            Endpoint.post(
+                "/moderation/stream-bans",
+                """{"streamId":"$streamId","streamType":"concert","bannedUserId":"$bannedUserId"$r}""",
+            ),
+        )
+    }
+
+    /** Liste des utilisateurs bannis de ce direct (ids). Best-effort. */
+    suspend fun listStreamBans(streamId: String): List<String> =
+        runCatching {
+            api.request(
+                Endpoint.get("/moderation/stream-bans", query = mapOf("streamId" to streamId, "streamType" to "concert")),
+                ListSerializer(ConcertStreamBanRow.serializer()),
+            ).mapNotNull { it.bannedUserId }
+        }.getOrDefault(emptyList())
 
     /** Likes courants (réutilise l'endpoint des lives, clé = id du concert). */
     suspend fun likesCount(concertId: String): Int =
@@ -234,8 +293,61 @@ class ConcertRepository(private val api: ApiClient) {
             Endpoint.get("/leaderboards/gifts", query = mapOf("contextType" to "concert", "contextId" to concertId)),
             ListSerializer(ConcertDonorEntry.serializer()),
         )
+
+    // --- Modération par évènement (chat on/off + modérateurs désignés) ---
+
+    /** Active/désactive le chat de ce concert (hôte artiste ou admin uniquement, 403 sinon). */
+    suspend fun setChatEnabled(concertId: String, enabled: Boolean) {
+        api.request<Unit>(Endpoint.patch(ConcertEndpoints.artistDetail(concertId), """{"chatEnabled":$enabled}"""))
+    }
+
+    /** Spectateurs actuellement connectés à la room (hôte uniquement) — vivier du picker de modérateurs. */
+    suspend fun listCurrentViewers(concertId: String): List<DisplayProfile> =
+        runCatching {
+            api.request(
+                Endpoint.get(ModerationEndpoints.viewers("concert", concertId)),
+                ListSerializer(DisplayProfile.serializer()),
+            )
+        }.getOrDefault(emptyList())
+
+    /** Modérateurs désignés de ce concert (max [com.dualmusic.domain.moderation.MAX_EVENT_MODERATORS]). */
+    suspend fun listEventModerators(concertId: String): List<EventModerator> =
+        runCatching {
+            api.request(
+                Endpoint.get(ModerationEndpoints.moderators("concert", concertId)),
+                ListSerializer(EventModerator.serializer()),
+            )
+        }.getOrDefault(emptyList())
+
+    /** Désigne un spectateur connecté comme modérateur (hôte uniquement). */
+    suspend fun appointModerator(concertId: String, userId: String) {
+        api.request<Unit>(
+            Endpoint.post(
+                ModerationEndpoints.moderators("concert", concertId),
+                json.encodeToString(AppointModeratorBody.serializer(), AppointModeratorBody(userId)),
+            ),
+        )
+    }
+
+    /** Révoque un modérateur désigné (hôte uniquement). */
+    suspend fun revokeModerator(concertId: String, userId: String) {
+        api.request<Unit>(Endpoint.delete(ModerationEndpoints.revokeModerator("concert", concertId, userId)))
+    }
 }
 
-/** Corps JSON `{content}` d'un message de chat. */
+/** Corps JSON `{message, parentId?}` d'un message de chat (clé `message` = colonne DB backend). */
 @Serializable
-private data class MessageBody(val content: String)
+private data class MessageBody(val message: String, val parentId: String? = null)
+
+/** Échappe une chaîne pour l'insérer dans un corps JSON construit à la main. */
+private fun String.jsonQuoted(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+/** Réponse de `GET /settings/public/economic_config` — on ne lit que la section dédicace. */
+@Serializable
+private data class ConcertEconomicConfigSetting(val value: ConcertEconomicConfigValue? = null)
+
+@Serializable
+private data class ConcertEconomicConfigValue(val dedication: ConcertDedicationConfigSection? = null)
+
+@Serializable
+private data class ConcertDedicationConfigSection(@SerialName("min_price_credits") val minPriceCredits: Double? = null)

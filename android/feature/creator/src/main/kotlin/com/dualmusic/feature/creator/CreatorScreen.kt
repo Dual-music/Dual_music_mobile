@@ -205,6 +205,8 @@ class CreatorViewModel(
         maxTickets: Int?,
         allowsDedications: Boolean,
         allowsSponsorAds: Boolean,
+        sponsorSubmissionDeadline: String,
+        dedicationSubmissionDeadline: String,
         onDone: () -> Unit,
     ) {
         if (title.isBlank() || scheduledDate.isBlank()) {
@@ -224,6 +226,10 @@ class CreatorViewModel(
                     coverImageUrl = _uiState.value.coverUrl,
                     allowsDedications = allowsDedications,
                     allowsSponsorAds = allowsSponsorAds,
+                    sponsorSubmissionDeadline = if (allowsSponsorAds && sponsorSubmissionDeadline.isNotBlank())
+                        normalizeIsoDate(sponsorSubmissionDeadline.trim()) else null,
+                    dedicationSubmissionDeadline = if (allowsDedications && dedicationSubmissionDeadline.isNotBlank())
+                        normalizeIsoDate(dedicationSubmissionDeadline.trim()) else null,
                 ),
             )
             runCatching { api.request<Unit>(Endpoint.post(ConcertEndpoints.ARTIST_LIST, body)) }
@@ -462,6 +468,8 @@ private fun CreateConcertForm(
     var maxTickets by remember { mutableStateOf("") }
     var dedications by remember { mutableStateOf(true) }
     var sponsorAds by remember { mutableStateOf(true) }
+    var dedicationDeadline by remember { mutableStateOf("") }
+    var sponsorDeadline by remember { mutableStateOf("") }
 
     // Pochette : image seule, ≤ 5 Mo (catégorie `image` côté serveur).
     val picker = rememberLauncherForActivityResult(
@@ -509,7 +517,25 @@ private fun CreateConcertForm(
             )
         }
         item { ToggleRow(strings.allowDedications, dedications) { dedications = it } }
+        if (dedications) {
+            item {
+                DateTimePickerField(
+                    value = dedicationDeadline,
+                    onValueChange = { dedicationDeadline = it },
+                    label = strings.dedicationDeadlineLabel,
+                )
+            }
+        }
         item { ToggleRow(strings.allowSponsorAds, sponsorAds) { sponsorAds = it } }
+        if (sponsorAds) {
+            item {
+                DateTimePickerField(
+                    value = sponsorDeadline,
+                    onValueChange = { sponsorDeadline = it },
+                    label = strings.sponsorDeadlineLabel,
+                )
+            }
+        }
         item {
             DMCard(modifier = Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
@@ -547,6 +573,8 @@ private fun CreateConcertForm(
                         maxTickets = maxTickets.toIntOrNull(),
                         allowsDedications = dedications,
                         allowsSponsorAds = sponsorAds,
+                        sponsorSubmissionDeadline = sponsorDeadline,
+                        dedicationSubmissionDeadline = dedicationDeadline,
                         onDone = onCreated,
                     )
                 },

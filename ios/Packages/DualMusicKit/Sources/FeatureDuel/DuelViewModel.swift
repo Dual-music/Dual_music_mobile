@@ -1,0 +1,238 @@
+import Foundation
+import Observation
+import CoreLiveMedia
+import CoreNetwork
+import CoreRealtime
+import CoreUI
+import DomainModels
+import FeatureWallet
+
+/// Cadeau reçu en direct dans le duel (pour l'animation).
+public struct DuelGift: Identifiable, Sendable, Equatable {
+    public let id: Int
+    public let fromUserId: String?
+    public let name: String?
+    public let image: String?
+    public let value: Double
+}
+
+/// État du minuteur du duel (persisté serveur → visible aussi pour les arrivants tardifs).
+public struct DuelTimer: Sendable, Equatable {
+    public let endsAt: String?
+    public let targetId: String?
+
+    public init(endsAt: String? = nil, targetId: String? = nil) {
+        self.endsAt = endsAt
+        self.targetId = targetId
+    }
+
+    /// Vrai si un minuteur est en cours.
+    public var isRunning: Bool { endsAt != nil }
+}
+
+/// ViewModel de la room de duel.
+///
+/// Orchestre : vidéo LiveKit (``media``), tallies de votes + minuteur + statut + cadeaux
+/// (Socket.IO `/live`), chat (`/chat`), et le **vote payant** délégué au portefeuille
+/// (procédure atomique serveur — aucun calcul d'argent ici).
+///
+/// Choix clé, identique à Android : le tally n'est mis à jour qu'à réception de l'événement
+/// temps réel `vote`. Pas d'optimisme local sur l'argent.
+@Observable
+@MainActor
+public final class DuelViewModel {
+
+    /// Client média (une connexion SFU par duel ouvert).
+    public let media: LiveRoomClient
+
+    public private(set) var duel: Duel?
+    /// Total de crédits votés par artiste (`artistId` → total), mis à jour en direct.
+    public private(set) var voteTotals: [String: Double] = [:]
+    public private(set) var timer = DuelTimer()
+    public private(set) var messages: [DuelChatMessage] = []
+    public private(set) var giftFeed: [DuelGift] = []
+    public private(set) var errorMessage: String?
+
+    private let duelId: String
+    private let roomName: String
+    private let realtime: RealtimeClient
+    private let repository: DuelRepository
+    private let wallet: WalletRepository
+
+    private var giftCounter = 0
+    private var subscriptions: [Subscription] = []
+    private var liveSession: NamespaceSession?
+    private var chatSession: NamespaceSession?
+    private var started = false
+
+    /// - Parameters:
+    ///   - duelId: identifiant du duel (contexte chat/cadeaux/votes).
+    ///   - roomName: room LiveKit à rejoindre.
+    ///   - media: client média dédié.
+    ///   - realtime: client Socket.IO partagé.
+    ///   - repository: lectures REST du duel.
+    ///   - wallet: opérations de débit (vote).
+    public init(
+        duelId: String,
+        roomName: String,
+        media: LiveRoomClient,
+        realtime: RealtimeClient,
+        repository: DuelRepository,
+        wallet: WalletRepository
+    ) {
+        self.duelId = duelId
+        self.roomName = roomName
+        self.media = media
+        self.realtime = realtime
+        self.repository = repository
+        self.wallet = wallet
+    }
+
+    /// Démarre : détail du duel, tallies, vidéo, chat, temps réel.
+    public func start() async {
+        guard !started else { return }
+        started = true
+
+        Task { await media.join(roomName: roomName, isHost: false) }
+        Task { [weak self] in
+            guard let self else { return }
+            if let detail = try? await self.repository.duel(id: self.duelId) {
+                self.duel = detail
+                // Réhydrate le minuteur persisté (arrivants tardifs).
+                self.timer = DuelTimer(endsAt: detail.currentTimerEndsAt, targetId: detail.currentTimerTargetId)
+            }
+            if let totals = try? await self.repository.voteTotals(id: self.duelId) {
+                self.voteTotals = Dictionary(totals.map { ($0.artistId, $0.total) }, uniquingKeysWith: { _, last in last })
+            }
+            if let history = try? await self.repository.chatHistory(duelId: self.duelId) {
+                self.messages = history
+            }
+        }
+        await connectRealtime()
+    }
+
+    /// Arrête tout (sortie d'écran).
+    public func stop() async {
+        subscriptions.forEach { $0.cancel() }
+        subscriptions.removeAll()
+        liveSession?.disconnect()
+        chatSession?.disconnect()
+        await media.leave()
+        started = false
+    }
+
+    /// Vote payant pour un artiste.
+    ///
+    /// Débit atomique côté serveur ; le tally se met à jour via l'événement temps réel
+    /// `vote`, jamais localement.
+    /// - Parameters:
+    ///   - artistId: artiste bénéficiaire.
+    ///   - amount: montant en crédits.
+    public func vote(artistId: String, amount: Double) async {
+        do {
+            try await wallet.vote(duelId: duelId, artistId: artistId, amount: amount)
+        } catch {
+            errorMessage = (error as? APIError)?.message ?? AppStrings.current.errVoteFailed
+        }
+    }
+
+    /// Envoie un message de chat.
+    public func sendMessage(_ text: String) async {
+        let content = text.trimmed
+        guard !content.isEmpty else { return }
+        try? await repository.postMessage(duelId: duelId, content: content)
+    }
+
+    /// Efface l'erreur affichée.
+    public func clearError() { errorMessage = nil }
+
+    /// Retire le cadeau le plus ancien après son animation.
+    public func consumeOldestGift() {
+        if !giftFeed.isEmpty { giftFeed.removeFirst() }
+    }
+
+    // MARK: - Temps réel
+
+    private func connectRealtime() async {
+        let live = realtime.session(.live)
+        let chat = realtime.session(.chat)
+        liveSession = live
+        chatSession = chat
+
+        subscriptions.append(live.onConnect { [weak self] in
+            guard let self else { return }
+            live.join(.duel, id: self.duelId)
+        })
+        subscriptions.append(chat.onConnect { [weak self] in
+            guard let self else { return }
+            chat.join(.duel, id: self.duelId)
+        })
+
+        // Vote payant enregistré → on cumule le tally de l'artiste visé.
+        subscriptions.append(live.onEvent(Realtime.Event.vote, as: VotePayload.self) { [weak self] payload in
+            guard let self else { return }
+            self.voteTotals[payload.artistId] = (self.voteTotals[payload.artistId] ?? 0) + payload.amount
+        })
+        // Minuteur (start/stop) piloté par le manager.
+        subscriptions.append(live.onEvent(Realtime.Event.timer, as: TimerPayload.self) { [weak self] payload in
+            self?.timer = DuelTimer(endsAt: payload.endsAt, targetId: payload.targetId)
+        })
+        // Statut / vainqueur.
+        subscriptions.append(live.onEvent(Realtime.Event.status, as: StatusPayload.self) { [weak self] payload in
+            guard let self, let winnerId = payload.winnerId, let current = self.duel else { return }
+            // `Duel` est immuable : on recharge le détail pour refléter le vainqueur.
+            Task { [weak self] in
+                guard let self, let refreshed = try? await self.repository.duel(id: current.id) else { return }
+                self.duel = refreshed
+                _ = winnerId
+            }
+        })
+        // Cadeaux (alimente l'animation).
+        subscriptions.append(live.onEvent(Realtime.Event.gift, as: GiftPayload.self) { [weak self] payload in
+            guard let self else { return }
+            self.giftCounter += 1
+            self.giftFeed.append(
+                DuelGift(
+                    id: self.giftCounter,
+                    fromUserId: payload.fromUserId,
+                    name: payload.giftName,
+                    image: payload.giftImage,
+                    value: payload.value
+                )
+            )
+        })
+        // Chat.
+        subscriptions.append(chat.onEvent(Realtime.Event.chatMessage, as: ChatMessagePayload.self) { [weak self] payload in
+            self?.messages.append(
+                DuelChatMessage(id: payload.id, userId: payload.userId, content: payload.content, user: payload.user)
+            )
+        })
+
+        await live.connect()
+        await chat.connect()
+    }
+}
+
+/// ViewModel de la liste des duels (catalogue).
+@Observable
+@MainActor
+public final class DuelsListViewModel {
+
+    public private(set) var duels: [Duel] = []
+    public private(set) var isLoading = false
+
+    private let repository: DuelRepository
+
+    /// - Parameter repository: lectures REST des duels.
+    public init(repository: DuelRepository) {
+        self.repository = repository
+    }
+
+    /// Charge le catalogue (les duels en direct d'abord, tri côté serveur).
+    public func load() async {
+        guard !isLoading else { return }
+        isLoading = true
+        duels = (try? await repository.duels()) ?? []
+        isLoading = false
+    }
+}

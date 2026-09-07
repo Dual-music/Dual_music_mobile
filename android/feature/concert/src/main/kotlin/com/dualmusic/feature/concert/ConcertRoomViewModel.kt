@@ -5,21 +5,36 @@ import androidx.lifecycle.viewModelScope
 import com.dualmusic.core.media.LiveRoomClient
 import com.dualmusic.core.realtime.NamespaceSession
 import com.dualmusic.core.realtime.RealtimeClient
+import com.dualmusic.domain.model.DisplayProfile
 import com.dualmusic.domain.model.VirtualGift
+import com.dualmusic.domain.moderation.EventModerator
 import com.dualmusic.domain.realtime.BroadcastEnvelope
 import com.dualmusic.domain.realtime.ChatMessagePayload
+import com.dualmusic.domain.realtime.EventModeratorPayload
+import com.dualmusic.domain.realtime.EventSettingsPayload
 import com.dualmusic.domain.realtime.GiftPayload
 import com.dualmusic.domain.realtime.PresencePayload
 import com.dualmusic.domain.realtime.Realtime
 import com.dualmusic.domain.realtime.StatusPayload
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Cadeau reçu en direct dans le concert (pour l'animation GPU). */
-data class ConcertGift(val id: Long, val fromUserId: String?, val value: Double)
+/** Cadeau reçu en direct dans le concert (burst + carte glissante). */
+data class ConcertGift(
+    val id: Long,
+    val fromUserId: String?,
+    /** Nom de l'expéditeur (résolu via le classement des donateurs, hydraté avec les profils). */
+    val fromUserName: String?,
+    val name: String?,
+    val image: String?,
+    val value: Double,
+)
 
 /**
  * ViewModel de la room de concert (viewer + hôte artiste).
@@ -99,6 +114,35 @@ class ConcertRoomViewModel(
     private val _broadcasting = MutableStateFlow(false)
     val broadcasting: StateFlow<Boolean> = _broadcasting.asStateFlow()
 
+    /** Id de l'utilisateur courant (pour bannissement + cadeau reçu + détection modérateur). */
+    private val _myUserId = MutableStateFlow<String?>(null)
+    val myUserId: StateFlow<String?> = _myUserId.asStateFlow()
+
+    /** Spectateurs bannis de ce direct (ids). Masque leurs messages + bloque le rejoint. */
+    private val _bannedUserIds = MutableStateFlow<Set<String>>(emptySet())
+    val bannedUserIds: StateFlow<Set<String>> = _bannedUserIds.asStateFlow()
+
+    /** Vrai si MOI je suis banni → écran de blocage plein écran. */
+    val iAmBanned: StateFlow<Boolean> =
+        combine(_bannedUserIds, _myUserId) { banned, id -> id != null && banned.contains(id) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** Filtre couleur vidéo actif de l'hôte (parité duel). */
+    private val _activeFilter = MutableStateFlow("none")
+    val activeFilter: StateFlow<String> = _activeFilter.asStateFlow()
+
+    /** Chat activé/désactivé par l'hôte (bascule `PATCH /artist-concerts/:id {chatEnabled}`). */
+    private val _chatEnabled = MutableStateFlow(true)
+    val chatEnabled: StateFlow<Boolean> = _chatEnabled.asStateFlow()
+
+    /** Modérateurs désignés par l'hôte (max 2, mêmes pouvoirs de bannissement que lui). */
+    private val _moderators = MutableStateFlow<List<EventModerator>>(emptyList())
+    val moderators: StateFlow<List<EventModerator>> = _moderators.asStateFlow()
+
+    /** Spectateurs actuellement connectés (vivier du picker de modérateurs — hôte uniquement). */
+    private val _viewers = MutableStateFlow<List<DisplayProfile>>(emptyList())
+    val viewers: StateFlow<List<DisplayProfile>> = _viewers.asStateFlow()
+
     private var liveSession: NamespaceSession? = null
     private var chatSession: NamespaceSession? = null
 
@@ -107,6 +151,7 @@ class ConcertRoomViewModel(
         viewModelScope.launch {
             // Hôte = l'artiste organisateur (droit de diffuser, exempté de billet).
             val myId = runCatching { repository.myUserId() }.getOrNull()
+            _myUserId.value = myId
             val host = myId != null && myId == hostUserId
             _isHost.value = host
             // Billetterie : re-vérifie côté serveur (le billet a pu être acheté ailleurs).
@@ -117,11 +162,15 @@ class ConcertRoomViewModel(
             if (!_needsTicket.value) joinMedia(host)
             runCatching { repository.chatHistory(concertId) }.getOrNull()?.let { _messages.value = it }
             _likes.value = repository.likesCount(concertId)
+            _bannedUserIds.value = runCatching { repository.listStreamBans(concertId) }.getOrDefault(emptyList()).toSet()
             runCatching { repository.giftCatalog() }.getOrNull()?.let { _giftCatalog.value = it }
+            // Réglage chat + modérateurs désignés (état initial ; le temps réel prend le relais ensuite).
+            runCatching { repository.concert(concertId) }.getOrNull()?.let { _chatEnabled.value = it.chatEnabled }
             loadInventory()
             loadGiftLeaderboard()
+            loadModerators()
         }
-        recordingCtl.refresh()
+        recordingCtl.startPolling()
         connectRealtime()
     }
 
@@ -149,9 +198,28 @@ class ConcertRoomViewModel(
     /** Hôte : démarre la diffusion caméra/micro et passe le concert en direct. */
     fun startBroadcast() {
         viewModelScope.launch {
-            runCatching { media.startBroadcast() }
-            runCatching { repository.goLive(concertId) }
-            _broadcasting.value = true
+            // Le join initial (dans start()) peut avoir échoué SILENCIEUSEMENT (réseau lent,
+            // timing — `LiveRoomClient.join()` avale ses propres erreurs et se contente de
+            // passer `connectionState` à `Failed`, sans jamais lever d'exception). `startBroadcast()`
+            // appelait alors la publication caméra sur une room jamais connectée, qui échouait à
+            // son tour — MAIS `_broadcasting` passait quand même à `true` (le `runCatching` avalait
+            // aussi CET échec) : l'écran se croyait en direct sans qu'aucune caméra ne soit publiée,
+            // et rien ne permettait de réessayer sans quitter puis rerejoindre l'écran. On (re)joint
+            // explicitement si la room n'est pas connectée, et on ne bascule `broadcasting` que si
+            // la publication a RÉELLEMENT réussi — sinon le bouton « Démarrer » reste affiché pour
+            // un nouvel essai, sur place.
+            if (media.connectionState.value !is com.dualmusic.core.media.LiveConnectionState.Connected) {
+                // Appel direct (et non `joinMedia()`, qui relance sa propre coroutine en tâche de
+                // fond sans l'attendre) : il faut que la connexion soit VRAIMENT établie avant de
+                // tenter la publication caméra juste en dessous.
+                media.join(roomName = roomName, isHost = true, canPublish = true)
+            }
+            val started = media.connectionState.value is com.dualmusic.core.media.LiveConnectionState.Connected &&
+                runCatching { media.startBroadcast() }.isSuccess
+            if (started) {
+                runCatching { repository.goLive(concertId) }
+                _broadcasting.value = true
+            }
         }
     }
 
@@ -178,10 +246,65 @@ class ConcertRoomViewModel(
         viewModelScope.launch { runCatching { media.switchCamera() } }
     }
 
-    fun sendMessage(text: String) {
+    /** Hôte : PAUSE (coupe caméra + micro) / REPRENDRE. */
+    fun togglePause() {
+        val resume = !media.camEnabled.value && !media.micEnabled.value
+        media.setCamEnabled(resume)
+        viewModelScope.launch { runCatching { media.setMicEnabled(resume) } }
+    }
+
+    /** Hôte : applique un filtre couleur vidéo (parité duel). */
+    fun setColorFilter(id: String, matrix: FloatArray?) {
+        media.setColorFilter(id, matrix)
+        _activeFilter.value = id
+    }
+
+    /** Hôte : bannit un spectateur (optimiste + persistant). Il ne peut plus écrire ni rejoindre. */
+    fun banUser(userId: String, reason: String?) {
+        _bannedUserIds.update { it + userId }
+        viewModelScope.launch {
+            runCatching { repository.createStreamBan(concertId, userId, reason) }
+                .onFailure { _bannedUserIds.update { ids -> ids - userId } }
+        }
+    }
+
+    /** Hôte : active/désactive le chat pour tous (optimiste + persistant). */
+    fun toggleChat(enabled: Boolean) {
+        _chatEnabled.value = enabled
+        viewModelScope.launch {
+            runCatching { repository.setChatEnabled(concertId, enabled) }
+                .onFailure { _chatEnabled.value = !enabled }
+        }
+    }
+
+    /** Recharge les modérateurs désignés de ce concert. */
+    fun loadModerators() {
+        viewModelScope.launch { _moderators.value = repository.listEventModerators(concertId) }
+    }
+
+    /** Hôte : recharge les spectateurs actuellement connectés (vivier du picker). */
+    fun loadViewers() {
+        viewModelScope.launch { _viewers.value = repository.listCurrentViewers(concertId) }
+    }
+
+    /** Hôte : désigne un spectateur connecté comme modérateur (max 2). */
+    fun appointModerator(userId: String) {
+        viewModelScope.launch {
+            runCatching { repository.appointModerator(concertId, userId) }.onSuccess { loadModerators() }
+        }
+    }
+
+    /** Hôte : révoque un modérateur désigné. */
+    fun revokeModerator(userId: String) {
+        viewModelScope.launch {
+            runCatching { repository.revokeModerator(concertId, userId) }.onSuccess { loadModerators() }
+        }
+    }
+
+    fun sendMessage(text: String, parentId: String? = null) {
         val content = text.trim()
         if (content.isEmpty()) return
-        viewModelScope.launch { runCatching { repository.postMessage(concertId, content) } }
+        viewModelScope.launch { runCatching { repository.postMessage(concertId, content, parentId) } }
     }
 
     /** Signale ce direct à la modération (best-effort ; l'échec reste silencieux). */
@@ -240,11 +363,15 @@ class ConcertRoomViewModel(
     }
 
     fun loadGiftLeaderboard() {
-        viewModelScope.launch {
-            val list = runCatching { repository.giftLeaderboard(concertId) }.getOrDefault(emptyList())
-            _leaderboard.value = list
-            _topDonor.value = list.firstOrNull()?.let { com.dualmusic.core.ui.overlay.TopDonor(it.displayName, it.value) }
-        }
+        viewModelScope.launch { refreshGiftLeaderboard() }
+    }
+
+    /** Recharge le classement (met à jour la bulle top-donateur) ; retourne la liste fraîche. */
+    private suspend fun refreshGiftLeaderboard(): List<ConcertDonorEntry> {
+        val list = runCatching { repository.giftLeaderboard(concertId) }.getOrDefault(emptyList())
+        _leaderboard.value = list
+        _topDonor.value = list.firstOrNull()?.let { com.dualmusic.core.ui.overlay.TopDonor(it.displayName, it.value) }
+        return list
     }
 
     private fun connectRealtime() {
@@ -259,11 +386,22 @@ class ConcertRoomViewModel(
             chat.onConnect { chat.join(Realtime.RoomType.CONCERT, concertId) }
 
             chat.on(Realtime.RealtimeEvent.CHAT_MESSAGE, ChatMessagePayload.serializer()) { p ->
-                _messages.update { it + ConcertChatMessage(id = p.id, userId = p.userId, content = p.content, user = p.user) }
+                _messages.update { it + ConcertChatMessage(id = p.id, userId = p.userId, content = p.content, user = p.user, parentId = p.parentId) }
             }
             live.on(Realtime.RealtimeEvent.GIFT, GiftPayload.serializer()) { p ->
-                _giftFeed.update { it + ConcertGift(giftCounter++, p.fromUserId, p.value) }
-                loadGiftLeaderboard() // met à jour la bulle top-donateur en direct
+                viewModelScope.launch {
+                    // Recharge le classement (met à jour la bulle top-donateur) ET en profite pour
+                    // résoudre le NOM de l'expéditeur (déjà hydraté avec les profils) → affiché
+                    // dans la carte glissante « cadeau reçu » (seule animation ; pas de bannière
+                    // en plus, pas de doublon avec la notif push — celle-ci suffit).
+                    val list = refreshGiftLeaderboard()
+                    val senderName = list.find { it.userId == p.fromUserId }?.displayName
+                    _giftFeed.update { it + ConcertGift(giftCounter++, p.fromUserId, senderName, p.giftName, p.giftImage, p.value) }
+                }
+            }
+            // Bannissement d'un spectateur poussé par le serveur (parité duel `stream:banned`).
+            live.on("stream:banned", ConcertStreamBannedPayload.serializer()) { p ->
+                if (p.streamId == null || p.streamId == concertId) _bannedUserIds.update { it + p.userId }
             }
             live.on(Realtime.RealtimeEvent.PRESENCE, PresencePayload.serializer()) { p ->
                 _viewerCount.value = p.count
@@ -276,6 +414,17 @@ class ConcertRoomViewModel(
             }
             // Statut : fin du concert → on pourrait fermer, mais on laisse l'UI décider.
             live.on(Realtime.RealtimeEvent.STATUS, StatusPayload.serializer()) { /* statut concert */ }
+            // Réglage chat basculé par l'hôte (parité web) — même room pour tous les spectateurs.
+            live.on(Realtime.RealtimeEvent.SETTINGS, EventSettingsPayload.serializer()) { p ->
+                if (p.concertId == null || p.concertId == concertId) p.chatEnabled?.let { _chatEnabled.value = it }
+            }
+            // Modérateur désigné/révoqué par l'hôte → resynchronise la liste (droit de bannir).
+            live.on(Realtime.RealtimeEvent.MODERATOR_APPOINTED, EventModeratorPayload.serializer()) { p ->
+                if (p.eventType == "concert" && p.eventId == concertId) loadModerators()
+            }
+            live.on(Realtime.RealtimeEvent.MODERATOR_REVOKED, EventModeratorPayload.serializer()) { p ->
+                if (p.eventType == "concert" && p.eventId == concertId) loadModerators()
+            }
             // Pub sponsor (start/stop) diffusée à toute la room.
             live.on(Realtime.RealtimeEvent.SPONSOR_AD, com.dualmusic.domain.realtime.SponsorAdPayload.serializer()) { p ->
                 sponsor.onEvent(p)

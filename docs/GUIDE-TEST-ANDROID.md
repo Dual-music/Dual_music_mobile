@@ -260,7 +260,7 @@ Sur le **navigateur du téléphone** (connecté au même Wi-Fi), ouvre :
 ```
 http://<IP_DU_PC>:4000/api/v1/health
 ```
-(ex. `http://192.168.1.42:4000/api/v1/health`). Si tu vois la réponse JSON → **le
+(ex. `http://172.17.10.149:4000/api/v1/health`). Si tu vois la réponse JSON → **le
 téléphone joint le backend** 🎉. Sinon, voir le dépannage plus bas (Wi-Fi / pare-feu / IP).
 
 ---
@@ -275,7 +275,7 @@ téléphone joint le backend** 🎉. Sinon, voir le dépannage plus bas (Wi-Fi /
    ```
 3. Remplace `10.0.2.2` par **l'IP du PC** trouvée à l'étape B.1 :
    ```kotlin
-   private const val API_BASE_URL = "http://192.168.1.42:4000"   // ← ton IP
+   private const val API_BASE_URL = "http://172.17.10.149:4000"   // ← ton IP
    ```
    > ⚠️ Garde `http://` et `:4000`. **N'ajoute PAS** `/api/v1` : l'app l'ajoute déjà elle-même.
    > 📱 **Émulateur** : laisse `10.0.2.2` (ne change rien).
@@ -334,7 +334,7 @@ ipconfig                        # → Adresse IPv4, ex. 192.168.1.42
 ```
 ```kotlin
 // 3. App — MainActivity.kt
-private const val API_BASE_URL = "http://192.168.1.42:4000"
+private const val API_BASE_URL = "http://172.17.10.149:4000"
 ```
 ```
 # 4. Android Studio — ▶ Run (téléphone branché, même Wi-Fi, port 4000 ouvert)

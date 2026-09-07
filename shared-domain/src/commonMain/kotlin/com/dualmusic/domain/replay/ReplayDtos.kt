@@ -19,10 +19,13 @@ data class ReplayVideo(
     @SerialName("video_url") val videoUrl: String? = null,
     @SerialName("replay_price") val replayPrice: Double = 0.0,
     @SerialName("is_premium") val isPremium: Boolean = false,
+    @SerialName("is_public") val isPublic: Boolean = true,
     val duration: Int? = null,
     @SerialName("views_count") val viewsCount: Int = 0,
     @SerialName("source_type") val sourceType: String? = null,
     @SerialName("recorded_date") val recordedDate: String? = null,
+    @SerialName("artist_id") val artistId: String? = null,
+    @SerialName("created_by") val createdBy: String? = null,
 ) {
     /** Vrai si un déblocage payant est nécessaire (premium + prix > 0). */
     val requiresUnlock: Boolean get() = isPremium && replayPrice > 0

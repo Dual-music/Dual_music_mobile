@@ -122,4 +122,22 @@ class AuthRepository(
      * (voir DELIVERY-03).
      */
     fun googleStartUrl(): String = baseUrl.trimEnd('/') + "/api/v1" + AuthEndpoints.OAUTH_GOOGLE_START
+
+    /**
+     * La connexion Google est-elle activée sur mobile (réglage admin, `google_signin_config`) ?
+     * Désactivée par défaut (demande explicite) — absent en base = `false`, jamais `true`.
+     */
+    suspend fun googleSigninEnabled(): Boolean =
+        runCatching {
+            api.request(
+                Endpoint.get("/settings/public/google_signin_config").copy(anonymous = true),
+                GoogleSigninConfigSetting.serializer(),
+            ).value?.enabled == true
+        }.getOrDefault(false)
 }
+
+@kotlinx.serialization.Serializable
+private data class GoogleSigninConfigSetting(val value: GoogleSigninConfigValue? = null)
+
+@kotlinx.serialization.Serializable
+private data class GoogleSigninConfigValue(val enabled: Boolean? = null)

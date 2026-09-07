@@ -58,4 +58,6 @@ data class DedicationRequest(
     val concertId: String,
     val concertType: String = "artist_concert",
     val message: String,
+    /** Prix libre en crédits (minimum imposé par `economic_config.dedication[_live]`, requis par le backend). */
+    val priceCredits: Double,
 )

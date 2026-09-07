@@ -32,6 +32,8 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
     implementation("androidx.compose.material3:material3")
+    // Icônes du lecteur moderne (Replay10/Forward10/Fullscreen/VolumeUp…), hors du jeu "Filled" de base.
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.foundation:foundation")
     // Picker média système (rememberLauncherForActivityResult + PickVisualMedia).
     implementation("androidx.activity:activity-compose:1.9.3")

@@ -56,7 +56,28 @@ data class CreateArtistConcert(
     val coverImageUrl: String? = null,
     val allowsDedications: Boolean = true,
     val allowsSponsorAds: Boolean = true,
+    /** Date limite (ISO 8601) des demandes de sponsor — n'a de sens que si [allowsSponsorAds]. */
+    val sponsorSubmissionDeadline: String? = null,
+    /** Date limite (ISO 8601) des demandes de dédicace — n'a de sens que si [allowsDedications]. */
+    val dedicationSubmissionDeadline: String? = null,
 )
+
+/**
+ * Entrée de l'annuaire public des artistes (`GET /artists`). `userId` est l'id compte à
+ * utiliser pour toute relation (candidature, duel…) — distinct de [id] (clé de la ligne
+ * `ArtistProfile`, sans usage côté client).
+ */
+@Serializable
+data class ArtistDirectoryEntry(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("stage_name") val stageName: String? = null,
+    @SerialName("full_name") val fullName: String? = null,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+) {
+    val displayName: String
+        get() = stageName?.takeIf { it.isNotBlank() } ?: fullName?.takeIf { it.isNotBlank() } ?: userId.take(8)
+}
 
 /** Chemins REST des outils créateur (source unique, partagée). */
 object CreatorEndpoints {
@@ -73,6 +94,8 @@ object CreatorEndpoints {
 
     /** Mise à jour du profil public artiste du caller (`PATCH`). Voir [ArtistProfile]. */
     const val ARTIST_ME = "/artists/me"
+    /** Annuaire public des artistes (`GET`) — recherche client-side côté appelant. */
+    const val ARTISTS = "/artists"
     /** Profil public manager du caller (`GET` lecture, `PATCH` mise à jour). Voir [ManagerProfile]. */
     const val MANAGER_ME = "/managers/me"
     /** Lecture d'un profil public (compte + profil artiste) — sert à relire le sien. */

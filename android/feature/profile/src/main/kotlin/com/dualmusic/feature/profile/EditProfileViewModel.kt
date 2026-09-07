@@ -78,12 +78,21 @@ class EditProfileViewModel(
     fun onNewPasswordChange(v: String) = _uiState.update { it.copy(newPassword = v, passwordMessage = null) }
     fun setMessage(text: String?) = _uiState.update { it.copy(message = text) }
 
-    /** Upload l'avatar sélectionné et mémorise son URL. */
+    /**
+     * Upload l'avatar sélectionné puis l'enregistre IMMÉDIATEMENT (`PATCH /users/me`, ce seul
+     * champ — `explicitNulls = false` sur le serializer garantit qu'aucun autre champ du profil
+     * n'est touché) : la photo doit être prise en compte dès le téléversement, sans dépendre du
+     * bouton « Enregistrer » du formulaire (qui pouvait ne jamais être pressé).
+     */
     fun uploadAvatar(media: com.dualmusic.core.upload.LocalMedia) {
         viewModelScope.launch {
             _uiState.update { it.copy(uploading = true, message = null) }
             runCatching { uploader.upload(media, UploadCategory.AVATAR) }
-                .onSuccess { url -> _uiState.update { it.copy(uploading = false, avatarUrl = url) } }
+                .onSuccess { url ->
+                    _uiState.update { it.copy(uploading = false, avatarUrl = url) }
+                    runCatching { repository.updateProfile(UpdateProfileRequest(avatarUrl = url)) }
+                        .onFailure { e -> _uiState.update { it.copy(message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.uploadFailed) } }
+                }
                 .onFailure { e -> _uiState.update { it.copy(uploading = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.uploadFailed) } }
         }
     }

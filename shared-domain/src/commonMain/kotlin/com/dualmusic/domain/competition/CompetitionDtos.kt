@@ -19,11 +19,13 @@ data class CompetitionCandidate(
     val status: String = "pending",
     @SerialName("total_votes") val totalVotes: Double = 0.0,
     @SerialName("total_gifts_credits") val totalGiftsCredits: Double = 0.0,
+    /** Voix cumulées d'un jury hors ligne, saisies par l'organisateur (voir setJuryVotes). */
+    @SerialName("jury_votes") val juryVotes: Int = 0,
     /** Profil d'affichage de l'artiste (hydraté serveur quand disponible). */
     val artist: DisplayProfile? = null,
 ) {
-    /** Score d'engagement affiché (votes + cadeaux). */
-    val score: Double get() = totalVotes + totalGiftsCredits
+    /** Score d'engagement affiché (votes + cadeaux + voix de jury). */
+    val score: Double get() = totalVotes + totalGiftsCredits + juryVotes
 }
 
 /** Compétition allégée jointe à une candidature (`GET /competitions/candidacies/mine`). */

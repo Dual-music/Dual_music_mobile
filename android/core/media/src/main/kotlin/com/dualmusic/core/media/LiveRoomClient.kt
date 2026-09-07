@@ -117,6 +117,13 @@ class LiveRoomClient(
     private var currentPosition: CameraPosition = CameraPosition.FRONT
 
     /**
+     * Job du collecteur `room.events` — annulé avant d'en relancer un nouveau à chaque [join].
+     * Sans ça, un client qui quitte puis rejoint (invité qui monte/descend de scène) empile un
+     * collecteur supplémentaire à chaque appel, sans jamais libérer le précédent.
+     */
+    private var eventsJob: kotlinx.coroutines.Job? = null
+
+    /**
      * Rejoint une room : récupère un jeton (ou utilise un jeton pré-chauffé) puis se
      * connecte au SFU.
      */
@@ -128,9 +135,15 @@ class LiveRoomClient(
     ) {
         _connectionState.value = LiveConnectionState.Connecting
         try {
-            scope.launch {
+            // Un seul collecteur `room.events` actif à la fois : un client qui quitte puis rejoint
+            // (invité montant/descendant de scène) ne doit PAS empiler des collecteurs successifs.
+            eventsJob?.cancel()
+            eventsJob = scope.launch {
                 room.events.collect { event ->
                     when (event) {
+                        is RoomEvent.ParticipantConnected,
+                        is RoomEvent.TrackPublished,
+                        is RoomEvent.TrackUnpublished,
                         is RoomEvent.TrackSubscribed,
                         is RoomEvent.TrackUnsubscribed,
                         is RoomEvent.TrackMuted,

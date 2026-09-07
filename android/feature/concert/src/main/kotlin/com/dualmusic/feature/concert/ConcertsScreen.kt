@@ -120,6 +120,21 @@ class ConcertsViewModel(
         }
     }
 
+    /** Prix minimum d'une dédicace de concert (config économique, section `dedication`). */
+    suspend fun dedicationMinPrice(): Double = repository.dedicationMinPrice()
+
+    /**
+     * Envoie une demande de dédicace pour un concert AVANT son direct (le serveur rejette sinon).
+     * @param onDone appelé avec `null` en cas de succès, sinon un message d'erreur affichable.
+     */
+    fun sendDedication(concertId: String, message: String, priceCredits: Double, onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            runCatching { repository.purchaseDedication(concertId, message, priceCredits) }
+                .onSuccess { onDone(null) }
+                .onFailure { onDone(it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed) }
+        }
+    }
+
     private fun connectPresence(concerts: List<Concert>) {
         if (concerts.isEmpty()) return
         val session = realtime.session(Realtime.Namespace.LIVE).also { liveSession = it }
@@ -150,6 +165,11 @@ fun ConcertsListScreen(
     viewModel: ConcertsViewModel,
     onOpen: (Concert) -> Unit = {},
     onOpenReplay: (ReplayVideo) -> Unit = {},
+    /** Ouvre l'écran Sponsoring (Profil) avec cet événement présélectionné — voir affiche « Sponsoriser ».
+     *  (Pas de bouton "Demander une dédicace" ici : contrairement au web, aucun flux d'envoi de
+     *  dédicace n'existe encore sur mobile — même le DTO `DedicationRequest` n'a pas `priceCredits`,
+     *  requis par le backend. À construire séparément avant d'exposer un bouton fonctionnel.) */
+    onRequestSponsor: (eventType: String, eventId: String) -> Unit = { _, _ -> },
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
@@ -204,8 +224,8 @@ fun ConcertsListScreen(
         }
 
         when (tab) {
-            0 -> if (live.isEmpty()) EmptyConcerts(s.noConcertsLive) else live.forEach { ConcertCard(it, ui.presence[it.id], ui.perCreditEur, isLive = true, onOpen = onOpen) }
-            1 -> if (upcoming.isEmpty()) EmptyConcerts(s.noConcertsUpcoming) else upcoming.forEach { ConcertCard(it, null, ui.perCreditEur, isLive = false, onOpen = onOpen) }
+            0 -> if (live.isEmpty()) EmptyConcerts(s.noConcertsLive) else live.forEach { ConcertCard(it, ui.presence[it.id], ui.perCreditEur, isLive = true, onOpen = onOpen, onRequestSponsor = onRequestSponsor, viewModel = viewModel) }
+            1 -> if (upcoming.isEmpty()) EmptyConcerts(s.noConcertsUpcoming) else upcoming.forEach { ConcertCard(it, null, ui.perCreditEur, isLive = false, onOpen = onOpen, onRequestSponsor = onRequestSponsor, viewModel = viewModel) }
             else -> if (replays.isEmpty()) EmptyConcerts(s.noConcertReplays) else replays.forEach { ConcertReplayCard(it, onOpenReplay) }
         }
     }
@@ -229,7 +249,16 @@ private fun TabPill(label: String, selected: Boolean, onClick: () -> Unit) {
 
 /** Carte d'un concert (En direct / À venir) : couverture + badge + infos + bouton. */
 @Composable
-private fun ConcertCard(concert: Concert, viewers: Int?, perCreditEur: Double, isLive: Boolean, onOpen: (Concert) -> Unit) {
+private fun ConcertCard(
+    concert: Concert,
+    viewers: Int?,
+    perCreditEur: Double,
+    isLive: Boolean,
+    onOpen: (Concert) -> Unit,
+    onRequestSponsor: (String, String) -> Unit = { _, _ -> },
+    viewModel: ConcertsViewModel? = null,
+) {
+    var showDedicationDialog by remember { mutableStateOf(false) }
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     val currency = LocalCurrency.current
@@ -274,8 +303,97 @@ private fun ConcertCard(concert: Concert, viewers: Int?, perCreditEur: Double, i
                 style = if (isLive) DMButtonStyle.DESTRUCTIVE else DMButtonStyle.PRIMARY,
                 modifier = Modifier.fillMaxWidth(),
             ) { onOpen(concert) }
+            // Dédicace UNIQUEMENT avant le direct (contrairement au live, où c'est possible pendant
+            // la diffusion) : toutes les demandes doivent être traitées avant que le concert ne
+            // démarre — le serveur rejette de toute façon (`resolveDedicationArtist`) une fois
+            // passé en `live`/`ended`, mais on masque déjà le bouton côté client.
+            if (!isLive && concert.isArtistConcert && concert.allowsDedications && !isDeadlinePassed(concert.dedicationSubmissionDeadline)) {
+                DMButton(s.requestDedicationBtn, style = DMButtonStyle.OUTLINE, modifier = Modifier.fillMaxWidth()) {
+                    showDedicationDialog = true
+                }
+            }
+            if (concert.isArtistConcert && concert.allowsSponsorAds && !isDeadlinePassed(concert.sponsorSubmissionDeadline)) {
+                DMButton(s.requestSponsorBtn, style = DMButtonStyle.OUTLINE, modifier = Modifier.fillMaxWidth()) {
+                    onRequestSponsor("artist_concert", concert.id)
+                }
+            }
         }
     }
+
+    if (showDedicationDialog && viewModel != null) {
+        DedicationRequestDialog(
+            concertId = concert.id,
+            artistName = artistName,
+            viewModel = viewModel,
+            onDismiss = { showDedicationDialog = false },
+        )
+    }
+}
+
+/**
+ * Popup « Demander une dédicace » (message + prix libre) — parité web `DedicationDialog`, en plus
+ * compact puisque limité à un concert AVANT son direct (déclenché depuis l'affiche de la liste,
+ * pas depuis une salle live).
+ */
+@Composable
+private fun DedicationRequestDialog(concertId: String, artistName: String, viewModel: ConcertsViewModel, onDismiss: () -> Unit) {
+    val s = LocalStrings.current
+    var message by remember { mutableStateOf("") }
+    var minPrice by remember { mutableStateOf(10.0) }
+    var priceText by remember { mutableStateOf("10") }
+    var sending by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        val min = viewModel.dedicationMinPrice()
+        minPrice = min
+        priceText = min.toInt().toString()
+    }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { if (!sending) onDismiss() },
+        title = { Text("${s.requestDedicationBtn} — $artistName") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                OutlinedTextField(
+                    value = message,
+                    onValueChange = { message = it },
+                    label = { Text(s.dedicationMessageLabel) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = priceText,
+                    onValueChange = { priceText = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("${s.dedicationPriceLabel} (min ${minPrice.toInt()})") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                error?.let { Text(it, color = DualMusicTheme.colors.destructive, fontSize = 12.sp) }
+            }
+        },
+        confirmButton = {
+            DMButton(if (sending) s.sending else s.send, enabled = !sending && message.isNotBlank()) {
+                val price = (priceText.toDoubleOrNull() ?: minPrice).coerceAtLeast(minPrice)
+                sending = true
+                error = null
+                viewModel.sendDedication(concertId, message.trim(), price) { err ->
+                    sending = false
+                    if (err == null) onDismiss() else error = err
+                }
+            }
+        },
+        dismissButton = { DMButton(s.cancel, style = DMButtonStyle.OUTLINE, enabled = !sending) { onDismiss() } },
+    )
+}
+
+/** `true` seulement si une date limite est fixée ET déjà dépassée (pas de date = jamais fermé). */
+private fun isDeadlinePassed(deadline: String?): Boolean {
+    if (deadline == null) return false
+    val clean = deadline.trim().replace(' ', 'T').substringBefore('.').substringBefore('+').removeSuffix("Z")
+        .let { if (it.length > 19) it.take(19) else it }
+    val fmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+        .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+    val parsed = runCatching { fmt.parse(clean) }.getOrNull() ?: return false
+    return parsed.time < System.currentTimeMillis()
 }
 
 /** Carte d'un replay de concert : couverture + badges Gratuit/Replay disponible + Regarder. */

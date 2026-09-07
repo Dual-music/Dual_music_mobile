@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Identité de l'app -->
+	<key>CFBundleDevelopmentRegion</key>
+	<string>fr</string>
+	<key>CFBundleDisplayName</key>
+	<string>Dual Music</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+
+	<!-- URL du backend, injectée par la configuration de build (voir project.yml). -->
+	<key>DMApiBaseURL</key>
+	<string>$(DM_API_BASE_URL)</string>
+
+	<!-- Client OAuth iOS Google. Laisser vide tant qu'il n'est pas créé : le bouton
+	     « Continuer avec Google » est alors automatiquement masqué. -->
+	<key>GIDClientID</key>
+	<string>$(DM_GOOGLE_CLIENT_ID)</string>
+
+	<!-- Schémas d'URL : retour du flux Google + deeplinks `dualmusic://`. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>google-signin</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(DM_GOOGLE_REVERSED_CLIENT_ID)</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>dualmusic</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>dualmusic</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- Interface -->
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+	</array>
+	<key>UIRequiresFullScreen</key>
+	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
+	<!-- Capacités d'arrière-plan : audio du live + notifications distantes. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>voip</string>
+		<string>remote-notification</string>
+	</array>
+
+	<!-- Autorisations : chaînes affichées par iOS. Sans elles, l'app est terminée
+	     au premier accès (et rejetée à la revue App Store). -->
+	<key>NSCameraUsageDescription</key>
+	<string>Dual Music utilise la caméra pour diffuser vos lives et duels en direct.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Dual Music utilise le micro pour diffuser votre voix pendant les lives et duels.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Dual Music accède à vos photos et vidéos pour votre avatar, vos pochettes de concert et vos médias de sponsoring.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Dual Music utilise Face ID pour confirmer vos retraits de crédits.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Dual Music se connecte au serveur de développement de votre réseau local pendant les tests.</string>
+
+	<!-- HTTP en clair : autorisé uniquement vers le réseau local (backend de dev).
+	     Aucune exception pour l'Internet public : la prod est en HTTPS. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

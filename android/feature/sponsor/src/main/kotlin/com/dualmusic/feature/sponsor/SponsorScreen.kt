@@ -119,25 +119,45 @@ class SponsorViewModel(
         }
     }
 
+    /** `true` seulement si une date limite est fixée ET déjà dépassée (pas de date = jamais fermé). */
+    private fun isDeadlinePassed(deadline: String?): Boolean {
+        if (deadline == null) return false
+        val clean = deadline.trim().replace(' ', 'T').substringBefore('.').substringBefore('+').removeSuffix("Z")
+            .let { if (it.length > 19) it.take(19) else it }
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+            .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+        val parsed = runCatching { fmt.parse(clean) }.getOrNull() ?: return false
+        return parsed.time < System.currentTimeMillis()
+    }
+
     /** Fusionne les catalogues (concerts d'artistes, compétitions, duels) en événements à venir. */
     private suspend fun loadEvents(): List<SponsorableEvent> {
         val q = mapOf("limit" to "50")
         val concerts = runCatching {
             api.request(Endpoint.get(ConcertEndpoints.ARTIST_LIST, q), ListSerializer(Concert.serializer()))
         }.getOrDefault(emptyList())
-            .filter { it.status == EventStatus.UPCOMING || it.status == EventStatus.LIVE }
+            .filter {
+                (it.status == EventStatus.UPCOMING || it.status == EventStatus.LIVE) &&
+                    it.allowsSponsorAds && !isDeadlinePassed(it.sponsorSubmissionDeadline)
+            }
             .map { SponsorableEvent("artist_concert", it.id, it.title) }
 
         val competitions = runCatching {
             api.request(Endpoint.get(CompetitionEndpoints.LIST, q), ListSerializer(Competition.serializer()))
         }.getOrDefault(emptyList())
-            .filter { it.status != "ended" && it.status != "cancelled" && it.acceptsSponsors }
+            .filter {
+                it.status != "ended" && it.status != "cancelled" && it.acceptsSponsors &&
+                    !isDeadlinePassed(it.sponsorSubmissionDeadline)
+            }
             .map { SponsorableEvent("competition", it.id, "🏆 ${it.title}") }
 
         val duels = runCatching {
             api.request(Endpoint.get(DuelEndpoints.LIST, q), ListSerializer(Duel.serializer()))
         }.getOrDefault(emptyList())
-            .filter { it.status == EventStatus.UPCOMING || it.status == EventStatus.LIVE }
+            .filter {
+                (it.status == EventStatus.UPCOMING || it.status == EventStatus.LIVE) && it.acceptsSponsors &&
+                    !isDeadlinePassed(it.sponsorSubmissionDeadline)
+            }
             .map {
                 val a = it.artist1?.displayName ?: "?"
                 val b = it.artist2?.displayName ?: "?"

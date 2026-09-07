@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -82,6 +83,8 @@ class ManagerCompetitionsViewModel(
         val coverUrl: String = "",
         val coverUploading: Boolean = false,
         val message: String? = null,
+        /** Réglage admin (désactivé par défaut) — voir `manualCandidatesEnabled()`. */
+        val manualCandidatesEnabled: Boolean = false,
     )
 
     private val _ui = MutableStateFlow(UiState())
@@ -91,6 +94,10 @@ class ManagerCompetitionsViewModel(
     private val _candidates = MutableStateFlow<List<com.dualmusic.domain.competition.CompetitionCandidate>>(emptyList())
     val candidates: StateFlow<List<com.dualmusic.domain.competition.CompetitionCandidate>> = _candidates.asStateFlow()
 
+    /** Annuaire d'artistes pour le picker d'ajout manuel (chargé à l'ouverture du dialog). */
+    private val _artistDirectory = MutableStateFlow<List<com.dualmusic.domain.creator.ArtistDirectoryEntry>>(emptyList())
+    val artistDirectory: StateFlow<List<com.dualmusic.domain.creator.ArtistDirectoryEntry>> = _artistDirectory.asStateFlow()
+
     fun load() {
         viewModelScope.launch {
             val myId = repository.myUserId()
@@ -98,6 +105,7 @@ class ManagerCompetitionsViewModel(
                 .onSuccess { comps -> _ui.update { it.copy(myId = myId, competitions = comps, message = null) } }
                 // DIAGNOSTIC : on affiche la vraie cause (au lieu de masquer par une liste vide).
                 .onFailure { e -> _ui.update { it.copy(myId = myId, message = "⚠️ ${e::class.simpleName}: ${(e.message ?: "").take(200)}") } }
+            _ui.update { it.copy(manualCandidatesEnabled = repository.manualCandidatesEnabled()) }
         }
     }
 
@@ -119,6 +127,20 @@ class ManagerCompetitionsViewModel(
     fun reviewCandidate(competitionId: String, candidateId: String, approve: Boolean) {
         viewModelScope.launch {
             runCatching { repository.reviewCandidate(candidateId, approve) }.onSuccess { loadCandidates(competitionId) }
+        }
+    }
+
+    /** Charge l'annuaire d'artistes (picker d'ajout manuel). */
+    fun loadArtistDirectory() {
+        viewModelScope.launch { _artistDirectory.value = repository.artistDirectory() }
+    }
+
+    /** Ajoute directement un candidat (walk-in) puis recharge les candidats. */
+    fun addCandidateManually(competitionId: String, artistId: String, pitch: String?, onResult: (Throwable?) -> Unit) {
+        viewModelScope.launch {
+            runCatching { repository.addCandidateManually(competitionId, artistId, pitch) }
+                .onSuccess { loadCandidates(competitionId); onResult(null) }
+                .onFailure { onResult(it) }
         }
     }
 
@@ -349,7 +371,9 @@ private fun CompetitionDetailScreen(
 ) {
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
+    val ui by viewModel.ui.collectAsStateWithLifecycle()
     val candidates by viewModel.candidates.collectAsStateWithLifecycle()
+    var addCandidateOpen by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier.fillMaxSize().background(DualMusicTheme.gradients.hero).verticalScroll(rememberScrollState()).padding(DualMusicTheme.spacing.md),
@@ -392,7 +416,12 @@ private fun CompetitionDetailScreen(
             DMButton(s.compPublishAction, modifier = Modifier.fillMaxWidth()) { viewModel.publish(competition.id); onBack() }
         }
 
-        Text(s.compCandidates, color = colors.foreground, fontWeight = FontWeight.Bold)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(s.compCandidates, color = colors.foreground, fontWeight = FontWeight.Bold)
+            if (isManager && ui.manualCandidatesEnabled) {
+                DMButton(s.compAddCandidateBtn, style = DMButtonStyle.OUTLINE, onClick = { addCandidateOpen = true })
+            }
+        }
         if (candidates.isEmpty()) {
             Text(s.noCandidates, color = colors.mutedForeground)
         } else {
@@ -414,6 +443,117 @@ private fun CompetitionDetailScreen(
             }
         }
     }
+
+    if (addCandidateOpen) {
+        AddCandidateDialog(
+            competitionId = competition.id,
+            viewModel = viewModel,
+            onDismiss = { addCandidateOpen = false },
+        )
+    }
+}
+
+/**
+ * Popup « Ajouter un candidat » — ajout direct par le manager (walk-in, présentiel), sans passer
+ * par la candidature en ligne. Parité web `CompetitionAddCandidateDialog`. Verrouillé côté
+ * serveur par le réglage admin `manual_candidates_config` (désactivé par défaut) — le bouton
+ * qui ouvre ce dialog n'est déjà visible que si [ManagerCompetitionsViewModel.UiState.manualCandidatesEnabled].
+ */
+@Composable
+private fun AddCandidateDialog(competitionId: String, viewModel: ManagerCompetitionsViewModel, onDismiss: () -> Unit) {
+    val s = LocalStrings.current
+    val colors = DualMusicTheme.colors
+    val artists by viewModel.artistDirectory.collectAsStateWithLifecycle()
+    var search by remember { mutableStateOf("") }
+    var selectedId by remember { mutableStateOf<String?>(null) }
+    var pitch by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) { viewModel.loadArtistDirectory() }
+
+    val filtered = remember(artists, search) {
+        val q = search.trim().lowercase()
+        if (q.isEmpty()) artists else artists.filter { it.displayName.lowercase().contains(q) }
+    }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(s.compAddCandidateTitle) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                OutlinedTextField(
+                    value = search,
+                    onValueChange = { search = it },
+                    label = { Text(s.compAddCandidateSearchPlaceholder) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 220.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    if (filtered.isEmpty()) {
+                        Text(s.compAddCandidateNoResults, color = colors.mutedForeground, fontSize = 12.sp)
+                    }
+                    filtered.forEach { a ->
+                        val selected = selectedId == a.userId
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(if (selected) colors.primary.copy(alpha = 0.15f) else Color.Transparent, RoundedCornerShape(DualMusicTheme.radii.sm))
+                                .clickable { selectedId = a.userId }
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+                        ) {
+                            com.dualmusic.core.ui.components.DMRemoteImage(
+                                url = a.avatarUrl,
+                                contentDescription = null,
+                                modifier = Modifier.size(32.dp).clip(CircleShape),
+                                fallbackEmoji = "🎤",
+                            )
+                            Text(a.displayName, color = colors.foreground, fontSize = 13.sp)
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = pitch,
+                    onValueChange = { pitch = it },
+                    label = { Text(s.compAddCandidatePitchLabel) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                error?.let { Text(it, color = colors.destructive, fontSize = 12.sp) }
+            }
+        },
+        confirmButton = {
+            DMButton(if (busy) s.sending else s.compAddCandidateSubmit, enabled = !busy && selectedId != null) {
+                val artistId = selectedId ?: return@DMButton
+                busy = true
+                error = null
+                viewModel.addCandidateManually(competitionId, artistId, pitch.trim().ifBlank { null }) { err ->
+                    busy = false
+                    if (err == null) {
+                        onDismiss()
+                    } else {
+                        val de = err as? com.dualmusic.domain.api.DomainError
+                        error = when {
+                            de?.code == "MANUAL_CANDIDATES_DISABLED" -> s.compAddCandidateDisabled
+                            de?.code == "CONFLICT" -> s.compAddCandidateAlready
+                            de != null && de.message.isNotBlank() -> de.message
+                            else -> s.networkSlow
+                        }
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            DMButton(s.compCancel, style = DMButtonStyle.OUTLINE, enabled = !busy, onClick = onDismiss)
+        },
+    )
 }
 
 /** Pilule de badge du détail. */

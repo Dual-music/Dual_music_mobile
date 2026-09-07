@@ -26,4 +26,12 @@ data class BroadcastPayload(
     val avatar: String? = null,
     val votes: Int? = null,
     val percent: Int? = null,
+    // `FORCE_MUTE`/`FORCE_UNMUTE` : id utilisateur de l'artiste coupé/réactivé d'autorité par le manager.
+    val artistId: String? = null,
+    // `media-state` (compétition multi-cam) : état micro/caméra d'un publieur, indexé par son
+    // identité LiveKit (= userId), pour afficher les badges des tuiles chez tous les spectateurs.
+    val identity: String? = null,
+    val isMicOn: Boolean? = null,
+    val isCameraOn: Boolean? = null,
+    val isStreaming: Boolean? = null,
 )

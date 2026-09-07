@@ -18,7 +18,9 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,9 +32,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -70,13 +74,17 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cameraswitch
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.HowToVote
 import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Mood
 import androidx.compose.material.icons.filled.MicOff
@@ -92,6 +100,7 @@ import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -122,11 +131,14 @@ import io.livekit.android.renderer.SurfaceViewRenderer
  * @param viewModel état + actions du duel.
  * @param voteAmount montant (crédits) d'un vote rapide.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun DuelRoomScreen(
     viewModel: DuelViewModel,
     voteAmount: Double = 10.0,
     onLeave: () -> Unit = {},
+    // Ouvre le profil public d'un artiste (clic sur son nom) — userId de l'artiste.
+    onOpenArtist: (String) -> Unit = {},
 ) {
     val duel by viewModel.duel.collectAsStateWithLifecycle()
     val totals by viewModel.voteTotals.collectAsStateWithLifecycle()
@@ -143,17 +155,32 @@ fun DuelRoomScreen(
     val mySlot by viewModel.mySlot.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val messages by viewModel.messages.collectAsStateWithLifecycle()
+    // Modération manager : artistes coupés d'autorité + spectateurs bannis (synchronisés temps réel).
+    val mutedArtists by viewModel.mutedArtists.collectAsStateWithLifecycle()
+    val bannedUserIds by viewModel.bannedUserIds.collectAsStateWithLifecycle()
+    val iAmBanned by viewModel.iAmBanned.collectAsStateWithLifecycle()
     val viewerCount by viewModel.viewerCount.collectAsStateWithLifecycle()
     val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
     val likes by viewModel.likes.collectAsStateWithLifecycle()
     val uiPrefs by UiPreferencesStore.state.collectAsStateWithLifecycle()
     val topDonor by viewModel.topDonor.collectAsStateWithLifecycle()
     val isManager by viewModel.isManager.collectAsStateWithLifecycle()
+    // Modération déléguée : modérateurs désignés + mon id (pour savoir si JE suis l'un d'eux).
+    val moderators by viewModel.moderators.collectAsStateWithLifecycle()
+    val myUserId by viewModel.myUserIdFlow.collectAsStateWithLifecycle()
+    val isModerator = myUserId != null && moderators.any { it.userId == myUserId }
+    var showModeratorsDialog by remember { mutableStateOf(false) }
     val inventory by viewModel.inventory.collectAsStateWithLifecycle()
     val giftCatalog by viewModel.giftCatalog.collectAsStateWithLifecycle()
     val leaderboard by viewModel.leaderboard.collectAsStateWithLifecycle()
     val recMode by viewModel.recordingCtl.mode.collectAsStateWithLifecycle()
     val recActive by viewModel.recordingCtl.active.collectAsStateWithLifecycle()
+    val recPaused by viewModel.recordingCtl.paused.collectAsStateWithLifecycle()
+    val recFinalizing by viewModel.recordingCtl.finalizing.collectAsStateWithLifecycle()
+    val recFailed by viewModel.recordingCtl.failed.collectAsStateWithLifecycle()
+    val recError by viewModel.recordingCtl.error.collectAsStateWithLifecycle()
+    val recAccumulatedSeconds by viewModel.recordingCtl.accumulatedSeconds.collectAsStateWithLifecycle()
+    val recRunStartedAt by viewModel.recordingCtl.runStartedAt.collectAsStateWithLifecycle()
     val recBusy by viewModel.recordingCtl.busy.collectAsStateWithLifecycle()
     val sponsorAd by viewModel.sponsor.activeAd.collectAsStateWithLifecycle()
     val sponsorAds by viewModel.sponsor.ads.collectAsStateWithLifecycle()
@@ -190,6 +217,29 @@ fun DuelRoomScreen(
             }
         }
     }
+    // Applaudissements pendant la célébration du vainqueur (démarre à l'annonce, s'arrête à l'arrêt).
+    val winnerActive = winnerInfo != null
+    DisposableEffect(winnerActive) {
+        val player = if (winnerActive) {
+            runCatching {
+                android.media.MediaPlayer().apply {
+                    setAudioAttributes(
+                        android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .build(),
+                    )
+                    setDataSource("https://assets.mixkit.co/active_storage/sfx/1011/1011-preview.mp3")
+                    isLooping = true
+                    setOnPreparedListener { runCatching { start() } }
+                    prepareAsync()
+                }
+            }.getOrNull()
+        } else {
+            null
+        }
+        onDispose { runCatching { player?.stop() }; runCatching { player?.release() } }
+    }
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     val context = LocalContext.current
@@ -208,8 +258,23 @@ fun DuelRoomScreen(
     var showSettings by remember { mutableStateOf(false) }
     var showFilters by remember { mutableStateOf(false) }
     var showDescription by remember { mutableStateOf(false) }
-    // Panneau MANAGER (arbitre) : temps de parole (slider min), vainqueur, fin, enregistrement.
+    // Panneau MANAGER (arbitre) : temps de parole (slider min), vainqueur, fin.
     var showManagerPanel by remember { mutableStateOf(false) }
+    // Feuille DÉDIÉE à l'enregistrement (manager) — séparée du panneau ci-dessus, parité
+    // concert/live/compétition (évite de mélanger « enregistrer » avec le reste de la gestion).
+    var showRecordingSheet by remember { mutableStateOf(false) }
+    var showCancelRecordingConfirm by remember { mutableStateOf(false) }
+
+    // Retour visible sur un échec d'action d'enregistrement — sans ça, un clic sur Pause/
+    // Reprendre/Sauvegarder qui échoue ne montrait RIEN : le bouton semblait « ne pas prendre ».
+    fun showRecordingError(message: String) {
+        android.widget.Toast.makeText(context, "Enregistrement : $message", android.widget.Toast.LENGTH_SHORT).show()
+    }
+    androidx.compose.runtime.LaunchedEffect(recFailed) {
+        if (recFailed) showRecordingError(recError ?: "échec, aucun segment récupérable")
+    }
+    // Spectateur ciblé pour un bannissement (le manager a tapé sa photo dans le chat) → confirmation.
+    var banTarget by remember { mutableStateOf<DuelChatMessage?>(null) }
     // Sélecteur de pub sponsor (déclenché par l'icône 📢 du rail, plus par un bouton bas).
     var showAdPicker by remember { mutableStateOf(false) }
     // Barre du bas condensée (parité web) : emojis repliables + panneau de vote + pop-up saisie.
@@ -327,8 +392,9 @@ fun DuelRoomScreen(
                     onParticipants = { showDescription = true }, // infos (remplace l'ancienne icône doc du rail)
                     onQuit = onLeave,
                 )
-                // Ligne 2 (désengorge le badge) : spectateurs + partage + mon état micro/caméra.
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Ligne 2 (désengorge le badge) : spectateurs + partage + mon état micro/caméra,
+                // et — à DROITE — le nom + chrono du performeur dont la case est en grand (jamais de débordement).
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
                         modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(Color.Black.copy(alpha = 0.4f)).padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -348,6 +414,17 @@ fun DuelRoomScreen(
                         Icon(if (micOn) Icons.Filled.Mic else Icons.Filled.MicOff, contentDescription = null, tint = if (micOn) Color(0xFF22C55E) else Color(0xFFFF4D6D), modifier = Modifier.size(16.dp))
                         Icon(if (camOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff, contentDescription = null, tint = if (camOn) Color(0xFF22C55E) else Color(0xFFFF4D6D), modifier = Modifier.size(16.dp))
                     }
+                    // Performeur en grand : nom (tronqué) + chrono poussés à DROITE, juste après le
+                    // contenu existant de cette 2ᵉ ligne — jamais de débordement ni de chevauchement.
+                    if (mainPerformerActive) {
+                        Spacer(Modifier.weight(1f))
+                        val perfName = when (timer.targetId) {
+                            duel?.artist1Id -> duel?.artist1?.displayName ?: strings.artist1
+                            duel?.artist2Id -> duel?.artist2?.displayName ?: strings.artist2
+                            else -> "Manager"
+                        }.let { if (it.length > 12) it.take(11) + "…" else it }
+                        com.dualmusic.core.ui.live.LiveCountdown(endsAtIso = timer.endsAt, label = perfName)
+                    }
                 }
                 val a1 = duel?.artist1Id
                 val a2 = duel?.artist2Id
@@ -356,6 +433,9 @@ fun DuelRoomScreen(
                     rightName = duel?.artist2?.displayName ?: strings.artist2,
                     leftTotal = a1?.let { totals[it] } ?: 0.0,
                     rightTotal = a2?.let { totals[it] } ?: 0.0,
+                    // Tap sur le nom d'un artiste → son profil public (spectateurs).
+                    onLeftClick = { a1?.let(onOpenArtist) },
+                    onRightClick = { a2?.let(onOpenArtist) },
                 )
                 // Meilleur donateur : ticker qui défile TOUJOURS droite→gauche (basicMarquee ne
                 // bougeait pas car le texte tenait dans la largeur → défilement manuel garanti).
@@ -368,16 +448,7 @@ fun DuelRoomScreen(
                         ScrollingLabel("👑  ${d.name}  ·  ${d.amount} 🎁", Modifier.weight(1f))
                     }
                 }
-                // Chrono du performeur JUSTE SOUS le top-donateur — uniquement quand SA case est en
-                // grand (sur une petite case, le chrono reste sur la vignette).
-                if (mainPerformerActive) {
-                    val perfName = when (timer.targetId) {
-                        duel?.artist1Id -> duel?.artist1?.displayName ?: strings.artist1
-                        duel?.artist2Id -> duel?.artist2?.displayName ?: strings.artist2
-                        else -> "Manager"
-                    }
-                    com.dualmusic.core.ui.live.LiveCountdown(endsAtIso = timer.endsAt, label = perfName)
-                }
+                // (Le chrono du performeur en grand est désormais sur la 2ᵉ ligne d'en-tête, à droite.)
                 // (Le chrono de temps de parole n'est plus affiché ici : il apparaît directement SUR
                 //  la case de l'artiste concerné — plus de doublon surchargé en haut de l'écran.)
                 // (Contrôles arbitre/manager déplacés dans un PANNEAU dédié — bouton 🎛 du rail —
@@ -404,21 +475,37 @@ fun DuelRoomScreen(
                     modifier = Modifier.fillMaxWidth(0.62f).heightIn(max = 160.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
-                    items(messages) { msg ->
+                    // Les messages des spectateurs bannis sont masqués partout (parité web).
+                    items(messages.filter { it.userId !in bannedUserIds }) { msg ->
                         // Résolution du message parent (réponse) → citation grisée façon TikTok.
                         val parent = msg.parentId?.let { pid -> messages.find { it.id == pid } }
+                        // Le manager peut bannir un spectateur (pas un participant) en tapant sa photo.
+                        val isParticipant = msg.userId == duel?.artist1Id || msg.userId == duel?.artist2Id || msg.userId == duel?.managerId
+                        val canBan = (isManager || isModerator) && !isParticipant
                         Row(
                             verticalAlignment = Alignment.Top,
-                            // Tap sur un message → y répondre (parité web).
+                            // Tap = répondre ; APPUI LONG (manager, sur un spectateur) = bannir.
                             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                                .background(Color.Black.copy(alpha = 0.28f)).clickable { replyingTo = msg; showCommentPopup = true }
+                                .background(Color.Black.copy(alpha = 0.28f))
+                                .combinedClickable(
+                                    onClick = { replyingTo = msg; showCommentPopup = true },
+                                    onLongClick = { if (canBan) banTarget = msg },
+                                )
                                 .padding(horizontal = 6.dp, vertical = 4.dp),
                         ) {
-                            // Avatar rond (initiale) — parité web.
+                            // Avatar rond (photo de profil ou initiale) — le manager tape ICI pour bannir.
                             Box(
-                                modifier = Modifier.size(22.dp).background(colors.primary.copy(alpha = 0.55f), CircleShape),
+                                modifier = Modifier.size(22.dp).clip(CircleShape).background(colors.primary.copy(alpha = 0.55f))
+                                    .then(if (canBan) Modifier.clickable { banTarget = msg } else Modifier),
                                 contentAlignment = Alignment.Center,
-                            ) { Text(msg.authorName.take(1).uppercase(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                            ) {
+                                val avatar = msg.user?.avatarUrl
+                                if (!avatar.isNullOrBlank()) {
+                                    com.dualmusic.core.ui.components.DMRemoteImage(url = avatar, contentDescription = msg.authorName, modifier = Modifier.fillMaxSize(), fallbackEmoji = "👤")
+                                } else {
+                                    Text(msg.authorName.take(1).uppercase(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
                             // Nom + contenu en COLONNE → le message long revient à la ligne.
                             Column(modifier = Modifier.padding(start = 6.dp)) {
                                 // Citation GRISÉE du message auquel on répond (le différencie de la réponse).
@@ -462,15 +549,25 @@ fun DuelRoomScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     // « Message... » = pill déclencheur ; la vraie saisie s'ouvre en pop-up (capture 2).
+                    // Si JE suis banni par le manager, OU que le manager a désactivé le chat pour
+                    // tous, la saisie est bloquée (parité web).
+                    val chatDisabled = duel?.chatEnabled == false
                     Row(
                         modifier = Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(999.dp))
-                            .background(Color.Black.copy(alpha = 0.35f)).clickable { showCommentPopup = true }
+                            .background(Color.Black.copy(alpha = 0.35f))
+                            .then(if (iAmBanned || chatDisabled) Modifier else Modifier.clickable { showCommentPopup = true })
                             .padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(16.dp))
-                        Text("Message...", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp, maxLines = 1)
+                        Icon(
+                            when { iAmBanned -> Icons.Filled.Block; chatDisabled -> Icons.Filled.Lock; else -> Icons.AutoMirrored.Filled.Chat },
+                            contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            when { iAmBanned -> "Vous avez été banni"; chatDisabled -> "Chat désactivé"; else -> "Message..." },
+                            color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp, maxLines = 1,
+                        )
                     }
                     BottomBarIcon(Icons.Filled.Favorite, Color(0xFFFF4D6D)) { viewModel.sendLike() }
                     BottomBarIcon(Icons.Filled.Mood, Color.White) { showEmojiBar = !showEmojiBar }
@@ -496,21 +593,29 @@ fun DuelRoomScreen(
                 MediaRailButton(Icons.Filled.Close, "Masquer tout") { overlaysHidden = true }
                 // Œil : masque/affiche seulement les petites cases (vignettes).
                 MediaRailButton(if (thumbnailsHidden) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, "Petites cases") { thumbnailsHidden = !thumbnailsHidden }
-                // Participant : Démarrer, puis ⚙️ regroupe les contrôles direct dans un pop-up.
-                if (canPublish) {
-                    if (!broadcasting) {
-                        MediaRailButton(Icons.Filled.Podcasts, "Démarrer", accent = true) {
-                            if (hasCamMic()) viewModel.startBroadcast() else camMicLauncher.launch(camMicPerms)
-                        }
-                    } else {
-                        // Filtres vidéo (parité web) — juste avant Réglages, pour le publieur.
-                        MediaRailButton(Icons.Filled.AutoAwesome, "Filtres", accent = true) { showFilters = true }
-                        MediaRailButton(Icons.Filled.Settings, "Réglages", accent = true) { showSettings = true }
-                    }
-                }
-                // Manager (arbitre) : panneau de gestion (temps de parole, vainqueur, fin, enregistrement).
+                // Manager (arbitre) : panneau de gestion (temps de parole, vainqueur, fin).
                 if (isManager) {
                     MediaRailButton(Icons.Filled.Tune, "Gérer le duel", accent = true) { showManagerPanel = true }
+                }
+                // Modérateurs désignés (ban/masquer message) — visible du manager ET des
+                // modérateurs eux-mêmes (pour qu'ils voient qui d'autre a ce pouvoir).
+                if (isManager || isModerator) {
+                    MediaRailButton(Icons.Filled.Groups, "Modérateurs", accent = true) { showModeratorsDialog = true }
+                }
+                // Enregistrement : icône DÉDIÉE (parité concert/live/compétition — évite de la
+                // mélanger avec le reste de la gestion du duel) — pastille rouge/orange dès qu'un
+                // segment tourne ou est en pause. Masquée si l'admin a coupé l'enregistrement
+                // pour les duels.
+                if (isManager && recMode == "manual") {
+                    Box {
+                        MediaRailButton(Icons.Filled.FiberManualRecord, "Enregistrement", accent = true) { showRecordingSheet = true }
+                        com.dualmusic.feature.sponsor.RecordingRailBadge(
+                            active = recActive, paused = recPaused,
+                            modifier = Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 2.dp),
+                        )
+                    }
+                } else if (isManager && recMode == "auto") {
+                    com.dualmusic.feature.sponsor.RecordingHostButton(mode = recMode, active = recActive, busy = recBusy, onToggle = {})
                 }
                 // 📢 Pub sponsor (manager) — EN BAS du rail : lance/arrête la pub (ne masque plus la
                 //    ligne de message). Masqué pendant l'annonce du vainqueur.
@@ -522,6 +627,19 @@ fun DuelRoomScreen(
                     ) {
                         if (sponsorAd != null) viewModel.sponsor.stop()
                         else { viewModel.sponsor.loadAds(); showAdPicker = true }
+                    }
+                }
+                // Participant : bouton « Démarrer » TOUT EN BAS du rail (sous la pub, comme demandé) ;
+                // une fois en direct il laisse place à Filtres + Réglages au même endroit.
+                if (canPublish) {
+                    if (!broadcasting) {
+                        MediaRailButton(Icons.Filled.Podcasts, "Démarrer", accent = true) {
+                            if (hasCamMic()) viewModel.startBroadcast() else camMicLauncher.launch(camMicPerms)
+                        }
+                    } else {
+                        // Filtres vidéo (parité web) — juste avant Réglages, pour le publieur.
+                        MediaRailButton(Icons.Filled.AutoAwesome, "Filtres", accent = true) { showFilters = true }
+                        MediaRailButton(Icons.Filled.Settings, "Réglages", accent = true) { showSettings = true }
                     }
                 }
             }
@@ -722,28 +840,123 @@ fun DuelRoomScreen(
                     Text("🎛 Gestion du duel", color = colors.foreground, fontWeight = FontWeight.Bold)
                     Icon(Icons.Filled.Close, contentDescription = "Fermer", tint = colors.mutedForeground, modifier = Modifier.size(20.dp).clickable { showManagerPanel = false })
                 }
+                // Chat du duel : le manager (hôte) peut le couper entièrement pour tous — pouvoir
+                // exclusif, jamais délégué aux modérateurs désignés.
+                Row(
+                    modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.25f), RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("💬 Chat activé", color = colors.foreground, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Switch(checked = duel?.chatEnabled ?: true, onCheckedChange = { viewModel.toggleChat(it) })
+                }
                 ManagerDuelControls(
                     artist1Name = duel?.artist1?.displayName ?: strings.artist1,
                     artist2Name = duel?.artist2?.displayName ?: strings.artist2,
                     artist1Id = duel?.artist1Id,
                     artist2Id = duel?.artist2Id,
                     timerRunning = timer.isRunning,
+                    mutedArtists = mutedArtists,
+                    onToggleMute = { viewModel.toggleMuteArtist(it) },
                     onGiveTurn = { id, sec -> viewModel.startTimer(id, sec) },
                     onStopTimer = { viewModel.stopTimer() },
                     onAnnounceWinner = { viewModel.announceWinnerAuto(); showManagerPanel = false },
                     onEnd = { viewModel.endDuel(onLeave) },
                 )
-                // Gestion de l'enregistrement (parité web) : off / auto / manuel.
-                Text("🔴 Enregistrement", color = colors.foreground, fontWeight = FontWeight.Bold)
-                com.dualmusic.feature.sponsor.RecordingHostButton(mode = recMode, active = recActive, busy = recBusy, onToggle = { viewModel.recordingCtl.toggle() })
             }
+        }
+
+        // Feuille DÉDIÉE à l'enregistrement (manager) : chrono + Pause/Reprendre/Annuler/Sauvegarder.
+        // Extraite en fonction locale (comme d'autres feuilles de cet écran) pour rester sous la
+        // limite de taille de méthode JVM (64 Ko) une fois toutes les fonctionnalités cumulées.
+        @Composable fun RecordingSheet() {
+        if (showRecordingSheet) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showRecordingSheet = false })
+            Column(
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().background(colors.background).navigationBarsPadding().padding(DualMusicTheme.spacing.md),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+            ) {
+                Text("🔴 Enregistrement du duel", color = colors.foreground, fontWeight = FontWeight.Bold)
+                com.dualmusic.feature.sponsor.RecordingSessionControls(
+                    mode = recMode,
+                    active = recActive,
+                    paused = recPaused,
+                    finalizing = recFinalizing,
+                    accumulatedSeconds = recAccumulatedSeconds,
+                    runStartedAt = recRunStartedAt,
+                    busy = recBusy,
+                    onStart = { viewModel.recordingCtl.start(onError = ::showRecordingError) },
+                    onPause = { viewModel.recordingCtl.pause(onError = ::showRecordingError) },
+                    onResume = { viewModel.recordingCtl.resume(onError = ::showRecordingError) },
+                    onCancel = { showCancelRecordingConfirm = true },
+                    onSave = { viewModel.recordingCtl.save(onError = ::showRecordingError); showRecordingSheet = false },
+                )
+            }
+        }
+        }
+        RecordingSheet()
+
+        // Confirmation d'annulation d'enregistrement (destructif : rien n'est recollé/publié).
+        @Composable fun CancelRecordingConfirmSheet() {
+        if (showCancelRecordingConfirm) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)).clickable { showCancelRecordingConfirm = false })
+            Column(
+                modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.86f).clip(RoundedCornerShape(16.dp))
+                    .background(colors.background).padding(DualMusicTheme.spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
+            ) {
+                Text("Annuler l'enregistrement ?", color = colors.foreground, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(
+                    "Tout ce qui a été enregistré jusqu'ici sera définitivement perdu — aucun replay ne sera créé.",
+                    color = colors.mutedForeground, fontSize = 13.sp,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    Box(modifier = Modifier.weight(1f).background(Color.Black.copy(alpha = 0.25f), RoundedCornerShape(999.dp)).clickable { showCancelRecordingConfirm = false }.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                        Text("Retour", color = colors.foreground, fontWeight = FontWeight.Bold)
+                    }
+                    Box(modifier = Modifier.weight(1f).background(colors.destructive, RoundedCornerShape(999.dp)).clickable { viewModel.recordingCtl.cancel(onError = ::showRecordingError); showCancelRecordingConfirm = false }.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                        Text("Annuler l'enregistrement", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+        }
+        CancelRecordingConfirmSheet()
+
+        // Confirmation de bannissement d'un spectateur (le manager a tapé sa photo dans le chat).
+        banTarget?.let { target ->
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)).clickable { banTarget = null })
+            Column(
+                modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.86f).clip(RoundedCornerShape(16.dp))
+                    .background(colors.background).padding(DualMusicTheme.spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
+            ) {
+                Text("🚫 Bannir ${target.authorName} ?", color = colors.foreground, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(
+                    "Ce spectateur ne pourra plus écrire dans ce direct et ses messages seront masqués pour tous.",
+                    color = colors.mutedForeground, fontSize = 13.sp,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    DMButton("Annuler", style = DMButtonStyle.OUTLINE, modifier = Modifier.weight(1f)) { banTarget = null }
+                    DMButton("Bannir", modifier = Modifier.weight(1f)) {
+                        viewModel.banUser(target.userId, target.content.take(200))
+                        banTarget = null
+                    }
+                }
+            }
+        }
+
+        // Modérateurs désignés (ban/masquer message) — hôte : gère la liste ; modérateur : la consulte.
+        if (showModeratorsDialog) {
+            EventModeratorsDialog(viewModel = viewModel, isManager = isManager, onDismiss = { showModeratorsDialog = false })
         }
 
         // Pop-up de saisie « Commenter » (capture 2) — ouvert depuis le pill « Message... ».
         if (showCommentPopup) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showCommentPopup = false; replyingTo = null })
             fun send() {
-                if (draft.isNotBlank()) {
+                // Banni par le manager OU chat désactivé pour tous → aucun envoi possible (parité web).
+                if (!iAmBanned && duel?.chatEnabled != false && draft.isNotBlank()) {
                     // Vraie RÉPONSE liée (parent_id) — la citation grisée est rendue côté affichage.
                     viewModel.sendMessage(draft, replyingTo?.id); draft = ""
                 }
@@ -949,7 +1162,108 @@ fun DuelRoomScreen(
                 },
             )
         }
+
+        // --- Barrière de BANNISSEMENT (parité web BannedAccessGate) : plein écran OPAQUE qui bloque
+        //     tout et empêche de rejoindre/rester dans ce duel dès que je suis banni par le manager. ---
+        if (iAmBanned) {
+            Column(
+                modifier = Modifier.fillMaxSize().background(colors.background)
+                    // Capte tous les taps (sans ondulation) → rien derrière n'est cliquable/joignable.
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
+                    .statusBarsPadding().navigationBarsPadding().padding(DualMusicTheme.spacing.xl),
+                verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.lg, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(Icons.Filled.Block, contentDescription = null, tint = colors.destructive, modifier = Modifier.size(64.dp))
+                Text("Accès bloqué", color = colors.foreground, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                Text(
+                    "Le manager vous a banni de ce duel. Vous ne pouvez plus y participer ni le rejoindre.",
+                    color = colors.mutedForeground, fontSize = 14.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                DMButton("Quitter", modifier = Modifier.fillMaxWidth(0.7f), onClick = onLeave)
+            }
+        }
     }
+}
+
+/**
+ * Modérateurs désignés du duel (max [com.dualmusic.domain.moderation.MAX_EVENT_MODERATORS]) :
+ * l'hôte + les spectateurs qu'il nomme partagent le pouvoir de bannir/masquer un message —
+ * JAMAIS le chat on/off, réservé au manager (hôte). Parité web (panneau de modération). Suit le
+ * même patron que `AddCandidateDialog` (`ManagerCompetitionsScreen.kt`) : `AlertDialog` privé,
+ * non partagé entre écrans.
+ */
+@Composable
+private fun EventModeratorsDialog(viewModel: DuelViewModel, isManager: Boolean, onDismiss: () -> Unit) {
+    val colors = DualMusicTheme.colors
+    val moderators by viewModel.moderators.collectAsStateWithLifecycle()
+    val viewers by viewModel.viewers.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { if (isManager) viewModel.loadViewers() }
+    val appointedIds = moderators.map { it.userId }.toSet()
+    val pickable = viewers.filter { it.id !in appointedIds }
+    val atLimit = moderators.size >= com.dualmusic.domain.moderation.MAX_EVENT_MODERATORS
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Modérateurs") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                Text(
+                    "Un modérateur peut bannir un spectateur ou masquer un message, comme vous.",
+                    color = colors.mutedForeground, fontSize = 12.sp,
+                )
+                if (moderators.isEmpty()) {
+                    Text("Aucun modérateur désigné.", color = colors.mutedForeground, fontSize = 13.sp)
+                } else {
+                    moderators.forEach { m ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(m.displayName, color = colors.foreground, fontSize = 13.sp)
+                            if (isManager) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = "Révoquer",
+                                    tint = colors.destructive,
+                                    modifier = Modifier.size(18.dp).clickable { viewModel.revokeModerator(m.userId) },
+                                )
+                            }
+                        }
+                    }
+                }
+                if (isManager) {
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(colors.mutedForeground.copy(alpha = 0.2f)))
+                    Text("Désigner un spectateur", color = colors.foreground, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    when {
+                        atLimit -> Text("Nombre maximum de modérateurs atteint (2).", color = colors.mutedForeground, fontSize = 12.sp)
+                        pickable.isEmpty() -> Text("Aucun spectateur connecté pour le moment.", color = colors.mutedForeground, fontSize = 12.sp)
+                        else -> Column(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp).verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            pickable.forEach { v ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(v.displayName, color = colors.foreground, fontSize = 13.sp)
+                                    Box(
+                                        modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(colors.primary)
+                                            .clickable { viewModel.appointModerator(v.id) }.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    ) { Text("Nommer", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { DMButton("Fermer", onClick = onDismiss) },
+    )
 }
 
 /** Pastille sélectionnable (destinataire du cadeau / onglet). */
@@ -1035,7 +1349,13 @@ private fun SlotContent(tile: SlotTile, modifier: Modifier) {
         key(track) {
             AndroidView(
                 modifier = modifier,
-                factory = { ctx -> SurfaceViewRenderer(ctx).apply { tile.client.room.initVideoRenderer(this) } },
+                factory = { ctx ->
+                    SurfaceViewRenderer(ctx).apply {
+                        tile.client.room.initVideoRenderer(this)
+                        // Cadre ENTIER visible (jamais rogné) — parité avec ce que montre le PC.
+                        setScalingType(livekit.org.webrtc.RendererCommon.ScalingType.SCALE_ASPECT_FIT)
+                    }
+                },
                 update = { renderer -> track.addRenderer(renderer) },
             )
         }
@@ -1144,6 +1464,8 @@ private fun ManagerDuelControls(
     artist1Id: String?,
     artist2Id: String?,
     timerRunning: Boolean,
+    mutedArtists: Set<String>,
+    onToggleMute: (String) -> Unit,
     onGiveTurn: (String, Int) -> Unit,
     onStopTimer: () -> Unit,
     onAnnounceWinner: () -> Unit,
@@ -1175,6 +1497,28 @@ private fun ManagerDuelControls(
             artist1Id?.let { DMButton("🎤 $artist1Name", modifier = Modifier.weight(1f), onClick = { onGiveTurn(it, (minutes * 60).toInt()) }) }
             artist2Id?.let { DMButton("🎤 $artist2Name", style = DMButtonStyle.SECONDARY, modifier = Modifier.weight(1f), onClick = { onGiveTurn(it, (minutes * 60).toInt()) }) }
         }
+        // Couper/réactiver d'AUTORITÉ le micro de chaque artiste (synchronisé partout, parité web).
+        Text("🎙 Micro des artistes", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+            artist1Id?.let { id ->
+                val muted = mutedArtists.contains(id)
+                DMButton(
+                    if (muted) "🔊 Réactiver $artist1Name" else "🔇 Couper $artist1Name",
+                    style = if (muted) DMButtonStyle.SECONDARY else DMButtonStyle.OUTLINE,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onToggleMute(id) },
+                )
+            }
+            artist2Id?.let { id ->
+                val muted = mutedArtists.contains(id)
+                DMButton(
+                    if (muted) "🔊 Réactiver $artist2Name" else "🔇 Couper $artist2Name",
+                    style = if (muted) DMButtonStyle.SECONDARY else DMButtonStyle.OUTLINE,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onToggleMute(id) },
+                )
+            }
+        }
         // UN SEUL bouton : le vainqueur est calculé AUTOMATIQUEMENT selon les votes (parité web),
         // puis la célébration s'affiche en plein écran chez tous les spectateurs.
         DMButton("🏆 ${s.announceWinner}", modifier = Modifier.fillMaxWidth(), onClick = onAnnounceWinner)
@@ -1192,6 +1536,8 @@ private fun VoteBar(
     rightName: String,
     leftTotal: Double,
     rightTotal: Double,
+    onLeftClick: () -> Unit = {},
+    onRightClick: () -> Unit = {},
 ) {
     val colors = DualMusicTheme.colors
     val sum = (leftTotal + rightTotal).takeIf { it > 0 } ?: 1.0
@@ -1202,8 +1548,19 @@ private fun VoteBar(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("$leftName · ${leftTotal.toInt()}", color = colors.foreground, fontWeight = FontWeight.Bold)
-            Text("${rightTotal.toInt()} · $rightName", color = colors.foreground, fontWeight = FontWeight.Bold)
+            // Noms cliquables (souligné) → profil public de l'artiste.
+            Text(
+                "$leftName · ${leftTotal.toInt()}",
+                color = colors.foreground, fontWeight = FontWeight.Bold,
+                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                modifier = Modifier.clickable(onClick = onLeftClick),
+            )
+            Text(
+                "${rightTotal.toInt()} · $rightName",
+                color = colors.foreground, fontWeight = FontWeight.Bold,
+                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                modifier = Modifier.clickable(onClick = onRightClick),
+            )
         }
         Row(
             modifier = Modifier

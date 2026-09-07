@@ -1,0 +1,8 @@
+# Dépendances Ruby de l'outillage iOS.
+#
+# Épingler Fastlane évite qu'une montée de version silencieuse casse la livraison :
+# `bundle exec fastlane …` utilise alors exactement la version validée ici.
+source "https://rubygems.org"
+
+gem "fastlane", "~> 2.220"
+gem "xcpretty", "~> 0.3"

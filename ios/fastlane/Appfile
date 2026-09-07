@@ -1,0 +1,12 @@
+# Identité de l'app pour Fastlane.
+#
+# `apple_id` et `team_id` sont volontairement lus depuis l'environnement : ils ne sont pas
+# secrets, mais les committer en dur oblige à modifier le dépôt quand l'équipe change.
+app_identifier("com.dualmusic.app")
+
+# Identifiant d'équipe Apple Developer (10 caractères). Renseigner FASTLANE_TEAM_ID
+# ou remplacer par la valeur en dur si le dépôt est privé.
+team_id(ENV["FASTLANE_TEAM_ID"])
+
+# Identifiant App Store Connect (facultatif : la clé API le rend inutile).
+apple_id(ENV["FASTLANE_APPLE_ID"])

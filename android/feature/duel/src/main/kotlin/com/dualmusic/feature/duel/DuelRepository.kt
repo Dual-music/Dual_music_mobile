@@ -6,13 +6,30 @@ import com.dualmusic.domain.duel.DuelEndpoints
 import com.dualmusic.domain.model.DisplayProfile
 import com.dualmusic.domain.model.Duel
 import com.dualmusic.domain.model.DuelVoteTotal
+import com.dualmusic.domain.moderation.AppointModeratorBody
+import com.dualmusic.domain.moderation.EventModerator
+import com.dualmusic.domain.moderation.ModerationEndpoints
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 
 /** Réponse de `GET /lives/:id/likes` (réutilisé pour les duels). */
 @Serializable
 private data class DuelLikesResponse(val likes: Int = 0)
+
+/** Ligne de `GET /moderation/stream-bans` — on ne retient que l'utilisateur banni. */
+@Serializable
+data class StreamBanRow(
+    @SerialName("banned_user_id") val bannedUserId: String? = null,
+)
+
+/** Payload temps réel `stream:banned` (émis sur `/live`) — un spectateur vient d'être banni. */
+@Serializable
+data class StreamBannedPayload(
+    @SerialName("user_id") val userId: String,
+    @SerialName("stream_id") val streamId: String? = null,
+)
 
 /** Message de chat d'un duel (auteur hydraté par le backend). */
 @Serializable
@@ -45,13 +62,65 @@ private data class VoteConfigValue(@SerialName("price_per_vote") val pricePerVot
 
 class DuelRepository(private val api: ApiClient) {
 
+    private val json = Json { explicitNulls = false }
+
+    /**
+     * Spectateurs actuellement connectés à ce duel (hôte uniquement — 403 sinon), vivier du
+     * picker de désignation. `GET /moderation/events/duel/:id/viewers`.
+     */
+    suspend fun listCurrentViewers(duelId: String): List<DisplayProfile> =
+        api.request(Endpoint.get(ModerationEndpoints.viewers("duel", duelId)), ListSerializer(DisplayProfile.serializer()))
+
+    /**
+     * Modérateurs désignés de ce duel (hôte + jusqu'à [com.dualmusic.domain.moderation.MAX_EVENT_MODERATORS]
+     * spectateurs). `GET /moderation/events/duel/:id/moderators`.
+     */
+    suspend fun listEventModerators(duelId: String): List<EventModerator> =
+        api.request(Endpoint.get(ModerationEndpoints.moderators("duel", duelId)), ListSerializer(EventModerator.serializer()))
+
+    /** Manager : désigne un spectateur modérateur. `POST /moderation/events/duel/:id/moderators`. */
+    suspend fun appointModerator(duelId: String, userId: String) {
+        val body = json.encodeToString(AppointModeratorBody.serializer(), AppointModeratorBody(userId))
+        api.request<Unit>(Endpoint.post(ModerationEndpoints.moderators("duel", duelId), body))
+    }
+
+    /** Manager : révoque un modérateur désigné. `DELETE /moderation/events/duel/:id/moderators/:userId`. */
+    suspend fun revokeModerator(duelId: String, userId: String) {
+        api.request<Unit>(Endpoint.delete(ModerationEndpoints.revokeModerator("duel", duelId, userId)))
+    }
+
     /**
      * Signale ce direct à la modération (parité web `LiveReportButton`).
      * `POST /moderation/reports/live` — le duel est identifié par son id (`liveId`).
      */
     suspend fun reportLive(liveId: String, reason: String) {
-        api.request<Unit>(Endpoint.post("moderation/reports/live", """{"liveId":"$liveId","reason":"$reason"}"""))
+        // `streamType` distingue les 3 entités partageant `live_reports` — sans lui, ce signalement
+        // de DUEL était enregistré par défaut comme "live", invisible/mal lié pour l'admin.
+        api.request<Unit>(Endpoint.post("moderation/reports/live", """{"liveId":"$liveId","streamType":"duel","reason":"$reason"}"""))
     }
+
+    /**
+     * Bannit un spectateur du chat de ce direct (parité web `banUser`).
+     * `POST /moderation/stream-bans` — `streamType` = "duel". Le backend diffuse `stream:banned`.
+     */
+    suspend fun createStreamBan(streamId: String, bannedUserId: String, reason: String?) {
+        val r = reason?.let { ""","reason":${it.jsonQuoted()}""" } ?: ""
+        api.request<Unit>(
+            Endpoint.post(
+                "/moderation/stream-bans",
+                """{"streamId":"$streamId","streamType":"duel","bannedUserId":"$bannedUserId"$r}""",
+            ),
+        )
+    }
+
+    /** Ids des spectateurs déjà bannis de ce direct (`GET /moderation/stream-bans?streamId=&streamType=duel`). */
+    suspend fun listStreamBans(streamId: String): List<String> =
+        runCatching {
+            api.request(
+                Endpoint.get("/moderation/stream-bans", query = mapOf("streamId" to streamId, "streamType" to "duel")),
+                ListSerializer(StreamBanRow.serializer()),
+            ).mapNotNull { it.bannedUserId }
+        }.getOrDefault(emptyList())
 
     /**
      * Prix d'UN vote en crédits — configuré par l'admin (`platform_settings.vote_config`), lu via

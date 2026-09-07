@@ -13,6 +13,16 @@ ios/**/xcuserdata/
 ios/**/.swiftpm/
 *.ipa
 *.dSYM.zip
+# Le projet Xcode est GÉNÉRÉ depuis ios/project.yml (XcodeGen) : ne pas le committer,
+# c'est la source de tous les conflits Git sur un projet iOS.
+ios/*.xcodeproj/
+ios/*.xcworkspace/
+ios/Package.resolved
+ios/**/Package.resolved
+ios/build/
+ios/**/*.xcresult
+# Configuration Firebase de l'app iOS : contient les identifiants du projet.
+ios/App/Resources/GoogleService-Info.plist
 
 # --- Android / Gradle ---
 .gradle/

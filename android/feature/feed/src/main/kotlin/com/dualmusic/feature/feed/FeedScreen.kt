@@ -38,6 +38,10 @@ fun FeedScreen(
     viewModel: FeedViewModel,
     makeLiveViewModel: (Live) -> LiveViewModel,
     initialPage: Int = 0,
+    onOpenArtist: (String) -> Unit = {},
+    // Icône rouge « quitter » (rail gauche) — ferme le plein écran et revient à la page des lives.
+    // Sans ce callback, `LiveRoomScreen` retombe sur son défaut `{}` (no-op) : le bouton ne fait rien.
+    onEndLive: () -> Unit = {},
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle()
 
@@ -76,10 +80,11 @@ fun FeedScreen(
             LiveRoomScreen(
                 viewModel = remember(item.id) { makeLiveViewModel(item) },
                 hostUserId = item.artistId,
-                quickGiftId = "", // TODO(feature-gifts): sélecteur de cadeau réel
                 prewarmedToken = viewModel.prewarmedToken(item.id),
                 liveTitle = item.title,
                 artistName = item.artist?.displayName,
+                onOpenArtist = onOpenArtist,
+                onEndLive = onEndLive,
             )
         } else {
             Poster(item)

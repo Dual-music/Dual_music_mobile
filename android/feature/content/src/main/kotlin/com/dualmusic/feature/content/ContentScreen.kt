@@ -1,7 +1,6 @@
 package com.dualmusic.feature.content
 
 import android.content.Intent
-import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +18,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,14 +31,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.MediaItem
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
@@ -204,12 +197,10 @@ private fun shareVideo(context: android.content.Context, video: LifestyleVideo) 
 }
 
 /** Lecteur plein écran d'une vidéo lifestyle. */
-@OptIn(UnstableApi::class)
 @Composable
 private fun LifestylePlayer(video: LifestyleVideo, onLike: () -> Unit, onView: () -> Unit, onBack: () -> Unit) {
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
-    val context = LocalContext.current
     val url = video.videoUrl
 
     Column(
@@ -222,16 +213,8 @@ private fun LifestylePlayer(video: LifestyleVideo, onLike: () -> Unit, onView: (
         if (url.isNullOrBlank()) {
             Text(s.videoUnavailable, color = colors.mutedForeground)
         } else {
-            val player = remember {
-                ExoPlayer.Builder(context).build().apply { setMediaItem(MediaItem.fromUri(url)); prepare(); playWhenReady = true }
-            }
-            DisposableEffect(Unit) {
-                onView()
-                onDispose { player.release() }
-            }
-            Box(modifier = Modifier.fillMaxWidth().aspectRatio(9f / 16f).background(Color.Black)) {
-                AndroidView(modifier = Modifier.fillMaxSize(), factory = { ctx -> PlayerView(ctx).apply { this.player = player } })
-            }
+            LaunchedEffect(Unit) { onView() }
+            ModernVideoPlayer(url = url)
             DMButton("❤ ${s.likeAction}", onClick = onLike)
         }
     }

@@ -2,33 +2,19 @@ package com.dualmusic.feature.replay
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import androidx.annotation.OptIn
-import androidx.media3.common.MediaItem
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMCard
 import com.dualmusic.core.ui.i18n.LocalStrings
@@ -132,42 +118,9 @@ fun ReplayPlayerScreen(viewModel: ReplayPlayerViewModel) {
                     Text(strings.videoUnavailable, color = colors.mutedForeground)
                 } else {
                     LaunchedEffect(Unit) { viewModel.registerView() }
-                    VideoPlayer(url = url)
+                    ModernVideoPlayer(url = url)
                 }
             }
         }
-    }
-}
-
-/**
- * Lecteur vidéo ExoPlayer intégré à Compose.
- * Le player est créé/relâché avec le cycle de vie du composable.
- * `@OptIn(UnstableApi)` : `PlayerView` de Media3 est encore marqué instable.
- */
-@OptIn(UnstableApi::class)
-@Composable
-private fun VideoPlayer(url: String) {
-    val context = LocalContext.current
-    val player = remember {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(url))
-            prepare()
-            playWhenReady = true
-        }
-    }
-    DisposableEffect(Unit) {
-        onDispose { player.release() }
-    }
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(16f / 9f)
-            .background(Color.Black),
-        contentAlignment = Alignment.Center,
-    ) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { ctx -> PlayerView(ctx).apply { this.player = player } },
-        )
     }
 }

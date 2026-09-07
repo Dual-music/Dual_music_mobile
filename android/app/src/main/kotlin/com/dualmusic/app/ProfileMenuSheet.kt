@@ -97,6 +97,10 @@ fun ProfileMenuPage(
                 MenuRow(Icons.Filled.SportsMartialArts, s.navDuels) { onNavigate(12) }
                 MenuRow(Icons.Filled.EmojiEvents, s.menuMyCompetitions) { onNavigate(25) }
                 MenuRow(Icons.Filled.Mic, s.menuArtistProfile) { onNavigate(21) }
+                // Gestion des replays de duels/compétitions gérés (prix, publication,
+                // téléchargement, remplacement) — même écran que côté artiste, filtré sur les
+                // replays dont ce manager est propriétaire (créateur).
+                MenuRow(Icons.Filled.Movie, s.menuReplays) { onNavigate(26) }
                 MenuRow(Icons.Filled.AccountBalanceWallet, s.menuEarnings) { onNavigate(3) }
                 MenuRow(Icons.Filled.Favorite, s.menuFollowing) { onNavigate(18) }
                 MenuRow(Icons.Filled.CreditCard, s.menuTransactions) { onNavigate(1) }

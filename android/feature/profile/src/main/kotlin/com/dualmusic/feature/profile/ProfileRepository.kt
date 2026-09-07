@@ -66,6 +66,16 @@ class ProfileRepository(private val api: ApiClient) {
     suspend fun myArtistProfile(userId: String): ArtistProfile? =
         api.request(Endpoint.get(CreatorEndpoints.publicProfile(userId)), PublicProfileResponse.serializer()).artistProfile
 
+    /** Profil public COMPLET d'un utilisateur (compte + profil artiste + suivi). `GET /users/:id`. */
+    suspend fun publicProfile(userId: String): PublicProfileResponse =
+        api.request(Endpoint.get(CreatorEndpoints.publicProfile(userId)), PublicProfileResponse.serializer())
+
+    /** Suit / ne suit plus un artiste. `POST` / `DELETE` `/users/:id/follow`. */
+    suspend fun setFollow(userId: String, follow: Boolean) {
+        if (follow) api.request<Unit>(Endpoint.post("/users/$userId/follow"))
+        else api.request<Unit>(Endpoint.delete("/users/$userId/follow"))
+    }
+
     /** Met à jour le profil public artiste (`PATCH /artists/me`). */
     suspend fun updateArtistProfile(request: UpdateArtistProfileRequest) {
         val body = json.encodeToString(UpdateArtistProfileRequest.serializer(), request)

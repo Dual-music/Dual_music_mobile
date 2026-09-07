@@ -96,12 +96,24 @@ class MyLivesViewModel(private val api: ApiClient) : ViewModel() {
         }
     }
 
-    /** Lance un live (titre optionnel), puis recharge. */
-    fun createLive(title: String) {
+    /**
+     * Lance un live (titre optionnel), puis recharge.
+     * @param allowsDedications dédicaces activées pour ce live.
+     * @param dedicationMinPriceCredits prix minimum propre à ce live (`null` = défaut global).
+     * @param allowGuests demandes d'invité (« lever la main ») activées pour ce live.
+     */
+    fun createLive(
+        title: String,
+        allowsDedications: Boolean = true,
+        dedicationMinPriceCredits: Double? = null,
+        allowGuests: Boolean = true,
+    ) {
         viewModelScope.launch {
             _message.value = null
             val safe = title.ifBlank { "Live" }
-            val body = "{\"title\":" + json.encodeToString(String.serializer(), safe) + "}"
+            val price = dedicationMinPriceCredits?.let { ""","dedicationMinPriceCredits":$it""" } ?: ""
+            val body = "{\"title\":" + json.encodeToString(String.serializer(), safe) +
+                ",\"allowsDedications\":$allowsDedications,\"allowGuests\":$allowGuests$price}"
             runCatching { api.request(Endpoint.post("/lives", body), Live.serializer()) }
                 .onSuccess { created -> _pendingBroadcast.value = created; load() }
                 .onFailure { e -> _message.value = e.message }
@@ -139,6 +151,9 @@ fun MyLivesScreen(
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     var title by remember { mutableStateOf("") }
+    var allowsDedications by remember { mutableStateOf(true) }
+    var allowGuests by remember { mutableStateOf(true) }
+    var minPriceText by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) { viewModel.load() }
     // Ouvre la diffusion plein écran dès qu'un live vient d'être créé.
@@ -170,11 +185,38 @@ fun MyLivesScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                // Réglages du live (modifiables aussi en direct depuis les contrôles ⚙️).
+                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    DMButton(
+                        "Dédicaces ${if (allowsDedications) "ON" else "OFF"}",
+                        style = if (allowsDedications) DMButtonStyle.PRIMARY else DMButtonStyle.OUTLINE,
+                        modifier = Modifier.weight(1f),
+                        onClick = { allowsDedications = !allowsDedications },
+                    )
+                    DMButton(
+                        "Invités ${if (allowGuests) "ON" else "OFF"}",
+                        style = if (allowGuests) DMButtonStyle.PRIMARY else DMButtonStyle.OUTLINE,
+                        modifier = Modifier.weight(1f),
+                        onClick = { allowGuests = !allowGuests },
+                    )
+                }
+                if (allowsDedications) {
+                    OutlinedTextField(
+                        value = minPriceText,
+                        onValueChange = { v -> minPriceText = v.filter { it.isDigit() } },
+                        label = { Text("Prix minimum dédicace (vide = défaut)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 DMButton(
                     s.startLive,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = active == null && !isLoading,
-                    onClick = { viewModel.createLive(title); title = "" },
+                    onClick = {
+                        viewModel.createLive(title, allowsDedications, minPriceText.toDoubleOrNull(), allowGuests)
+                        title = ""; minPriceText = ""
+                    },
                 )
             }
         }

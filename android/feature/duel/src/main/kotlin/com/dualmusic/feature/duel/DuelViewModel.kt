@@ -5,9 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.dualmusic.core.media.LiveRoomClient
 import com.dualmusic.core.realtime.NamespaceSession
 import com.dualmusic.core.realtime.RealtimeClient
+import com.dualmusic.domain.model.DisplayProfile
 import com.dualmusic.domain.model.Duel
+import com.dualmusic.domain.moderation.EventModerator
 import com.dualmusic.domain.realtime.GiftPayload
 import com.dualmusic.domain.realtime.ChatMessagePayload
+import com.dualmusic.domain.realtime.EventModeratorPayload
+import com.dualmusic.domain.realtime.EventSettingsPayload
 import com.dualmusic.domain.realtime.PresencePayload
 import com.dualmusic.domain.realtime.Realtime
 import com.dualmusic.domain.realtime.StatusPayload
@@ -194,6 +198,65 @@ class DuelViewModel(
     private val _broadcasting = MutableStateFlow(false)
     val broadcasting: StateFlow<Boolean> = _broadcasting.asStateFlow()
 
+    /** Artistes coupés d'AUTORITÉ par le manager (hard-mute) — ids utilisateur (parité web `mutedArtists`). */
+    private val _mutedArtists = MutableStateFlow<Set<String>>(emptySet())
+    val mutedArtists: StateFlow<Set<String>> = _mutedArtists.asStateFlow()
+
+    /** Spectateurs bannis du chat de ce direct (ids utilisateur) → messages masqués + saisie bloquée. */
+    private val _bannedUserIds = MutableStateFlow<Set<String>>(emptySet())
+    val bannedUserIds: StateFlow<Set<String>> = _bannedUserIds.asStateFlow()
+
+    /** Mon id, en flux, pour dériver [iAmBanned] (bloque MA saisie si le manager m'a banni). */
+    private val _myUserId = MutableStateFlow<String?>(null)
+    /** Exposé pour l'UI (ex. déterminer si JE suis un modérateur désigné). */
+    val myUserIdFlow: StateFlow<String?> = _myUserId.asStateFlow()
+
+    /** Vrai si JE suis banni de ce direct → l'UI bloque ma saisie de message (parité web). */
+    val iAmBanned: StateFlow<Boolean> =
+        combine(_bannedUserIds, _myUserId) { banned, id -> id != null && banned.contains(id) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** Modérateurs désignés de ce duel (hôte + jusqu'à 2 spectateurs) — visible par tous. */
+    private val _moderators = MutableStateFlow<List<EventModerator>>(emptyList())
+    val moderators: StateFlow<List<EventModerator>> = _moderators.asStateFlow()
+
+    /** Spectateurs actuellement connectés (hôte uniquement — chargé à l'ouverture du picker). */
+    private val _viewers = MutableStateFlow<List<DisplayProfile>>(emptyList())
+    val viewers: StateFlow<List<DisplayProfile>> = _viewers.asStateFlow()
+
+    /** Recharge les modérateurs désignés (appelé au chargement initial + sur événement temps réel). */
+    fun loadModerators() {
+        viewModelScope.launch { runCatching { repository.listEventModerators(duelId) }.getOrNull()?.let { _moderators.value = it } }
+    }
+
+    /** Manager : (re)charge les spectateurs connectés (vivier du picker « désigner un modérateur »). */
+    fun loadViewers() {
+        viewModelScope.launch { _viewers.value = runCatching { repository.listCurrentViewers(duelId) }.getOrDefault(emptyList()) }
+    }
+
+    /** Manager : désigne un spectateur modérateur (ban/masquer message — jamais le chat on/off). */
+    fun appointModerator(userId: String) {
+        viewModelScope.launch {
+            runCatching { repository.appointModerator(duelId, userId) }
+                .onSuccess { loadModerators() }
+                .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
+
+    /** Manager : révoque un modérateur désigné. */
+    fun revokeModerator(userId: String) {
+        viewModelScope.launch {
+            runCatching { repository.revokeModerator(duelId, userId) }
+                .onSuccess { loadModerators() }
+                .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
+        }
+    }
+
+    /** Manager : active/désactive le chat de ce duel pour tous (jamais délégué aux modérateurs). */
+    fun toggleChat(enabled: Boolean) {
+        patchDuel("""{"chatEnabled":$enabled}""")
+    }
+
     private var giftCounter = 0L
     private var liveSession: NamespaceSession? = null
     private var chatSession: NamespaceSession? = null
@@ -203,6 +266,7 @@ class DuelViewModel(
         viewModelScope.launch {
             val d = runCatching { repository.duel(duelId) }.getOrNull()
             myUserId = myUserId ?: runCatching { repository.myUserId() }.getOrNull()
+            _myUserId.value = myUserId
             if (d != null) {
                 _duel.value = d
                 // Réhydrate le minuteur persisté (arrivants tardifs).
@@ -230,13 +294,16 @@ class DuelViewModel(
             runCatching { repository.chatHistory(duelId) }.getOrNull()?.let { _messages.value = it }
             // Charge le compteur de j'aime PERSISTÉ (ne repart plus de 0 au retour sur le direct).
             _likes.value = runCatching { repository.likesCount(duelId) }.getOrDefault(0)
+            // Bans de chat déjà posés (parité web `useStreamBan`) → messages masqués dès l'arrivée.
+            _bannedUserIds.value = runCatching { repository.listStreamBans(duelId).toSet() }.getOrDefault(emptySet())
         }
         loadTopDonor()
         viewModelScope.launch { _votePrice.value = repository.votePricePerVote() }
         viewModelScope.launch { runCatching { repository.giftCatalog() }.getOrNull()?.let { _giftCatalog.value = it } }
         loadInventory()
         loadGiftLeaderboard()
-        recordingCtl.refresh()
+        loadModerators()
+        recordingCtl.startPolling()
         connectRealtime()
     }
 
@@ -274,10 +341,15 @@ class DuelViewModel(
         broadcastMediaState()
     }
 
-    /** Participant : coupe/rétablit le micro. */
+    /** Participant : coupe/rétablit le micro. Rouvrir est INTERDIT tant que le manager m'a coupé. */
     fun toggleMic() {
         val m = myMedia ?: return
         val next = !m.micEnabled.value
+        // Coupé d'autorité par le manager → l'artiste ne peut pas se réactiver seul (parité web).
+        if (next && myUserId != null && _mutedArtists.value.contains(myUserId)) {
+            _error.value = "Micro coupé par le manager"
+            return
+        }
         viewModelScope.launch { runCatching { m.setMicEnabled(next) }; _micOn.value = next; broadcastMediaState() }
     }
 
@@ -465,14 +537,86 @@ class DuelViewModel(
         viewModelScope.launch { runCatching { repository.reportLive(duelId, reason) } }
     }
 
+    // --- Modération manager : couper le micro d'un artiste / bannir un spectateur (parité web) ---
+
+    /**
+     * Manager : coupe/réactive d'AUTORITÉ le micro d'un artiste (parité web `toggleMuteArtist`).
+     * Diffuse `FORCE_MUTE`/`FORCE_UNMUTE` sur `duel-mute-<id>` → l'artiste visé se coupe partout et
+     * tous les clients marquent l'artiste comme coupé (indicateur + panneau manager synchronisés).
+     */
+    fun toggleMuteArtist(artistId: String) {
+        val shouldMute = !_mutedArtists.value.contains(artistId)
+        applyMuteState(artistId, shouldMute)
+        liveSession?.emit(
+            "broadcast",
+            org.json.JSONObject(
+                mapOf(
+                    "channel" to "duel-mute-$duelId",
+                    "event" to if (shouldMute) "FORCE_MUTE" else "FORCE_UNMUTE",
+                    "payload" to org.json.JSONObject(mapOf("artistId" to artistId)),
+                ),
+            ),
+        )
+    }
+
+    /**
+     * Applique l'état de coupure d'un artiste : map partagée + hard-mute réel de MON micro si c'est
+     * moi. Le mute ne concerne QUE le micro (`setMicEnabled`) : aucune opération caméra ici, pour
+     * ne jamais toucher la vidéo — ni chez l'artiste, ni chez les autres.
+     */
+    private fun applyMuteState(artistId: String, muted: Boolean) {
+        _mutedArtists.update { if (muted) it + artistId else it - artistId }
+        if (artistId == myUserId && myMedia != null) {
+            viewModelScope.launch {
+                runCatching { myMedia?.setMicEnabled(!muted) }
+                _micOn.value = !muted
+                broadcastMediaState()
+            }
+        }
+    }
+
+    /**
+     * Manager : bannit un spectateur du chat de ce direct (parité web `banUser`). `POST
+     * /moderation/stream-bans` → le backend diffuse `stream:banned` ; ses messages sont masqués
+     * partout et sa saisie est bloquée. Optimiste côté manager (annulé si l'appel échoue).
+     */
+    fun banUser(userId: String, reason: String?) {
+        _bannedUserIds.update { it + userId }
+        viewModelScope.launch {
+            runCatching { repository.createStreamBan(duelId, userId, reason) }
+                .onFailure {
+                    _bannedUserIds.update { ids -> ids - userId }
+                    _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed
+                }
+        }
+    }
+
     /** Annonce le vainqueur (ne termine pas le duel). */
     fun announceWinner(artistId: String) {
         patchDuel("""{"winnerId":"$artistId"}""")
     }
 
+    /** Dernier winnerId déjà célébré (via `status`) → évite de re-déclencher la célébration. */
+    private var shownWinnerId: String? = null
+
+    /** Construit la carte vainqueur (nom/avatar/voix/%) à partir de l'id de l'artiste gagnant. */
+    private fun winnerFromId(winnerId: String?): DuelWinner? {
+        val d = _duel.value ?: return null
+        val wid = winnerId ?: return null
+        val a1 = d.artist1Id; val a2 = d.artist2Id
+        val v1 = _voteTotals.value[a1] ?: 0.0
+        val v2 = _voteTotals.value[a2] ?: 0.0
+        val profile = when (wid) { a1 -> d.artist1; a2 -> d.artist2; else -> null }
+        val winnerVotes = if (wid == a1) v1 else v2
+        val total = v1 + v2
+        val percent = if (total > 0) ((winnerVotes / total) * 100).toInt() else 100
+        return DuelWinner(profile?.displayName ?: "Vainqueur", profile?.avatarUrl, winnerVotes.toInt(), percent)
+    }
+
     /**
      * Annonce AUTOMATIQUEMENT le vainqueur = artiste avec le PLUS de votes (parité web) : sauve
-     * `winnerId` SANS terminer le duel + diffuse une célébration PLEIN ÉCRAN à tous les spectateurs.
+     * `winnerId` SANS terminer le duel. La propagation à TOUS passe par l'événement `status`
+     * (fiable, room du duel) — cf. handler STATUS — en plus du broadcast immédiat.
      */
     fun announceWinnerAuto() {
         val d = _duel.value ?: return
@@ -480,14 +624,10 @@ class DuelViewModel(
         val v1 = _voteTotals.value[a1] ?: 0.0
         val v2 = _voteTotals.value[a2] ?: 0.0
         val winnerId = if (v1 >= v2) a1 else a2
-        val profile = if (winnerId == a1) d.artist1 else d.artist2
-        val winnerVotes = if (winnerId == a1) v1 else v2
-        val total = v1 + v2
-        val votes = winnerVotes.toInt()
-        val percent = if (total > 0) ((winnerVotes / total) * 100).toInt() else 100
-        val name = profile?.displayName ?: "Vainqueur"
+        val w = winnerFromId(winnerId) ?: return
+        shownWinnerId = winnerId
         patchDuel("""{"winnerId":"$winnerId"}""")
-        _winnerInfo.value = DuelWinner(name, profile?.avatarUrl, votes, percent)
+        _winnerInfo.value = w
         liveSession?.emit(
             "broadcast",
             org.json.JSONObject(
@@ -495,7 +635,7 @@ class DuelViewModel(
                     "channel" to "duel-winner-$duelId",
                     "event" to "winner_announced",
                     "payload" to org.json.JSONObject(
-                        mapOf("name" to name, "avatar" to (profile?.avatarUrl ?: ""), "votes" to votes, "percent" to percent),
+                        mapOf("name" to w.name, "avatar" to (w.avatar ?: ""), "votes" to w.votes, "percent" to w.percent),
                     ),
                 ),
             ),
@@ -540,6 +680,7 @@ class DuelViewModel(
                 live.emit("broadcast:join", "duel-focus-$duelId")
                 live.emit("broadcast:join", "duel-media-$duelId")
                 live.emit("broadcast:join", "duel-winner-$duelId")
+                live.emit("broadcast:join", "duel-mute-$duelId")
                 // Re-diffuse mon état média à (re)connexion → les arrivants (web) le voient.
                 broadcastMediaState()
             }
@@ -555,10 +696,26 @@ class DuelViewModel(
             live.on(Realtime.RealtimeEvent.TIMER, TimerPayload.serializer()) { p ->
                 _timer.value = DuelTimer(endsAt = p.endsAt, targetId = p.targetId)
             }
-            // Statut / vainqueur.
+            // Statut / vainqueur. La désignation d'un `winnerId` déclenche la célébration PLEIN
+            // ÉCRAN chez TOUS (propagation FIABLE via la room du duel, parité web) — pas seulement
+            // via le broadcast éphémère qui pouvait être manqué.
             live.on(Realtime.RealtimeEvent.STATUS, StatusPayload.serializer()) { p ->
                 _duel.update { d -> d?.copy(winnerId = p.winnerId ?: d.winnerId) }
+                val wid = p.winnerId
+                if (wid == null) {
+                    shownWinnerId = null
+                } else if (wid != shownWinnerId) {
+                    shownWinnerId = wid
+                    winnerFromId(wid)?.let { _winnerInfo.value = it }
+                }
             }
+            // Réglages du duel modifiés par le manager en direct (chat on/off) — visible par tous.
+            live.on(Realtime.RealtimeEvent.SETTINGS, EventSettingsPayload.serializer()) { p ->
+                _duel.update { d -> d?.copy(chatEnabled = p.chatEnabled ?: d.chatEnabled) }
+            }
+            // Modération : un modérateur a été désigné/révoqué par le manager → recharge pour tous.
+            live.on(Realtime.RealtimeEvent.MODERATOR_APPOINTED, EventModeratorPayload.serializer()) { loadModerators() }
+            live.on(Realtime.RealtimeEvent.MODERATOR_REVOKED, EventModeratorPayload.serializer()) { loadModerators() }
             // Cadeaux (alimente l'animation GPU + la bulle top-donateur).
             live.on(Realtime.RealtimeEvent.GIFT, GiftPayload.serializer()) { p ->
                 _giftFeed.update { it + DuelGift(giftCounter++, p.fromUserId, p.giftName, p.giftImage, p.value) }
@@ -583,7 +740,14 @@ class DuelViewModel(
                     // Vainqueur annoncé par le manager → célébration PLEIN ÉCRAN persistante pour tous.
                     "winner_announced" -> _winnerInfo.value = env.payload?.let { DuelWinner(it.name ?: "Vainqueur", it.avatar, it.votes ?: 0, it.percent ?: 0) }
                     "winner_stopped" -> _winnerInfo.value = null
+                    // Hard-mute d'un artiste imposé par le manager (duel-mute-<id>) → coupe/réactive partout.
+                    "FORCE_MUTE" -> env.payload?.artistId?.let { applyMuteState(it, true) }
+                    "FORCE_UNMUTE" -> env.payload?.artistId?.let { applyMuteState(it, false) }
                 }
+            }
+            // Bannissement d'un spectateur (parité web `stream:banned`) → masque ses messages partout.
+            live.on("stream:banned", com.dualmusic.feature.duel.StreamBannedPayload.serializer()) { p ->
+                if (p.streamId == null || p.streamId == duelId) _bannedUserIds.update { it + p.userId }
             }
             // Présence (spectateurs).
             live.on(Realtime.RealtimeEvent.PRESENCE, PresencePayload.serializer()) { p ->

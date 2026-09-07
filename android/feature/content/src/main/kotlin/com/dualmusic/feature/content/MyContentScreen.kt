@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -100,14 +101,17 @@ class MyContentViewModel(
                     )
                 }.getOrDefault(emptyList())
             } ?: emptyList()
-            val replays = myUserId?.let { uid ->
-                runCatching {
-                    api.request(
-                        Endpoint.get(ReplayEndpoints.LIST, query = mapOf("artistId" to uid)),
-                        ListSerializer(ReplayVideo.serializer()),
-                    )
-                }.getOrDefault(emptyList())
-            } ?: emptyList()
+            // `mine=true` (et non `artistId=uid`) : couvre à la fois les replays où l'appelant
+            // est l'ARTISTE (`artist_id`) et ceux dont il est le CRÉATEUR (`created_by`, ex. un
+            // manager de duel/compétition) — `artistId` seul ne renvoyait jamais les replays de
+            // duels/compétitions gérés par un manager, qui n'est pas l'artiste. Parité web
+            // (`MyReplays.tsx` utilise déjà `mine: "true"`).
+            val replays = runCatching {
+                api.request(
+                    Endpoint.get(ReplayEndpoints.LIST, query = mapOf("mine" to "true")),
+                    ListSerializer(ReplayVideo.serializer()),
+                )
+            }.getOrDefault(emptyList())
             _uiState.update { it.copy(artistName = name, videos = videos, replays = replays) }
         }
     }
@@ -138,6 +142,28 @@ class MyContentViewModel(
 
     /** Signale une erreur (lecture/plafond de taille) à l'UI. */
     fun setMessage(text: String?) = _uiState.update { it.copy(message = text) }
+
+    /** Réglages (prix, publication) d'un replay — hôte/propriétaire. */
+    fun updateReplaySettings(id: String, replayPrice: Double, isPublic: Boolean, onDone: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val body = """{"replay_price":$replayPrice,"is_public":$isPublic,"is_premium":${replayPrice > 0}}"""
+            val ok = runCatching { api.request<Unit>(Endpoint.patch(ReplayEndpoints.detail(id), body)) }.isSuccess
+            if (ok) load()
+            onDone(ok)
+        }
+    }
+
+    /** Remplace le fichier vidéo d'un replay (téléversement direct, catégorie `replay`). */
+    fun replaceReplayVideo(id: String, media: com.dualmusic.core.upload.LocalMedia, onDone: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val ok = runCatching {
+                val url = uploader.upload(media, UploadCategory.REPLAY)
+                api.request<Unit>(Endpoint.patch(ReplayEndpoints.detail(id), """{"video_url":${url.jsonQuoted()}}"""))
+            }.isSuccess
+            if (ok) load()
+            onDone(ok)
+        }
+    }
 
     /** Publie la vidéo (URL déjà uploadée) via `POST /lifestyle`, puis recharge. */
     fun publish(title: String, description: String, onDone: () -> Unit) {
@@ -179,9 +205,12 @@ class MyContentViewModel(
  * Équivalent mobile de l'onglet Contenu du web.
  *
  * @param viewModel source d'état.
+ * @param isArtist masque la publication lifestyle + « Mes vidéos » pour un manager (pas
+ *   d'artiste) qui accède à cet écran seulement pour gérer les replays de duels/compétitions
+ *   qu'il gère — ces deux sections n'ont pas de sens pour lui.
  */
 @Composable
-fun MyContentScreen(viewModel: MyContentViewModel) {
+fun MyContentScreen(viewModel: MyContentViewModel, isArtist: Boolean = true) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
@@ -190,6 +219,7 @@ fun MyContentScreen(viewModel: MyContentViewModel) {
 
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
+    var manageReplay by remember { mutableStateOf<ReplayVideo?>(null) }
 
     LaunchedEffect(Unit) { viewModel.load() }
 
@@ -227,8 +257,8 @@ fun MyContentScreen(viewModel: MyContentViewModel) {
     ) {
         item { ui.message?.let { Text(it, color = colors.primary) } }
 
-        // --- Publier une vidéo lifestyle ---
-        item {
+        // --- Publier une vidéo lifestyle (artiste seulement — sans objet pour un manager) ---
+        if (isArtist) item {
             DMCard(modifier = Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
                     Text(s.publishLifestyle, color = colors.foreground, fontWeight = FontWeight.Bold)
@@ -277,12 +307,14 @@ fun MyContentScreen(viewModel: MyContentViewModel) {
             }
         }
 
-        // --- Mes vidéos ---
-        item { Text(s.myVideos, color = colors.foreground, fontWeight = FontWeight.Bold) }
-        if (ui.videos.isEmpty()) {
-            item { Text(s.noMyVideos, color = colors.mutedForeground) }
-        } else {
-            items(ui.videos) { v -> ContentRow(v.title ?: "—", "❤ ${v.likesCount} · 👁 ${v.viewsCount}") }
+        // --- Mes vidéos (artiste seulement) ---
+        if (isArtist) {
+            item { Text(s.myVideos, color = colors.foreground, fontWeight = FontWeight.Bold) }
+            if (ui.videos.isEmpty()) {
+                item { Text(s.noMyVideos, color = colors.mutedForeground) }
+            } else {
+                items(ui.videos) { v -> ContentRow(v.title ?: "—", "❤ ${v.likesCount} · 👁 ${v.viewsCount}") }
+            }
         }
 
         // --- Mes replays ---
@@ -290,16 +322,113 @@ fun MyContentScreen(viewModel: MyContentViewModel) {
         if (ui.replays.isEmpty()) {
             item { Text(s.noMyReplays, color = colors.mutedForeground) }
         } else {
-            items(ui.replays) { r -> ContentRow(r.title ?: "—", "👁 ${r.viewsCount}") }
+            items(ui.replays) { r ->
+                ContentRow(
+                    title = r.title ?: "—",
+                    meta = "👁 ${r.viewsCount}" + if (!r.isPublic) " · Brouillon" else "",
+                    onClick = { manageReplay = r },
+                )
+            }
+        }
+    }
+
+    // Gestion d'un replay (propriétaire) : prix, publication, téléchargement, remplacement vidéo.
+    manageReplay?.let { r ->
+        ReplayManageDialog(
+            replay = r,
+            onDismiss = { manageReplay = null },
+            onSave = { price, isPublic -> viewModel.updateReplaySettings(r.id, price, isPublic) { manageReplay = null } },
+            onReplaceVideo = { media -> viewModel.replaceReplayVideo(r.id, media) { manageReplay = null } },
+        )
+    }
+}
+
+/** Feuille de gestion d'un replay : prix, publication, téléchargement, remplacement vidéo. */
+@Composable
+private fun ReplayManageDialog(
+    replay: ReplayVideo,
+    onDismiss: () -> Unit,
+    onSave: (price: Double, isPublic: Boolean) -> Unit,
+    onReplaceVideo: (com.dualmusic.core.upload.LocalMedia) -> Unit,
+) {
+    val colors = DualMusicTheme.colors
+    val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var price by remember(replay.id) { mutableStateOf(replay.replayPrice.toInt().toString()) }
+    var isPublic by remember(replay.id) { mutableStateOf(replay.isPublic) }
+    var uploadingVideo by remember { mutableStateOf(false) }
+
+    val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            scope.launch {
+                uploadingVideo = true
+                runCatching { readLocalMedia(context, uri, maxBytes = 2048L * 1024 * 1024) }
+                    .onSuccess { media -> onReplaceVideo(media) }
+                    .onFailure { uploadingVideo = false }
+            }
+        }
+    }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        DMCard(modifier = Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md)) {
+                Text("🎛️ Gestion du replay", color = colors.foreground, fontWeight = FontWeight.Bold)
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Rendre public", color = colors.foreground)
+                        Text("Visible sur la page des replays une fois activé.", color = colors.mutedForeground, fontWeight = FontWeight.Normal)
+                    }
+                    androidx.compose.material3.Switch(checked = isPublic, onCheckedChange = { isPublic = it })
+                }
+
+                OutlinedTextField(
+                    value = price,
+                    onValueChange = { v -> price = v.filter { it.isDigit() } },
+                    label = { Text("Prix (crédits — 0 = gratuit)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                DMButton(
+                    "Enregistrer les réglages",
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { onSave(price.toDoubleOrNull() ?: 0.0, isPublic) },
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    DMButton(
+                        "Télécharger",
+                        style = DMButtonStyle.OUTLINE,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            val url = replay.videoUrl
+                            if (!url.isNullOrBlank()) {
+                                context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                            }
+                        },
+                    )
+                    DMButton(
+                        if (uploadingVideo) "…" else "Remplacer la vidéo",
+                        style = DMButtonStyle.OUTLINE,
+                        modifier = Modifier.weight(1f),
+                        enabled = !uploadingVideo,
+                        onClick = { videoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
+                    )
+                }
+            }
         }
     }
 }
 
-/** Ligne simple de contenu (titre + méta). */
+/** Ligne simple de contenu (titre + méta) — cliquable pour ouvrir la gestion si [onClick] fourni. */
 @Composable
-private fun ContentRow(title: String, meta: String) {
+private fun ContentRow(title: String, meta: String, onClick: (() -> Unit)? = null) {
     val colors = DualMusicTheme.colors
-    DMCard(modifier = Modifier.fillMaxWidth()) {
+    DMCard(
+        modifier = Modifier.fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -309,6 +438,9 @@ private fun ContentRow(title: String, meta: String) {
         }
     }
 }
+
+/** Échappe une chaîne pour l'insérer dans un corps JSON construit à la main. */
+private fun String.jsonQuoted(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 /** Extrait la durée d'une vidéo locale au format `m:ss` (repli `0:00`). */
 private fun extractDuration(context: android.content.Context, uri: Uri): String = runCatching {

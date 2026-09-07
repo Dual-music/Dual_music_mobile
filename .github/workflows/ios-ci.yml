@@ -1,0 +1,154 @@
+# CI iOS — Dual Music
+#
+# Rôle : compiler et tester l'app iOS **à chaque push/PR**, sur un runner macOS GitHub.
+# C'est le filet de sécurité principal du projet : le développement se fait sous Windows,
+# donc aucune erreur de compilation Swift n'est détectable localement. Tout ce qui casse
+# doit être attrapé ici.
+#
+# Trois étages, du plus rapide au plus complet :
+#   1. `lint`      — style (non bloquant, feedback immédiat) ;
+#   2. `kit-tests` — tests unitaires du paquet DualMusicKit sur simulateur ;
+#   3. `app-build` — génération du projet Xcode + build de l'app + tests UI.
+name: iOS CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-ci.yml'
+  # Permet de relancer la CI à la demande depuis l'onglet Actions.
+  workflow_dispatch:
+
+concurrency:
+  group: ios-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Simulateur cible. `OS=latest` évite de casser à chaque montée de version d'Xcode.
+  DESTINATION: 'platform=iOS Simulator,name=iPhone 15,OS=latest'
+
+jobs:
+  # ===========================================================================
+  #  1. Qualité de forme
+  # ===========================================================================
+  lint:
+    name: SwiftLint (non bloquant)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer SwiftLint
+        run: brew install swiftlint
+
+      # `--strict` n'est volontairement PAS utilisé : le style ne doit pas bloquer une
+      # livraison. Les avertissements restent visibles dans l'annotation de la PR.
+      - name: Analyser
+        working-directory: ios
+        run: swiftlint lint --reporter github-actions-logging || true
+
+  # ===========================================================================
+  #  2. Tests unitaires du paquet (domaine, réseau, design system)
+  # ===========================================================================
+  kit-tests:
+    name: Tests DualMusicKit
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sélectionner Xcode 15.4
+        run: sudo xcode-select -switch /Applications/Xcode_15.4.app
+
+      - name: Cache des dépendances SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/Packages/DualMusicKit/Package.swift') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      # Le paquet cible iOS uniquement (SwiftUI/UIKit) : on le teste donc sur simulateur,
+      # et non avec `swift test` qui compilerait pour macOS.
+      - name: Tester le paquet sur simulateur
+        working-directory: ios/Packages/DualMusicKit
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -scheme DualMusicKit \
+            -destination "$DESTINATION" \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Publier les résultats de test
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kit-test-results
+          path: ios/Packages/DualMusicKit/TestResults.xcresult
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  #  3. Build de l'application + tests UI
+  # ===========================================================================
+  app-build:
+    name: Build app + tests UI
+    runs-on: macos-14
+    needs: kit-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sélectionner Xcode 15.4
+        run: sudo xcode-select -switch /Applications/Xcode_15.4.app
+
+      - name: Installer XcodeGen
+        run: brew install xcodegen
+
+      - name: Cache des dépendances SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/Packages/DualMusicKit/Package.swift') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      # Le .xcodeproj n'est pas committé : on le régénère depuis project.yml.
+      - name: Générer le projet Xcode
+        working-directory: ios
+        run: xcodegen generate
+
+      # `CODE_SIGNING_ALLOWED=NO` : aucun certificat n'est nécessaire pour un build
+      # simulateur, ce qui garde la CI utilisable sans secret Apple.
+      - name: Compiler l'app (simulateur)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project DualMusic.xcodeproj \
+            -scheme DualMusic \
+            -destination "$DESTINATION" \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Tests UI (lancement, écran de connexion)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project DualMusic.xcodeproj \
+            -scheme DualMusic \
+            -destination "$DESTINATION" \
+            -derivedDataPath DerivedData \
+            -only-testing:DualMusicUITests \
+            -resultBundlePath UITestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Publier les résultats des tests UI
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-results
+          path: ios/UITestResults.xcresult
+          if-no-files-found: ignore

@@ -133,6 +133,8 @@ fun DuelsListScreen(
     viewModel: DuelsListViewModel,
     onOpen: (Duel) -> Unit,
     onOpenReplay: (ReplayVideo) -> Unit = {},
+    /** Ouvre l'écran Sponsoring (Profil) avec ce duel présélectionné — voir affiche « Sponsoriser ». */
+    onRequestSponsor: (eventType: String, eventId: String) -> Unit = { _, _ -> },
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
@@ -180,8 +182,8 @@ fun DuelsListScreen(
         }
 
         when (tab) {
-            0 -> if (live.isEmpty()) EmptyDuels(s.noDuelsLive) else live.forEach { DuelCard(it, ui.votes[it.id], ui.presence[it.id], isLive = true, onOpen = onOpen) }
-            1 -> if (upcoming.isEmpty()) EmptyDuels(s.noDuelsUpcoming) else upcoming.forEach { DuelCard(it, ui.votes[it.id], null, isLive = false, onOpen = onOpen) }
+            0 -> if (live.isEmpty()) EmptyDuels(s.noDuelsLive) else live.forEach { DuelCard(it, ui.votes[it.id], ui.presence[it.id], isLive = true, onOpen = onOpen, onRequestSponsor = onRequestSponsor) }
+            1 -> if (upcoming.isEmpty()) EmptyDuels(s.noDuelsUpcoming) else upcoming.forEach { DuelCard(it, ui.votes[it.id], null, isLive = false, onOpen = onOpen, onRequestSponsor = onRequestSponsor) }
             else -> if (replays.isEmpty()) EmptyDuels(s.noDuelReplays) else replays.forEach { ReplayCard(it, onOpenReplay) }
         }
     }
@@ -205,7 +207,14 @@ private fun TabPill(label: String, selected: Boolean, onClick: () -> Unit) {
 
 /** Carte d'un duel (En direct / À venir). */
 @Composable
-private fun DuelCard(duel: Duel, votes: Pair<Double, Double>?, viewers: Int?, isLive: Boolean, onOpen: (Duel) -> Unit) {
+private fun DuelCard(
+    duel: Duel,
+    votes: Pair<Double, Double>?,
+    viewers: Int?,
+    isLive: Boolean,
+    onOpen: (Duel) -> Unit,
+    onRequestSponsor: (String, String) -> Unit = { _, _ -> },
+) {
     val colors = DualMusicTheme.colors
     val s = LocalStrings.current
     val a1 = votes?.first ?: 0.0
@@ -255,8 +264,24 @@ private fun DuelCard(duel: Duel, votes: Pair<Double, Double>?, viewers: Int?, is
             }
 
             DMButton(if (isLive) s.voteBtn else s.viewDuelBtn, modifier = Modifier.fillMaxWidth()) { onOpen(duel) }
+            if (duel.acceptsSponsors && !isDeadlinePassed(duel.sponsorSubmissionDeadline)) {
+                DMButton(s.requestSponsorBtn, style = DMButtonStyle.OUTLINE, modifier = Modifier.fillMaxWidth()) {
+                    onRequestSponsor("duel", duel.id)
+                }
+            }
         }
     }
+}
+
+/** `true` seulement si une date limite est fixée ET déjà dépassée (pas de date = jamais fermé). */
+private fun isDeadlinePassed(deadline: String?): Boolean {
+    if (deadline == null) return false
+    val clean = deadline.trim().replace(' ', 'T').substringBefore('.').substringBefore('+').removeSuffix("Z")
+        .let { if (it.length > 19) it.take(19) else it }
+    val fmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+        .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+    val parsed = runCatching { fmt.parse(clean) }.getOrNull() ?: return false
+    return parsed.time < System.currentTimeMillis()
 }
 
 @Composable

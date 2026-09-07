@@ -50,6 +50,8 @@ data class SignInUiState(
     val isSubmitting: Boolean = false,
     val error: String? = null,
     val info: String? = null,
+    // Réglage admin (`google_signin_config`), désactivé par défaut — voir `AuthViewModel.init`.
+    val googleSigninEnabled: Boolean = false,
 ) {
     /** Le formulaire courant est-il soumettable ? (règles = celles du backend). */
     val canSubmit: Boolean
@@ -78,6 +80,15 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SignInUiState())
     val uiState: StateFlow<SignInUiState> = _uiState.asStateFlow()
+
+    init {
+        // Réglage admin, désactivé par défaut — le bouton Google reste masqué tant que ce
+        // chargement n'a pas répondu `true` (jamais affiché "par erreur" en cas d'échec réseau).
+        viewModelScope.launch {
+            val enabled = runCatching { repository.googleSigninEnabled() }.getOrDefault(false)
+            _uiState.update { it.copy(googleSigninEnabled = enabled) }
+        }
+    }
 
     fun onEmailChange(v: String) = _uiState.update { it.copy(email = v, error = null) }
     fun onPasswordChange(v: String) = _uiState.update { it.copy(password = v, error = null) }

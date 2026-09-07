@@ -1,0 +1,57 @@
+# Configuration SwiftLint — Dual Music iOS
+#
+# Philosophie : le linter sert à repérer les vrais pièges (force unwrap, fonctions
+# interminables), pas à imposer un style tatillon qui ferait du bruit dans les PR.
+# Il est exécuté en CI en mode **non bloquant**.
+
+included:
+  - App/Sources
+  - App/Tests
+  - App/UITests
+  - Packages/DualMusicKit/Sources
+  - Packages/DualMusicKit/Tests
+
+excluded:
+  - Packages/DualMusicKit/.build
+  - DerivedData
+  - .build
+
+disabled_rules:
+  # Les vues SwiftUI sont naturellement longues (déclaratif) : la règle produirait du bruit.
+  - type_body_length
+  - file_length
+  # Les fermetures de `body` dépassent souvent 20 lignes sans que ce soit un problème.
+  - closure_body_length
+  # Les DTOs ont beaucoup de propriétés : c'est le miroir du contrat backend.
+  - type_name
+
+opt_in_rules:
+  - empty_count
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - overridden_super_call
+  - redundant_nil_coalescing
+  - toggle_bool
+  - unused_import
+
+line_length:
+  warning: 130
+  error: 200
+  ignores_comments: true
+  ignores_urls: true
+
+function_body_length:
+  warning: 80
+  error: 150
+
+identifier_name:
+  min_length: 1        # `s` pour les chaînes localisées, `g` pour un contexte graphique
+  max_length: 60
+  excluded: [id, s, r, g, b, h, l, x, y, c, m]
+
+force_cast: error
+force_try: error
+
+# Les tests peuvent forcer un déballage : un échec y est un échec de test, pas un crash prod.
+force_unwrapping:
+  severity: warning

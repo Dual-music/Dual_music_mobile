@@ -10,6 +10,9 @@ import com.dualmusic.domain.gift.GiftEndpoints
 import com.dualmusic.domain.gift.InventoryItem
 import com.dualmusic.domain.model.Competition
 import com.dualmusic.domain.model.DisplayProfile
+import com.dualmusic.domain.moderation.AppointModeratorBody
+import com.dualmusic.domain.moderation.EventModerator
+import com.dualmusic.domain.moderation.ModerationEndpoints
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -44,9 +47,46 @@ data class CompetitionChatMessage(
     // Le backend utilise la clé `message` (colonne DB) et hydrate l'auteur sous `author`.
     @SerialName("message") val content: String,
     @SerialName("author") val user: DisplayProfile? = null,
+    // Réponse à un message parent (chat en fil) — présent quand c'est une réponse.
+    @SerialName("parent_id") val parentId: String? = null,
 ) {
     val authorName: String get() = user?.displayName ?: com.dualmusic.core.ui.i18n.appStrings.fan
 }
+
+/** Ligne de bannissement (`GET /moderation/stream-bans`) — on n'extrait que l'utilisateur banni. */
+@Serializable
+data class CompetitionStreamBanRow(
+    @SerialName("banned_user_id") val bannedUserId: String? = null,
+)
+
+/** Charge utile `competition:banned` — un spectateur ou candidat vient d'être banni. */
+@Serializable
+data class CompetitionStreamBannedPayload(
+    @SerialName("user_id") val userId: String,
+    @SerialName("competition_id") val competitionId: String? = null,
+)
+
+/** Réponse `GET /lives/:id/likes`. La compétition réutilise l'endpoint générique des likes. */
+@Serializable
+private data class CompetitionLikesResponse(val likes: Int = 0)
+
+/** Réglage public du prix du vote (`GET /settings/public/vote_config`). */
+@Serializable
+private data class CompetitionVoteConfigSetting(val value: CompetitionVoteConfigValue? = null)
+
+@Serializable
+private data class CompetitionVoteConfigValue(@SerialName("price_per_vote") val pricePerVote: Double = 1.0)
+
+/** Réglage public de l'ajout manuel de candidat (`GET /settings/public/manual_candidates_config`). */
+@Serializable
+private data class ManualCandidatesConfigSetting(val value: ManualCandidatesConfigValue? = null)
+
+@Serializable
+private data class ManualCandidatesConfigValue(val enabled: Boolean? = null)
+
+/** Corps de `POST /competitions/:id/candidates/manual`. */
+@Serializable
+private data class AddCandidateManuallyBody(val artistId: String, val pitch: String? = null)
 
 /**
  * Accès REST aux compétitions.
@@ -58,11 +98,13 @@ data class CompetitionChatMessage(
 class CompetitionRepository(private val api: ApiClient) {
 
     /**
-     * Signale ce direct à la modération (parité web `LiveReportButton`).
-     * `POST /moderation/reports/live` — la compétition est identifiée par son id (`liveId`).
+     * Signale cette compétition à la modération (parité web `LiveReportButton`).
+     * `POST /moderation/reports/competition` — table dédiée (`competition_reports`), distincte de
+     * `live_reports` (live/concert/duel) : envoyer ça vers `/moderation/reports/live` enregistrait
+     * le signalement comme un "live" générique, invisible/mal lié pour l'admin.
      */
     suspend fun reportLive(liveId: String, reason: String) {
-        api.request<Unit>(Endpoint.post("moderation/reports/live", """{"liveId":"$liveId","reason":"$reason"}"""))
+        api.request<Unit>(Endpoint.post("moderation/reports/competition", """{"competitionId":"$liveId","reason":"$reason"}"""))
     }
 
     /** Historique du chat (50 derniers messages). */
@@ -72,10 +114,56 @@ class CompetitionRepository(private val api: ApiClient) {
             ListSerializer(CompetitionChatMessage.serializer()),
         )
 
-    /** Poste un message de chat. */
-    suspend fun postMessage(id: String, content: String) {
-        api.request<Unit>(Endpoint.post(CompetitionEndpoints.messages(id), """{"message":${content.jsonQuoted()}}"""))
+    /** Poste un message de chat (optionnellement une réponse à `parentId` — chat en fil). */
+    suspend fun postMessage(id: String, content: String, parentId: String? = null) {
+        val parent = parentId?.let { ""","parentId":"$it"""" } ?: ""
+        api.request<Unit>(Endpoint.post(CompetitionEndpoints.messages(id), """{"message":${content.jsonQuoted()}$parent}"""))
     }
+
+    /**
+     * Bannit un spectateur OU un candidat de cette compétition (modération). `POST
+     * /moderation/competition-bans` — table/canal DÉDIÉS (`competition_bans` / événement
+     * `competition:banned`), PAS le mécanisme générique `/moderation/stream-bans` (corrigé :
+     * l'ancien code postait sur `stream_bans`, invisible du web qui lit `competition_bans` —
+     * un bannissement posé depuis mobile n'était donc jamais vu côté web, et réciproquement).
+     * Le banni ne peut plus écrire, rejoindre, ni (s'il était candidat) continuer de diffuser.
+     */
+    suspend fun createStreamBan(competitionId: String, bannedUserId: String, reason: String?) {
+        val r = reason?.let { ""","reason":${it.jsonQuoted()}""" } ?: ""
+        api.request<Unit>(
+            Endpoint.post(
+                "/moderation/competition-bans",
+                """{"competitionId":"$competitionId","bannedUserId":"$bannedUserId"$r}""",
+            ),
+        )
+    }
+
+    /** Liste des utilisateurs bannis de cette compétition (ids). Best-effort. */
+    suspend fun listStreamBans(competitionId: String): List<String> =
+        runCatching {
+            api.request(
+                Endpoint.get("/moderation/competition-bans", query = mapOf("competitionId" to competitionId)),
+                ListSerializer(CompetitionStreamBanRow.serializer()),
+            ).mapNotNull { it.bannedUserId }
+        }.getOrDefault(emptyList())
+
+    /** Compteur de J'aime persistant (`GET /lives/:id/likes`, générique par id). */
+    suspend fun likesCount(competitionId: String): Int =
+        runCatching {
+            api.request(Endpoint.get("/lives/$competitionId/likes"), CompetitionLikesResponse.serializer()).likes
+        }.getOrDefault(0)
+
+    /** Incrémente le compteur de J'aime persistant (`POST /lives/:id/likes`). */
+    suspend fun like(competitionId: String) {
+        runCatching { api.request<Unit>(Endpoint.post("/lives/$competitionId/likes")) }
+    }
+
+    /** Prix d'un vote (crédits) piloté par l'admin (`GET /settings/public/vote_config`). */
+    suspend fun votePricePerVote(): Double =
+        runCatching {
+            api.request(Endpoint.get("/settings/public/vote_config"), CompetitionVoteConfigSetting.serializer())
+                .value?.pricePerVote ?: 1.0
+        }.getOrDefault(1.0)
 
     /** Classement des donateurs (`GET /leaderboards/gifts?contextType=competition`). */
     suspend fun giftLeaderboard(id: String): List<CompetitionDonorEntry> =
@@ -223,6 +311,46 @@ class CompetitionRepository(private val api: ApiClient) {
         api.request<Unit>(Endpoint.post("/competitions/candidates/$candidateId/review", """{"approve":$approve}"""))
     }
 
+    /**
+     * L'ajout manuel de candidat est-il activé (réglage admin, `manual_candidates_config`) ?
+     * Désactivé par défaut (demande explicite, parité web) — absent en base = `false`.
+     */
+    suspend fun manualCandidatesEnabled(): Boolean =
+        runCatching {
+            api.request(
+                Endpoint.get("/settings/public/manual_candidates_config").copy(anonymous = true),
+                ManualCandidatesConfigSetting.serializer(),
+            ).value?.enabled == true
+        }.getOrDefault(false)
+
+    /** Annuaire public des artistes (`GET /artists`) — pour le picker d'ajout manuel. */
+    suspend fun artistDirectory(): List<com.dualmusic.domain.creator.ArtistDirectoryEntry> =
+        runCatching {
+            api.request(
+                Endpoint.get(com.dualmusic.domain.creator.CreatorEndpoints.ARTISTS),
+                ListSerializer(com.dualmusic.domain.creator.ArtistDirectoryEntry.serializer()),
+            )
+        }.getOrDefault(emptyList())
+
+    /**
+     * Ajoute directement un candidat (walk-in, présentiel) sans passer par la candidature en
+     * ligne. `POST /competitions/:id/candidates/manual` — verrouillé côté serveur par le
+     * réglage [manualCandidatesEnabled].
+     */
+    suspend fun addCandidateManually(competitionId: String, artistId: String, pitch: String?) {
+        val body = json.encodeToString(AddCandidateManuallyBody.serializer(), AddCandidateManuallyBody(artistId, pitch))
+        api.request<Unit>(Endpoint.post("/competitions/$competitionId/candidates/manual", body))
+    }
+
+    /**
+     * Fixe (valeur absolue, pas un incrément) les voix cumulées d'un jury hors ligne pour un
+     * candidat — additionnées aux votes payants + cadeaux dans le classement (parité web).
+     * `POST /competitions/candidates/:id/jury-votes`.
+     */
+    suspend fun setJuryVotes(candidateId: String, juryVotes: Int) {
+        api.request<Unit>(Endpoint.post("/competitions/candidates/$candidateId/jury-votes", """{"juryVotes":$juryVotes}"""))
+    }
+
     /** Publie la compétition (ouvre les votes). `POST /competitions/:id/publish`. */
     suspend fun publish(id: String) {
         api.request<Unit>(Endpoint.post("/competitions/$id/publish", "{}"))
@@ -243,6 +371,50 @@ class CompetitionRepository(private val api: ApiClient) {
     suspend fun setFocus(id: String, participantId: String?) {
         val pid = participantId?.let { """"$it"""" } ?: "null"
         api.request<Unit>(Endpoint.post("/competitions/$id/focus", """{"participantId":$pid}"""))
+    }
+
+    // --- Modération par évènement (chat on/off + modérateurs désignés) ---
+
+    /**
+     * Active/désactive le chat de cette compétition (manager organisateur ou admin uniquement,
+     * 403 sinon). `PATCH /competitions/:id` — dédiée plutôt que [updateCompetition] (qui exige
+     * le corps COMPLET de [CreateCompetitionBody], sans champ `chatEnabled`).
+     */
+    suspend fun setChatEnabled(id: String, enabled: Boolean) {
+        api.request<Unit>(Endpoint.patch("/competitions/$id", """{"chatEnabled":$enabled}"""))
+    }
+
+    /** Spectateurs actuellement connectés à la room (manager uniquement) — vivier du picker de modérateurs. */
+    suspend fun listCurrentViewers(competitionId: String): List<DisplayProfile> =
+        runCatching {
+            api.request(
+                Endpoint.get(ModerationEndpoints.viewers("competition", competitionId)),
+                ListSerializer(DisplayProfile.serializer()),
+            )
+        }.getOrDefault(emptyList())
+
+    /** Modérateurs désignés de cette compétition (max [com.dualmusic.domain.moderation.MAX_EVENT_MODERATORS]). */
+    suspend fun listEventModerators(competitionId: String): List<EventModerator> =
+        runCatching {
+            api.request(
+                Endpoint.get(ModerationEndpoints.moderators("competition", competitionId)),
+                ListSerializer(EventModerator.serializer()),
+            )
+        }.getOrDefault(emptyList())
+
+    /** Désigne un spectateur connecté comme modérateur (manager uniquement). */
+    suspend fun appointModerator(competitionId: String, userId: String) {
+        api.request<Unit>(
+            Endpoint.post(
+                ModerationEndpoints.moderators("competition", competitionId),
+                json.encodeToString(AppointModeratorBody.serializer(), AppointModeratorBody(userId)),
+            ),
+        )
+    }
+
+    /** Révoque un modérateur désigné (manager uniquement). */
+    suspend fun revokeModerator(competitionId: String, userId: String) {
+        api.request<Unit>(Endpoint.delete(ModerationEndpoints.revokeModerator("competition", competitionId, userId)))
     }
 }
 

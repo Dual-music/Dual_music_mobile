@@ -251,6 +251,10 @@ class AppContainer(context: Context) {
     /** ViewModel du profil public créateur (artiste/manager + liens sociaux). */
     fun makePublicProfileViewModel(): PublicProfileViewModel = PublicProfileViewModel(profileRepository, mediaUploader)
 
+    /** ViewModel de CONSULTATION du profil public d'un artiste (ouvert depuis un direct). */
+    fun makeArtistPublicProfileViewModel(userId: String): com.dualmusic.feature.profile.ArtistPublicProfileViewModel =
+        com.dualmusic.feature.profile.ArtistPublicProfileViewModel(userId, profileRepository)
+
     /** Vrai si l'admin a ouvert les candidatures manager (gating de l'entrée de menu). */
     suspend fun managerRequestsEnabled(): Boolean =
         runCatching { profileRepository.requestsEnabled(com.dualmusic.domain.role.RoleEndpoints.MANAGER_REQUESTS_ENABLED) }
@@ -443,11 +447,16 @@ class AppContainer(context: Context) {
      * [LiveRoomClient] (une connexion SFU par live affiché).
      */
     fun makeLiveViewModel(live: Live): LiveViewModel {
-        val media = LiveRoomClient(appContext, tokenService, appScope)
+        // Contexte EGL partagé par la room principale + les rooms d'invités (une par invité actif,
+        // créées à la demande) : sans EGL commun, les pistes des rooms invitées sont souscrites
+        // mais ne s'affichent pas (cases transparentes) — même contrainte que le multi-room duel.
+        val sharedEgl = livekit.org.webrtc.EglBase.create()
+        val media = LiveRoomClient(appContext, tokenService, appScope, sharedEgl)
         return LiveViewModel(
             liveId = live.id,
             roomName = live.liveKitRoom,
             media = media,
+            mediaFactory = { LiveRoomClient(appContext, tokenService, appScope, sharedEgl) },
             realtime = realtimeClient,
             repository = liveRepository,
             sponsorAds = sponsorAdRepository,
@@ -460,11 +469,13 @@ class AppContainer(context: Context) {
      * le viewer (chat/cadeaux/présence) + publication caméra/micro. Room dédiée.
      */
     fun makeLiveHostViewModel(live: Live): LiveViewModel {
-        val media = LiveRoomClient(appContext, tokenService, appScope)
+        val sharedEgl = livekit.org.webrtc.EglBase.create()
+        val media = LiveRoomClient(appContext, tokenService, appScope, sharedEgl)
         return LiveViewModel(
             liveId = live.id,
             roomName = live.liveKitRoom,
             media = media,
+            mediaFactory = { LiveRoomClient(appContext, tokenService, appScope, sharedEgl) },
             realtime = realtimeClient,
             repository = liveRepository,
             sponsorAds = sponsorAdRepository,
@@ -532,7 +543,10 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize().background(DualMusicTheme.gradients.hero),
                         contentAlignment = androidx.compose.ui.Alignment.Center,
                     ) { androidx.compose.material3.CircularProgressIndicator(color = DualMusicTheme.colors.primary) }
-                    else -> SignInScreen(viewModel = vm, onGoogle = { /* TODO(lot suivant): OAuth Google + deeplink */ })
+                    // Google (Credential Manager → ID token → /auth/oauth/google/native) est déjà
+                    // entièrement câblé DANS SignInScreen — voir GoogleSignIn.kt. Ce paramètre
+                    // `onGoogle` (mort, jamais invoqué en interne) a été retiré.
+                    else -> SignInScreen(viewModel = vm)
                 }
             }
             }
@@ -573,8 +587,25 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
     var openCompetitionReplay by remember { mutableStateOf<ReplayVideo?>(null) }
     var openConcert by remember { mutableStateOf<com.dualmusic.domain.model.Concert?>(null) }
     var openConcertReplay by remember { mutableStateOf<ReplayVideo?>(null) }
+    // Profil public d'un artiste, ouvert depuis un direct (clic sur son nom) → userId affiché.
+    var openArtistProfile by remember { mutableStateOf<String?>(null) }
     // Diffusion live (hôte) en plein écran, au-dessus du Scaffold → SANS la barre du bas.
     var broadcastLive by remember { mutableStateOf<Live?>(null) }
+    // Live SPECTATEUR ouvert (feed vertical) — hissé au niveau global pour un rendu PLEIN ÉCRAN
+    // immersif au-dessus du Scaffold (parité duel : pas de footer ni de nav basse dans le direct).
+    var openLive by remember { mutableStateOf<Live?>(null) }
+    val feedVm: FeedViewModel = viewModel { container.makeFeedViewModel() }
+    // Id du caller — pour savoir, depuis la page PUBLIQUE des lives (tous artistes confondus),
+    // si le live ouvert est LE SIEN (→ doit rentrer comme hôte) ou pas (→ simple spectateur).
+    // Même instance que celle de ProfileSection (Compose `viewModel()` mutualise par type) : pas
+    // de requête réseau supplémentaire.
+    val dashboardVmForLives = viewModel { container.makeDashboardViewModel() }
+    // `load()` est explicite (pas d'auto-chargement à la construction) — sans cet appel, `me`
+    // resterait `null` tant que l'utilisateur n'a jamais ouvert l'onglet Profil de la session.
+    // Idempotent (guard interne) : sans risque même si ProfileSection le déclenche aussi (même
+    // instance partagée, Compose `viewModel()` mutualise par type).
+    LaunchedEffect(Unit) { dashboardVmForLives.load() }
+    val myUserIdForLives = dashboardVmForLives.uiState.collectAsStateWithLifecycle().value.me?.user?.id
 
     // Quitte le profil et sélectionne un onglet bas (réinitialise les superpositions).
     fun goTab(t: Int) { tab = t; showProfile = false; homeOpen = 0; notifOpen = false; rechargeOpen = false }
@@ -610,7 +641,6 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
         com.dualmusic.feature.live.LiveRoomScreen(
             viewModel = hostVm,
             hostUserId = live.artistId,
-            quickGiftId = "",
             isHost = true,
             onEndLive = { broadcastLive = null },
             liveTitle = live.title,
@@ -627,7 +657,13 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
         if (tab == 2 && openDuelReplay == null) openDuel?.let { duel ->
             ImmersiveFullscreen()
             val duelVm: DuelViewModel = viewModel(key = duel.id) { container.makeDuelViewModel(duel) }
-            DuelRoomScreen(viewModel = duelVm, onLeave = { openDuel = null })
+            DuelRoomScreen(viewModel = duelVm, onLeave = { openDuel = null }, onOpenArtist = { openArtistProfile = it })
+            // Profil public d'un artiste (clic sur son nom) : superposé AU-DESSUS du direct, qui
+            // reste en composition → aucune reconnexion. Le retour ferme juste l'overlay.
+            openArtistProfile?.let { artistUserId ->
+                val pubVm = viewModel(key = "artist-pub-$artistUserId") { container.makeArtistPublicProfileViewModel(artistUserId) }
+                com.dualmusic.feature.profile.ArtistPublicProfileScreen(viewModel = pubVm, onBack = { openArtistProfile = null })
+            }
             return
         }
         if (tab == 3 && openConcertReplay == null) openConcert?.let { concert ->
@@ -638,14 +674,43 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                 viewModel = roomVm,
                 concertTitle = concert.title,
                 onLeave = { openConcert = null },
+                onOpenArtist = { openArtistProfile = it },
             )
+            // Profil public de l'artiste (clic sur son nom) : superposé au-dessus du direct.
+            openArtistProfile?.let { artistUserId ->
+                val pubVm = viewModel(key = "artist-pub-$artistUserId") { container.makeArtistPublicProfileViewModel(artistUserId) }
+                com.dualmusic.feature.profile.ArtistPublicProfileScreen(viewModel = pubVm, onBack = { openArtistProfile = null })
+            }
             return
         }
         if (tab == 4 && openCompetitionReplay == null) openCompetition?.let { competition ->
             ImmersiveFullscreen()
             val roomVm: CompetitionRoomViewModel =
                 viewModel(key = competition.id) { container.makeCompetitionRoomViewModel(competition.id) }
-            CompetitionRoomScreen(viewModel = roomVm, onLeave = { openCompetition = null })
+            CompetitionRoomScreen(viewModel = roomVm, onLeave = { openCompetition = null }, onOpenArtist = { openArtistProfile = it })
+            // Profil public d'un candidat (clic sur son nom) : superposé au-dessus du direct.
+            openArtistProfile?.let { artistUserId ->
+                val pubVm = viewModel(key = "artist-pub-$artistUserId") { container.makeArtistPublicProfileViewModel(artistUserId) }
+                com.dualmusic.feature.profile.ArtistPublicProfileScreen(viewModel = pubVm, onBack = { openArtistProfile = null })
+            }
+            return
+        }
+        // Live SPECTATEUR (onglet Lives) en PLEIN ÉCRAN immersif — parité duel : pas de footer/navbar.
+        if (tab == 1) openLive?.let { live ->
+            ImmersiveFullscreen()
+            androidx.activity.compose.BackHandler { openLive = null }
+            val startIndex = feedVm.items.value.indexOfFirst { it.id == live.id }.coerceAtLeast(0)
+            com.dualmusic.feature.feed.FeedScreen(
+                viewModel = feedVm,
+                makeLiveViewModel = container::makeLiveViewModel,
+                initialPage = startIndex,
+                onOpenArtist = { openArtistProfile = it },
+                onEndLive = { openLive = null },
+            )
+            openArtistProfile?.let { artistUserId ->
+                val pubVm = viewModel(key = "artist-pub-$artistUserId") { container.makeArtistPublicProfileViewModel(artistUserId) }
+                com.dualmusic.feature.profile.ArtistPublicProfileScreen(viewModel = pubVm, onBack = { openArtistProfile = null })
+            }
             return
         }
     }
@@ -755,22 +820,22 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                     )
                 }
                 1 -> {
-                    // Footer « Lives » : liste (grille de cartes, parité web /lives) → lecteur.
-                    val feedVm: FeedViewModel = viewModel { container.makeFeedViewModel() }
-                    var openLive by remember { mutableStateOf<com.dualmusic.domain.model.Live?>(null) }
-                    val live = openLive
-                    if (live == null) {
-                        com.dualmusic.feature.feed.LivesListScreen(viewModel = feedVm, onOpen = { openLive = it })
-                    } else {
-                        // Ouvre le feed vertical (swipe TikTok) positionné sur le live choisi.
-                        androidx.activity.compose.BackHandler { openLive = null }
-                        val startIndex = feedVm.items.value.indexOfFirst { it.id == live.id }.coerceAtLeast(0)
-                        com.dualmusic.feature.feed.FeedScreen(
-                            viewModel = feedVm,
-                            makeLiveViewModel = container::makeLiveViewModel,
-                            initialPage = startIndex,
-                        )
-                    }
+                    // Footer « Lives » : liste (grille de cartes, parité web /lives) — TOUS les
+                    // artistes confondus, y compris le mien. Le lecteur (feed vertical) s'ouvre en
+                    // PLEIN ÉCRAN immersif au-dessus du Scaffold (voir plus haut).
+                    com.dualmusic.feature.feed.LivesListScreen(
+                        viewModel = feedVm,
+                        onOpen = { live ->
+                            // Si c'est MON PROPRE live, j'y entre comme HÔTE (contrôles de diffusion),
+                            // pas comme un simple spectateur — sinon je ne peux ni parler ni gérer mon
+                            // live en y accédant depuis cette liste publique.
+                            if (myUserIdForLives != null && live.artistId == myUserIdForLives) {
+                                broadcastLive = live
+                            } else {
+                                openLive = live
+                            }
+                        },
+                    )
                 }
                 2 -> {
                     // Le direct de duel est rendu en plein écran au-dessus du Scaffold (voir plus haut) ;
@@ -782,7 +847,12 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                         ReplayPlayerScreen(viewModel = playerVm)
                     } else {
                         val listVm: DuelsListViewModel = viewModel { container.makeDuelsListViewModel() }
-                        DuelsListScreen(viewModel = listVm, onOpen = { openDuel = it }, onOpenReplay = { openDuelReplay = it })
+                        DuelsListScreen(
+                            viewModel = listVm,
+                            onOpen = { openDuel = it },
+                            onOpenReplay = { openDuelReplay = it },
+                            onRequestSponsor = { _, _ -> profileSub = 11; showProfile = true },
+                        )
                     }
                 }
                 3 -> {
@@ -800,6 +870,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                             viewModel = concertsVm,
                             onOpen = { openConcert = it },
                             onOpenReplay = { openConcertReplay = it },
+                            onRequestSponsor = { _, _ -> profileSub = 11; showProfile = true },
                         )
                     }
                 }
@@ -818,6 +889,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                             viewModel = listVm,
                             onOpen = { openCompetition = it },
                             onOpenReplay = { openCompetitionReplay = it },
+                            onRequestSponsor = { _, _ -> profileSub = 11; showProfile = true },
                         )
                     }
                 }
@@ -942,9 +1014,13 @@ private fun ProfileSection(
                 )
             }
         }
-        26 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuContent, onBack = { onSub(PROFILE_MENU) }) {
+        26 -> SubScreen(
+            title = if (isArtist) com.dualmusic.core.ui.i18n.LocalStrings.current.menuContent else com.dualmusic.core.ui.i18n.LocalStrings.current.menuReplays,
+            onBack = { onSub(PROFILE_MENU) },
+        ) {
             com.dualmusic.feature.content.MyContentScreen(
                 viewModel = viewModel { container.makeMyContentViewModel() },
+                isArtist = isArtist,
             )
         }
         20 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.menuDashboard, onBack = { onSub(PROFILE_MENU) }) {
@@ -1030,18 +1106,4 @@ private fun SubScreen(title: String, onBack: () -> Unit, content: @Composable ()
         DMPageHeader(title = title, onBack = onBack)
         content()
     }
-}
-
-/**
- * Écran générique « section en construction » — utilisé pour les entrées de menu artiste
- * dont l'écran mobile dédié (Lives, Mes compétitions, Contenu) arrive dans un prochain lot.
- */
-@Composable
-private fun SectionComingSoon() {
-    val s = com.dualmusic.core.ui.i18n.LocalStrings.current
-    com.dualmusic.core.ui.components.DMEmptyState(
-        title = s.comingSoon,
-        subtitle = s.comingSoonHint,
-        modifier = Modifier.fillMaxSize(),
-    )
 }

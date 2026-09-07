@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Capacités de l'app.
+
+	  `aps-environment` : notifications push. `development` en local ; Xcode/Fastlane le
+	  bascule automatiquement en `production` lors d'un archivage App Store, à condition que
+	  la capacité « Push Notifications » soit activée sur l'App ID (developer.apple.com).
+	-->
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>
