@@ -45,10 +45,17 @@ public actor HTTPClient {
 
     /// Session par défaut : timeouts bornés + pas de cache disque pour les réponses d'API
     /// (les données financières ne doivent jamais être resservies depuis un cache).
+    ///
+    /// ⚠️ `waitsForConnectivity = true` ignore `timeoutIntervalForRequest` tant qu'aucun
+    /// chemin réseau n'est établi : c'est `timeoutIntervalForResource` qui borne alors
+    /// l'attente réelle. Avec 60 s, `bootstrap()` (réhydratation au lancement, avant même
+    /// l'écran de connexion) restait bloqué une minute entière backend éteint/injoignable —
+    /// contraire à l'exigence de recette « backend arrêté → écran de connexion affiché
+    /// rapidement ». 15 s reste large pour une requête API mobile et rend l'app réactive.
     private static func makeDefaultSession() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 60
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 15
         config.waitsForConnectivity = true
         return URLSession(configuration: config)
     }
