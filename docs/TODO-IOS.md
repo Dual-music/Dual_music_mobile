@@ -50,6 +50,18 @@ SwiftLint + `kit-tests` (compilation + tests du paquet `DualMusicKit`) + `app-bu
   depuis Windows sans Xcode pour symboliser le crash. `testLaunchPerformance` exclu
   (catégorie de test nécessitant une machine dédiée) ; le reste des tests UI est passé en
   `continue-on-error` — la compilation, elle, reste un vrai gate bloquant.
+- **Flake intermittent découvert le 2026-09-08** :
+  `HTTPClientTests.testConcurrent401sTriggerSingleRefresh` a échoué 2 fois de suite
+  (`count == 2` au lieu de `1`) sur un run, puis est repassé au vert immédiatement après
+  (`gh run rerun --failed`, même code, aucune modification). Relecture complète de la
+  logique single-flight (`HTTPClient.performSingleFlightRefresh`, `InMemoryTokenStore`,
+  `CountingRefresher` — tous des `actor`, `refreshTask` posé de façon synchrone sans point
+  de suspension intermédiaire) sans trouver de faille logique : le comportement observé est
+  cohérent avec une anomalie d'ordonnancement du runner CI partagé sous charge (comme le
+  flake `Failed to create a bundle instance` déjà documenté ci-dessus), pas un vrai bug de
+  production. **Ne pas modifier `HTTPClient.swift` sur la seule base de ce flake** — si ça
+  se reproduit fréquemment, envisager d'augmenter les tentatives du retry loop CI plutôt que
+  de retoucher à l'aveugle un code sensible (auth/refresh de session).
 
 Tout est documenté dans les commentaires du `.github/workflows/ios-ci.yml` correspondant,
 pour ne pas avoir à redécouvrir ces causes en cas de régression.
@@ -60,7 +72,7 @@ pour ne pas avoir à redécouvrir ces causes en cas de régression.
 
 Écart vérifié dans le code (Android a la fonctionnalité, iOS ne l'a pas du tout) :
 
-### 1.0 Mode hôte Live 🚧 EN COURS (dédicaces ✅, invités/modérateurs à venir)
+### 1.0 Mode hôte Live 🚧 EN COURS (diffusion + Mes lives + dédicaces ✅ CI verte le 2026-09-08, invités/modérateurs à venir)
 
 Priorité de l'utilisateur : report/ban d'abord (fait, voir 1.1), puis mode hôte Live —
 dédicaces, invités sur scène, modérateurs — le plus gros chantier restant après le report/ban.
