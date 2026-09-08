@@ -75,6 +75,15 @@ public enum LiveEndpoints {
     public static func end(_ id: String) -> String { "/lives/\(id)/end" }
     /// Hôte : réglages du live (dédicaces/invités/chat), mise à jour partielle.
     public static func settings(_ id: String) -> String { "/lives/\(id)/settings" }
+    /// Spectateur : demande à rejoindre en invité (« lever la main »).
+    public static func join(_ id: String) -> String { "/lives/\(id)/join" }
+    /// Demandes d'invité de ce live : `?status=pending|accepted`.
+    public static func joinRequests(_ id: String) -> String { "/lives/\(id)/join-requests" }
+    /// Annule SA PROPRE demande (autorisé au demandeur quel que soit son statut courant —
+    /// contrairement à ``respondJoin(_:)``, réservé à l'hôte).
+    public static func cancelJoin(_ requestId: String) -> String { "/lives/join-requests/\(requestId)" }
+    /// Hôte : répond à une demande (`accepted`/`rejected`/`ended`).
+    public static func respondJoin(_ requestId: String) -> String { "/lives/join-requests/\(requestId)/respond" }
 }
 
 /// Chemins des duels.

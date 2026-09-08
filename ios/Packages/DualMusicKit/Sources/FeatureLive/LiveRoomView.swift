@@ -28,6 +28,7 @@ public struct LiveRoomView: View {
     @State private var dedicationMessage = ""
     @State private var dedicationPriceText = ""
     @State private var minPriceText = ""
+    @State private var showGuestsSheet = false
 
     /// - Parameters:
     ///   - viewModel: état + actions du live.
@@ -89,6 +90,7 @@ public struct LiveRoomView: View {
             // --- Overlays ---
             VStack {
                 viewerBadge
+                guestTilesStrip
                 Spacer()
                 chatOverlay
                 if let feedback = viewModel.dedicationFeedback {
@@ -97,7 +99,9 @@ public struct LiveRoomView: View {
                 if viewModel.isHost {
                     hostControls
                     dedicationSettingsRow
+                    guestSettingsRow
                 } else {
+                    if viewModel.isGuestAccepted { guestSelfControls }
                     actionBar
                 }
             }
@@ -120,6 +124,8 @@ public struct LiveRoomView: View {
         .sheet(isPresented: $showDedicationSheet) { dedicationRequestSheet }
         // Hôte : demandes en attente (accepter/rejeter) + historique (marquer comme livrée).
         .sheet(isPresented: $showDedicationRequests) { dedicationRequestsSheet }
+        // Hôte : demandes d'invité en attente (accepter/rejeter) + invités actifs (retirer).
+        .sheet(isPresented: $showGuestsSheet) { guestsSheet }
         // Feuille de motifs (viewer uniquement — voir bouton drapeau de `viewerBadge`).
         .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
             ForEach(ReportReason.allCases, id: \.self) { reason in
@@ -214,6 +220,29 @@ public struct LiveRoomView: View {
                 .background(.white.opacity(0.15), in: Capsule())
                 .submitLabel(.send)
                 .onSubmit(send)
+
+            if !viewModel.isGuestAccepted && viewModel.liveAllowGuests {
+                Button {
+                    Task {
+                        if viewModel.myJoinRequestId == nil {
+                            await viewModel.requestJoin()
+                        } else {
+                            await viewModel.cancelJoin()
+                        }
+                    }
+                } label: {
+                    Image(systemName: viewModel.myJoinRequestId == nil ? "hand.raised.fill" : "clock.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(
+                            viewModel.myJoinRequestId == nil ? .white.opacity(0.15) : theme.colors.accent,
+                            in: Circle()
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(s.raiseHand))
+            }
 
             if viewModel.liveAllowsDedications {
                 Button {
@@ -316,6 +345,29 @@ public struct LiveRoomView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text(s.dedicationsLabel))
+
+            Button {
+                showGuestsSheet = true
+                Task { await viewModel.loadJoinRequests() }
+            } label: {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "hand.raised.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(.white.opacity(0.15), in: Circle())
+                    if !viewModel.joinRequests.isEmpty {
+                        Text("\(viewModel.joinRequests.count)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(4)
+                            .background(theme.colors.destructive, in: Circle())
+                            .offset(x: 4, y: -4)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(s.guestsLabel))
 
             Spacer()
 
@@ -506,6 +558,176 @@ public struct LiveRoomView: View {
                 } else {
                     DMButton(s.markDelivered) { Task { await viewModel.deliverDedication(id: dedication.id) } }
                 }
+            }
+        }
+    }
+
+    // MARK: - Invités sur scène
+
+    /// Tuiles des invités actifs, HORS moi-même — `guestClients` en est déjà la source
+    /// (``LiveViewModel/reconcileGuestSubscriptions`` filtre l'appelant lui-même à la
+    /// construction), pas besoin de connaître mon propre id ici.
+    private var guestTilesStrip: some View {
+        let ids = viewModel.guestClients.keys.sorted()
+        return Group {
+            if !ids.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: theme.spacing.sm) {
+                        ForEach(ids, id: \.self) { userId in
+                            guestTile(userId)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Une tuile invité : vidéo si l'invité diffuse, sinon un repli avatar générique.
+    private func guestTile(_ userId: String) -> some View {
+        let client = viewModel.guestClients[userId]
+        let name = viewModel.acceptedGuests.first { $0.userId == userId }?.displayName ?? s.viewerFallback
+        return VStack(spacing: 2) {
+            ZStack {
+                if let track = client?.primaryVideoTrack {
+                    SwiftUIVideoView(track, layoutMode: .fill)
+                } else {
+                    Color.black.opacity(0.4)
+                    Image(systemName: "person.fill")
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+            }
+            .frame(width: 60, height: 80)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            Text(name)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .frame(width: 60)
+        }
+    }
+
+    /// Contrôles de l'invité accepté sur SA PROPRE publication (room dédiée) : micro, caméra,
+    /// descendre de scène. Affiché EN PLUS de la barre d'action normale (le chat continue).
+    private var guestSelfControls: some View {
+        HStack(spacing: theme.spacing.md) {
+            controlButton(viewModel.guestMedia.isMicrophoneEnabled ? "mic.fill" : "mic.slash.fill") {
+                Task { await viewModel.toggleGuestMicrophone() }
+            }
+            controlButton(viewModel.guestMedia.isCameraEnabled ? "video.fill" : "video.slash.fill") {
+                Task { await viewModel.toggleGuestCamera() }
+            }
+            Spacer()
+            Button {
+                Task { await viewModel.leaveStage() }
+            } label: {
+                Text(s.leaveStageAction)
+                    .font(DMFont.caption).bold()
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, theme.spacing.md)
+                    .padding(.vertical, theme.spacing.sm)
+                    .background(theme.colors.destructive, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// Hôte : réglage des demandes d'invité pour ce live, appliqué en direct.
+    private var guestSettingsRow: some View {
+        Button {
+            viewModel.setGuestsEnabled(!viewModel.liveAllowGuests)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "hand.raised.fill")
+                Text(viewModel.liveAllowGuests ? s.guestsEnabledOn : s.guestsEnabledOff)
+            }
+            .font(DMFont.caption).bold()
+            .foregroundStyle(.white)
+            .padding(.horizontal, theme.spacing.md)
+            .padding(.vertical, theme.spacing.sm)
+            .background(viewModel.liveAllowGuests ? theme.colors.primary : .black.opacity(0.35), in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Feuille hôte : demandes en attente (accepter/rejeter) + invités actifs (retirer).
+    private var guestsSheet: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: theme.spacing.md) {
+                Text(s.guestsLabel).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+
+                if viewModel.joinRequests.isEmpty && viewModel.acceptedGuests.isEmpty {
+                    Text(s.noGuestRequests).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                }
+
+                if !viewModel.joinRequests.isEmpty {
+                    DMSectionTitle("\(s.pendingRequests) (\(viewModel.joinRequests.count))")
+                    ForEach(viewModel.joinRequests) { request in
+                        pendingGuestRow(request)
+                    }
+                }
+
+                if !viewModel.acceptedGuests.isEmpty {
+                    DMSectionTitle("\(s.activeGuests) (\(viewModel.acceptedGuests.count))")
+                    ForEach(viewModel.acceptedGuests) { guest in
+                        activeGuestRow(guest)
+                    }
+                }
+            }
+            .padding(theme.spacing.lg)
+        }
+        .presentationDetents([.medium, .large])
+        .dmScreenBackground()
+    }
+
+    /// Ligne d'une demande d'invité en attente : accepter ou rejeter.
+    private func pendingGuestRow(_ request: LiveJoinRequest) -> some View {
+        DMCard {
+            HStack {
+                Text("✋ \(request.displayName)")
+                    .font(DMFont.body)
+                    .foregroundStyle(theme.colors.foreground)
+                Spacer()
+                HStack(spacing: theme.spacing.sm) {
+                    Button { Task { await viewModel.respondJoin(id: request.id, accept: true) } } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(theme.colors.primary, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(s.accept))
+                    Button { Task { await viewModel.respondJoin(id: request.id, accept: false) } } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(theme.colors.destructive, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(s.rejectAction))
+                }
+            }
+        }
+    }
+
+    /// Ligne d'un invité actif : retirer (met fin à sa publication chez tout le monde).
+    private func activeGuestRow(_ guest: LiveJoinRequest) -> some View {
+        DMCard {
+            HStack {
+                Text("🎤 \(guest.displayName)")
+                    .font(DMFont.body)
+                    .foregroundStyle(theme.colors.foreground)
+                Spacer()
+                Button { Task { await viewModel.kickGuest(requestId: guest.id) } } label: {
+                    Image(systemName: "person.fill.xmark")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(theme.colors.destructive, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(s.removeGuestAction))
             }
         }
     }

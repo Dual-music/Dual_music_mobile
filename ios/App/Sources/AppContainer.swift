@@ -341,6 +341,7 @@ public final class AppContainer {
             liveId: live.id,
             roomName: live.liveKitRoom,
             media: LiveRoomClient(tokenService: liveKitTokens),
+            tokenService: liveKitTokens,
             realtime: realtime,
             repository: liveRepository,
             callerId: profile.me?.user.id
@@ -357,6 +358,7 @@ public final class AppContainer {
             liveId: live.id,
             roomName: live.liveKitRoom,
             media: LiveRoomClient(tokenService: liveKitTokens),
+            tokenService: liveKitTokens,
             realtime: realtime,
             repository: liveRepository,
             isHost: true,

@@ -72,7 +72,7 @@ pour ne pas avoir à redécouvrir ces causes en cas de régression.
 
 Écart vérifié dans le code (Android a la fonctionnalité, iOS ne l'a pas du tout) :
 
-### 1.0 Mode hôte Live 🚧 EN COURS (diffusion + Mes lives + dédicaces ✅ CI verte le 2026-09-08, invités/modérateurs à venir)
+### 1.0 Mode hôte Live 🚧 EN COURS (diffusion + Mes lives + dédicaces + invités ✅, modérateurs à venir)
 
 Priorité de l'utilisateur : report/ban d'abord (fait, voir 1.1), puis mode hôte Live —
 dédicaces, invités sur scène, modérateurs — le plus gros chantier restant après le report/ban.
@@ -105,13 +105,34 @@ dédicaces, invités sur scène, modérateurs — le plus gros chantier restant 
     champ `priceCredits`, pourtant obligatoire côté backend (400 sans lui) — le seul appelant
     existant (`ConcertFeature.purchaseDedication`, jamais branché à une UI) était mort, donc
     correctif sans risque.
-- [ ] Invités sur scène (« lever la main », accepter/retirer un invité, partage de room
-      LiveKit multi-participants) — pas commencé. Regarder `LiveViewModel.kt` côté Android
-      (`requestJoin`/`acceptGuest`/`removeGuest`/`reconcileGuestSubscriptions`) avant de
-      porter : sensiblement plus complexe que les dédicaces (partage de contexte
-      EGL/LiveKit entre plusieurs participants actifs).
-  - `Live.allowGuests` et le toggle hôte existent déjà côté données (`updateLiveSettings`),
-      mais rien ne les exploite encore côté UI invités.
+- **Invités sur scène** (2026-09-08) : chaque invité publie dans SA PROPRE room LiveKit
+  dédiée (`live-guest-<liveId>-<userId>`, jamais la room principale — l'hôte y reste seul
+  publicateur) ; tout le monde (hôte, spectateurs, autres invités) s'y abonne en visionnage
+  seul via un `LiveRoomClient` par invité actif, créé/fermé dynamiquement
+  (`reconcileGuestSubscriptions`, appelé après chaque rechargement de la liste des invités
+  acceptés). Spectateur : bouton « lever la main » (icône seule, visible si
+  `liveAllowGuests` et pas déjà accepté) → `POST /lives/:id/join` ; annulable tant qu'en
+  attente. Hôte : bouton avec badge (demandes en attente) ouvrant une feuille
+  demandes-en-attente (accepter/rejeter, `POST /lives/join-requests/:id/respond`) +
+  invités-actifs (retirer, même endpoint avec statut `ended`) ; réglage on/off en direct
+  (`PATCH /lives/:id/settings`). Invité accepté : contrôles micro/caméra + « descendre de
+  scène » (garde le chat/cadeaux actifs, reste connecté à la room principale comme
+  spectateur). Temps réel : `join:new`/`join:update` — tout le monde recharge (pour
+  recalculer les abonnements aux rooms d'invités), le spectateur concerné voit son statut
+  changer (`accepted` déclenche la publication automatiquement, pas besoin d'ouvrir un
+  écran séparé — contrairement à Android qui gate ça derrière une vérification de
+  permission runtime explicite, inutile ici : LiveKit/AVFoundation déclenche le prompt
+  système directement).
+  - **Périmètre volontairement réduit vs Android** (à ajouter avec les modérateurs si
+    besoin) : pas de relais `guest_action` (mute à distance par l'hôte, chrono de parole
+    accordé, kick "instantané" en plus du `join:update` standard) — `join:update` suffit
+    déjà à notifier l'invité retiré, juste sans le petit coup de pouce de latence du canal
+    broadcast dédié. Pas de tuile "focus plein écran" au tap (Android permet de mettre un
+    invité en avant à la place du flux hôte) — les tuiles restent en bandeau fixe.
+  - `LiveKitTokenService`/`LiveRoomClient` : ajout du paramètre `canPublish` (existait déjà
+    dans `LiveKitTokenRequest`, juste jamais exposé) — un invité publie avec `canPublish:
+    true` sans être `isHost`, distinction nécessaire pour que le backend délivre les bons
+    droits LiveKit.
 - [ ] Modérateurs désignés (jusqu'à 2 spectateurs nommés par l'hôte, peuvent bannir/masquer un
       message mais jamais couper le chat) — pas commencé.
 - [ ] Chat on/off par l'hôte (`Live.chatEnabled` existe déjà côté données/décodage, jamais

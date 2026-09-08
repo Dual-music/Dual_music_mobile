@@ -65,7 +65,14 @@ public final class LiveRoomClient {
     ///   - isHost: vrai pour l'artiste (publication), faux pour un viewer.
     ///   - prewarmedToken: jeton déjà obtenu par le feed (prefetch) — évite un aller-retour
     ///     réseau au scroll et réduit fortement la latence d'entrée-live.
-    public func join(roomName: String, isHost: Bool = false, prewarmedToken: LiveKitToken? = nil) async {
+    ///   - canPublish: vrai pour un invité qui publie dans SA PROPRE room (`live-guest-…`)
+    ///     sans être l'hôte de la room principale.
+    public func join(
+        roomName: String,
+        isHost: Bool = false,
+        prewarmedToken: LiveKitToken? = nil,
+        canPublish: Bool = false
+    ) async {
         guard connectionState != .connecting, connectionState != .connected else { return }
         connectionState = .connecting
         do {
@@ -79,7 +86,7 @@ public final class LiveRoomClient {
             if let prewarmedToken {
                 creds = prewarmedToken
             } else {
-                creds = try await tokenService.token(roomName: roomName, isHost: isHost)
+                creds = try await tokenService.token(roomName: roomName, isHost: isHost, canPublish: canPublish)
             }
 
             // `autoSubscribe` par défaut : un viewer reçoit la couche simulcast adaptée à

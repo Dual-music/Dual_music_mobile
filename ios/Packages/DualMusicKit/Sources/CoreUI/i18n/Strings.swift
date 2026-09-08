@@ -413,6 +413,16 @@ public struct DMStrings: Sendable {
     public let dedicationsEnabledOn: String
     public let dedicationsEnabledOff: String
     public let dedicationMinPriceLive: String
+    // Invités sur scène (fan + hôte).
+    public let noGuestRequests: String
+    public let pendingRequests: String
+    public let activeGuests: String
+    public let viewerFallback: String
+    public let raiseHand: String
+    public let removeGuestAction: String
+    public let leaveStageAction: String
+    public let guestsEnabledOn: String
+    public let guestsEnabledOff: String
 }
 
 // MARK: - Tables de traduction
@@ -792,7 +802,16 @@ public extension DMStrings {
         delivered: "Livrée",
         dedicationsEnabledOn: "Dédicaces activées",
         dedicationsEnabledOff: "Dédicaces coupées",
-        dedicationMinPriceLive: "Prix minimum dédicace"
+        dedicationMinPriceLive: "Prix minimum dédicace",
+        noGuestRequests: "Aucune demande pour le moment",
+        pendingRequests: "Demandes en attente",
+        activeGuests: "Invités actifs",
+        viewerFallback: "Spectateur",
+        raiseHand: "Lever la main",
+        removeGuestAction: "Retirer l'invité",
+        leaveStageAction: "Descendre de scène",
+        guestsEnabledOn: "Invités activés",
+        guestsEnabledOff: "Invités coupés"
     )
 
     /// Chaînes **anglaises**.
@@ -1168,7 +1187,16 @@ public extension DMStrings {
         delivered: "Delivered",
         dedicationsEnabledOn: "Dedications on",
         dedicationsEnabledOff: "Dedications off",
-        dedicationMinPriceLive: "Minimum dedication price"
+        dedicationMinPriceLive: "Minimum dedication price",
+        noGuestRequests: "No request yet",
+        pendingRequests: "Pending requests",
+        activeGuests: "Active guests",
+        viewerFallback: "Viewer",
+        raiseHand: "Raise hand",
+        removeGuestAction: "Remove guest",
+        leaveStageAction: "Leave stage",
+        guestsEnabledOn: "Guests on",
+        guestsEnabledOff: "Guests off"
     )
 
     /// Renvoie la table de chaînes d'une langue.

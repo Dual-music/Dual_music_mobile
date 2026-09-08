@@ -141,6 +141,40 @@ struct DedicationConfigSection: Decodable, Sendable {
     enum CodingKeys: String, CodingKey { case minPriceCredits = "min_price_credits" }
 }
 
+/// Demande d'un spectateur pour rejoindre le live en invité (`live_join_requests`).
+/// Le backend renvoie les lignes brutes (pas toujours de profil hydraté) → repli d'affichage.
+public struct LiveJoinRequest: Decodable, Sendable, Identifiable, Equatable {
+    public let id: String
+    public let userId: String
+    /// `pending` | `accepted` | `rejected` | `ended` | `cancelled`.
+    public let status: String
+    public let user: DisplayProfile?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userId = "user_id"
+        case status
+        case user
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.val(String.self, .id, "")
+        userId = c.val(String.self, .userId, "")
+        status = c.val(String.self, .status, "pending")
+        user = c.opt(DisplayProfile.self, .user)
+    }
+
+    /// Nom d'affichage (repli « Spectateur » comme sur Android).
+    @MainActor
+    public var displayName: String { user?.displayName ?? AppStrings.current.viewerFallback }
+}
+
+/// Corps de `POST /lives/join-requests/:id/respond`.
+struct RespondJoinBody: Encodable, Sendable {
+    let status: String
+}
+
 /// Accès REST aux actions et à l'historique d'un live.
 ///
 /// Le temps réel (messages, cadeaux, présence) passe par Socket.IO ; ce repository couvre
@@ -304,5 +338,37 @@ public struct LiveRepository: Sendable {
     /// Hôte : marque une dédicace acceptée comme interprétée en direct.
     public func deliverDedication(id: String) async throws {
         try await http.send(.post(ConcertEndpoints.dedicationDeliver(id)))
+    }
+
+    /// Spectateur : demande à rejoindre en invité (« lever la main »). Renvoie l'id de la
+    /// demande créée, à conserver pour l'annuler.
+    public func requestJoin(liveId: String) async throws -> String {
+        try await http.request(.post(LiveEndpoints.join(liveId)), as: LiveJoinRequest.self).id
+    }
+
+    /// Annule SA PROPRE demande (autorisé au demandeur quel que soit son statut courant —
+    /// contrairement à ``respondJoin(requestId:accept:)``, réservé à l'hôte).
+    public func cancelJoin(requestId: String) async throws {
+        try await http.send(.delete(LiveEndpoints.cancelJoin(requestId)))
+    }
+
+    /// Demandes d'invité de ce live, filtrées par statut (`pending` par défaut).
+    public func joinRequests(liveId: String, status: String = "pending") async throws -> [LiveJoinRequest] {
+        try await http.request(
+            .get(LiveEndpoints.joinRequests(liveId), query: ["status": status]),
+            as: [LiveJoinRequest].self
+        )
+    }
+
+    /// Hôte : accepte/refuse une demande EN ATTENTE.
+    public func respondJoin(requestId: String, accept: Bool) async throws {
+        try await http.send(
+            .post(LiveEndpoints.respondJoin(requestId), body: RespondJoinBody(status: accept ? "accepted" : "rejected"))
+        )
+    }
+
+    /// Hôte : retire un invité déjà accepté (état `ended` persistant).
+    public func kickGuest(requestId: String) async throws {
+        try await http.send(.post(LiveEndpoints.respondJoin(requestId), body: RespondJoinBody(status: "ended")))
     }
 }

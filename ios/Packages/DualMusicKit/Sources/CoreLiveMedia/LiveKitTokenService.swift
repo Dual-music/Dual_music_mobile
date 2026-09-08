@@ -21,11 +21,16 @@ public struct LiveKitTokenService: Sendable {
     /// - Parameters:
     ///   - roomName: nom de room fourni par l'API (ex. `live:abc` ou `duel:123`).
     ///   - isHost: vrai pour l'artiste/host (droits de publication) ; faux pour un viewer.
+    ///   - canPublish: vrai pour un invité qui publie dans SA PROPRE room (`live-guest-…`)
+    ///     sans être l'hôte — le backend applique `isHost` par défaut si omis.
     /// - Returns: jeton + URL du SFU + identité du participant.
     /// - Throws: ``CoreNetwork/APIError``.
-    public func token(roomName: String, isHost: Bool = false) async throws -> LiveKitToken {
+    public func token(roomName: String, isHost: Bool = false, canPublish: Bool = false) async throws -> LiveKitToken {
         try await http.request(
-            .post(MediaEndpoints.livekitToken, body: LiveKitTokenRequest(roomName: roomName, isHost: isHost)),
+            .post(
+                MediaEndpoints.livekitToken,
+                body: LiveKitTokenRequest(roomName: roomName, isHost: isHost, canPublish: canPublish)
+            ),
             as: LiveKitToken.self
         )
     }

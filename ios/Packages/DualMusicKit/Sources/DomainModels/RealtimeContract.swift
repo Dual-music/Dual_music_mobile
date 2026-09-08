@@ -77,6 +77,12 @@ public enum Realtime {
         /// `/live` · room live — dédicace acceptée/rejetée/livrée. Payload
         /// ``DedicationEventPayload``.
         public static let dedicationUpdate = "dedication:update"
+        /// `/live` · room live — nouvelle demande d'invité (« lever la main »). Payload
+        /// ``JoinEventPayload``.
+        public static let joinNew = "join:new"
+        /// `/live` · room live — demande d'invité acceptée/rejetée/terminée/annulée. Payload
+        /// ``JoinEventPayload``.
+        public static let joinUpdate = "join:update"
     }
 }
 
@@ -310,5 +316,28 @@ public struct DedicationEventPayload: Decodable, Sendable {
         fanId = c.opt(String.self, .fanId)
         status = c.opt(String.self, .status)
         priceCredits = c.amountIfPresent(.priceCredits)
+    }
+}
+
+/// `join:new` / `join:update` — même room que `join:live` (dédicaces). Sert seulement à
+/// détecter "dois-je recharger" (hôte, ou tout le monde pour recalculer les abonnements aux
+/// rooms d'invités) et "ma propre demande a changé d'état" (spectateur concerné) : l'état
+/// fait toujours l'objet d'un rechargement REST complet.
+public struct JoinEventPayload: Decodable, Sendable {
+    public let liveId: String?
+    public let userId: String?
+    public let status: String?
+
+    enum CodingKeys: String, CodingKey {
+        case liveId = "live_id"
+        case userId = "user_id"
+        case status
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        liveId = c.opt(String.self, .liveId)
+        userId = c.opt(String.self, .userId)
+        status = c.opt(String.self, .status)
     }
 }
