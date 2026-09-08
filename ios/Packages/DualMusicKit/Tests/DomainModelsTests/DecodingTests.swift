@@ -21,7 +21,7 @@ final class DecodingTests: XCTestCase {
         XCTAssertEqual(live.artistId, "artist-9")
         XCTAssertEqual(live.viewerCount, 0, "Un compteur absent doit valoir 0, pas échouer")
         XCTAssertEqual(live.status, .live, "Statut par défaut d'un live")
-        XCTAssertEqual(live.liveKitRoom, "live:live-1", "Repli sur `live:<id>` sans room_id")
+        XCTAssertEqual(live.liveKitRoom, "live-live-1", "Repli sur `live-<id>` (tiret, comme Android/backend) sans room_id")
     }
 
     func testIgnoresUnknownKeys() throws {
