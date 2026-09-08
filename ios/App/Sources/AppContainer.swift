@@ -342,7 +342,8 @@ public final class AppContainer {
             roomName: live.liveKitRoom,
             media: LiveRoomClient(tokenService: liveKitTokens),
             realtime: realtime,
-            repository: liveRepository
+            repository: liveRepository,
+            callerId: profile.me?.user.id
         )
         liveRooms[live.id] = viewModel
         return viewModel
@@ -358,7 +359,8 @@ public final class AppContainer {
             media: LiveRoomClient(tokenService: liveKitTokens),
             realtime: realtime,
             repository: liveRepository,
-            isHost: true
+            isHost: true,
+            callerId: profile.me?.user.id
         )
     }
 

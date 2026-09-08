@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import CoreLiveMedia
+import CoreNetwork
 import CoreRealtime
 import CoreUI
 import DomainModels
@@ -40,8 +41,24 @@ public final class LiveViewModel {
     /// Vrai pour l'hôte (artiste qui diffuse) — contrôle l'accès au bannissement.
     public let isHost: Bool
 
+    /// Hôte : demandes de dédicace EN ATTENTE pour ce live (à accepter/rejeter) — alimente le badge.
+    public private(set) var dedications: [LiveDedication] = []
+    /// Hôte : dédicaces déjà ACCEPTÉES ou LIVRÉES pour ce live (historique, sous les demandes).
+    public private(set) var dedicationHistory: [LiveDedication] = []
+    /// Prix minimum EFFECTIF d'une dédicace pour CE live (crédits) : la surcharge propre au
+    /// live si l'hôte en a fixé une, sinon le défaut global (`economic_config`).
+    public private(set) var dedicationMinPriceCredits: Double = 10
+    /// Dédicaces activées pour CE live (réglage hôte, réactif en direct via `settings`).
+    public private(set) var liveAllowsDedications: Bool = true
+    /// Demandes d'invité (« lever la main ») activées pour CE live (réglage hôte).
+    public private(set) var liveAllowGuests: Bool = true
+    /// Confirmation « dédicace envoyée » (ou message d'échec/décision de l'hôte) affichée au fan.
+    public private(set) var dedicationFeedback: String?
+    public func clearDedicationFeedback() { dedicationFeedback = nil }
+
     private let liveId: String
     private let roomName: String
+    private let callerId: String?
     private let realtime: RealtimeClient
     private let repository: LiveRepository
 
@@ -58,13 +75,15 @@ public final class LiveViewModel {
     ///   - realtime: client Socket.IO partagé.
     ///   - repository: lectures/actions REST du live.
     ///   - isHost: vrai pour l'artiste qui diffuse — autorise le bannissement.
+    ///   - callerId: id du caller (fan) — sert à cibler la bannière de décision de dédicace.
     public init(
         liveId: String,
         roomName: String,
         media: LiveRoomClient,
         realtime: RealtimeClient,
         repository: LiveRepository,
-        isHost: Bool = false
+        isHost: Bool = false,
+        callerId: String? = nil
     ) {
         self.liveId = liveId
         self.roomName = roomName
@@ -72,6 +91,7 @@ public final class LiveViewModel {
         self.realtime = realtime
         self.repository = repository
         self.isHost = isHost
+        self.callerId = callerId
     }
 
     /// Démarre : vidéo, historique de chat, rooms temps réel.
@@ -90,7 +110,25 @@ public final class LiveViewModel {
                 self.messages = history
             }
         }
+        Task { [weak self] in await self?.loadLiveSettings() }
+        if isHost {
+            Task { [weak self] in await self?.loadDedications() }
+        }
         await connectRealtime()
+    }
+
+    /// Charge les réglages de CE live (dédicaces on/off + prix minimum effectif, invités
+    /// on/off) — pour tout le monde (hôte, invité, spectateur), tous doivent voir les mêmes
+    /// règles.
+    private func loadLiveSettings() async {
+        let globalDefault = (try? await repository.dedicationMinPrice()) ?? 10
+        if let live = try? await repository.live(id: liveId) {
+            liveAllowsDedications = live.allowsDedications
+            liveAllowGuests = live.allowGuests
+            dedicationMinPriceCredits = live.dedicationMinPriceCredits ?? globalDefault
+        } else {
+            dedicationMinPriceCredits = globalDefault
+        }
     }
 
     /// Arrête tout (sortie d'écran) : temps réel + SFU.
@@ -170,6 +208,73 @@ public final class LiveViewModel {
         if !giftFeed.isEmpty { giftFeed.removeFirst() }
     }
 
+    // MARK: - Dédicaces
+
+    /// Hôte : active/désactive les dédicaces pour ce live, en direct (visible par tous).
+    public func setDedicationsEnabled(_ enabled: Bool) {
+        liveAllowsDedications = enabled
+        Task { try? await repository.updateLiveSettings(liveId: liveId, allowsDedications: enabled) }
+    }
+
+    /// Hôte : fixe le prix minimum d'une dédicace pour CE live (surcharge le défaut global).
+    public func setDedicationMinPrice(_ price: Double) {
+        guard price > 0 else { return }
+        dedicationMinPriceCredits = price
+        Task { try? await repository.updateLiveSettings(liveId: liveId, dedicationMinPriceCredits: price) }
+    }
+
+    /// Fan : envoie une dédicace (message dédié). `price` est choisi par le fan (≥ prix
+    /// minimum effectif — le champ de saisie le clamp déjà, revalidé ici par sécurité).
+    /// L'échec (solde insuffisant, etc.) est SIGNALÉ au fan plutôt que silencieux.
+    public func dedicate(message: String, price: Double) async {
+        let text = message.trimmed
+        guard !text.isEmpty else { return }
+        let effectivePrice = max(price, dedicationMinPriceCredits)
+        do {
+            try await repository.sendDedication(liveId: liveId, message: text, priceCredits: effectivePrice)
+            dedicationFeedback = "🎤 Dédicace envoyée à l'artiste !"
+        } catch {
+            dedicationFeedback = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Hôte : (re)charge les dédicaces de CE live — séparées en « en attente » (badge +
+    /// actions accepter/rejeter) et « acceptées/livrées » (historique, même feuille).
+    /// Auto-rafraîchi via temps réel (`dedication:new`/`dedication:update`).
+    public func loadDedications() async {
+        guard isHost else { return }
+        let all = (try? await repository.artistDedications()) ?? []
+        let mine = all.filter { $0.concertId == liveId }
+        dedications = mine.filter { $0.status == "pending" }
+        dedicationHistory = mine.filter { $0.status == "paid" || $0.status == "delivered" }
+    }
+
+    /// Hôte : accepte une demande EN ATTENTE — débite le fan MAINTENANT, puis recharge.
+    public func acceptDedication(id: String) async {
+        do {
+            try await repository.acceptDedication(id: id)
+            await loadDedications()
+        } catch {
+            dedicationFeedback = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Hôte : rejette une demande EN ATTENTE — aucun débit, puis recharge.
+    public func rejectDedication(id: String) async {
+        do {
+            try await repository.rejectDedication(id: id)
+            await loadDedications()
+        } catch {
+            dedicationFeedback = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Hôte : marque une dédicace ACCEPTÉE comme livrée (interprétée) puis recharge la liste.
+    public func deliverDedication(id: String) async {
+        try? await repository.deliverDedication(id: id)
+        await loadDedications()
+    }
+
     // MARK: - Temps réel
 
     private func connectRealtime() async {
@@ -208,6 +313,39 @@ public final class LiveViewModel {
         })
         subscriptions.append(live.onEvent(Realtime.Event.presence, as: PresencePayload.self) { [weak self] payload in
             self?.viewerCount = payload.count
+        })
+        // Réglages modifiés par l'hôte en direct — tout le monde réagit aussitôt (masque/
+        // affiche le bouton de dédicace, etc.). `dedicationMinPriceCredits` absent = pas de
+        // surcharge sur ce live → garde le prix effectif déjà chargé (défaut global).
+        subscriptions.append(live.onEvent(Realtime.Event.settings, as: LiveSettingsPayload.self) { [weak self] payload in
+            guard let self else { return }
+            self.liveAllowsDedications = payload.allowsDedications
+            self.liveAllowGuests = payload.allowGuests
+            if let price = payload.dedicationMinPriceCredits { self.dedicationMinPriceCredits = price }
+        })
+        // Dédicaces : (a) hôte — badge + liste auto-rafraîchis sans avoir à ouvrir la feuille ;
+        // (b) fan concerné — bannière immédiate de la décision de l'hôte (accepté = débité
+        // MAINTENANT, rejeté = aucun débit), pour ne jamais laisser croire à un solde qu'il n'a
+        // plus.
+        subscriptions.append(live.onEvent(Realtime.Event.dedicationNew, as: DedicationEventPayload.self) { [weak self] _ in
+            guard let self, self.isHost else { return }
+            Task { await self.loadDedications() }
+        })
+        subscriptions.append(live.onEvent(Realtime.Event.dedicationUpdate, as: DedicationEventPayload.self) { [weak self] payload in
+            guard let self else { return }
+            if self.isHost { Task { await self.loadDedications() } }
+            guard let fanId = payload.fanId, fanId == self.callerId else { return }
+            switch payload.status {
+            case "paid":
+                let credits = payload.priceCredits.map { String(Int($0)) } ?? ""
+                self.dedicationFeedback = "🎤 Ta dédicace a été acceptée — \(credits) crédits débités."
+            case "rejected":
+                self.dedicationFeedback = "Ta dédicace a été refusée — aucun crédit débité."
+            case "delivered":
+                self.dedicationFeedback = "🎉 Ta dédicace vient d'être interprétée en direct !"
+            default:
+                break
+            }
         })
 
         await live.connect()

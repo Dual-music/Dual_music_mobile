@@ -23,6 +23,11 @@ public struct LiveRoomView: View {
     @State private var draft = ""
     @State private var showReport = false
     @State private var banTarget: LiveChatMessage?
+    @State private var showDedicationSheet = false
+    @State private var showDedicationRequests = false
+    @State private var dedicationMessage = ""
+    @State private var dedicationPriceText = ""
+    @State private var minPriceText = ""
 
     /// - Parameters:
     ///   - viewModel: état + actions du live.
@@ -86,8 +91,12 @@ public struct LiveRoomView: View {
                 viewerBadge
                 Spacer()
                 chatOverlay
+                if let feedback = viewModel.dedicationFeedback {
+                    dedicationFeedbackBanner(feedback)
+                }
                 if viewModel.isHost {
                     hostControls
+                    dedicationSettingsRow
                 } else {
                     actionBar
                 }
@@ -100,6 +109,17 @@ public struct LiveRoomView: View {
         .onDisappear {
             Task { await viewModel.stop() }
         }
+        .onChange(of: viewModel.dedicationFeedback) { _, feedback in
+            guard feedback != nil else { return }
+            Task {
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                viewModel.clearDedicationFeedback()
+            }
+        }
+        // Fan : demande de dédicace (message + prix, prix plancher forcé par l'hôte).
+        .sheet(isPresented: $showDedicationSheet) { dedicationRequestSheet }
+        // Hôte : demandes en attente (accepter/rejeter) + historique (marquer comme livrée).
+        .sheet(isPresented: $showDedicationRequests) { dedicationRequestsSheet }
         // Feuille de motifs (viewer uniquement — voir bouton drapeau de `viewerBadge`).
         .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
             ForEach(ReportReason.allCases, id: \.self) { reason in
@@ -195,6 +215,21 @@ public struct LiveRoomView: View {
                 .submitLabel(.send)
                 .onSubmit(send)
 
+            if viewModel.liveAllowsDedications {
+                Button {
+                    dedicationPriceText = String(Int(viewModel.dedicationMinPriceCredits))
+                    showDedicationSheet = true
+                } label: {
+                    Image(systemName: "megaphone.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(.white.opacity(0.15), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(s.dedication))
+            }
+
             Button {
                 Task { await viewModel.sendGift(giftId: quickGiftId, toUserId: hostUserId) }
             } label: {
@@ -259,6 +294,29 @@ public struct LiveRoomView: View {
                 Task { await viewModel.switchCamera() }
             }
 
+            Button {
+                showDedicationRequests = true
+                Task { await viewModel.loadDedications() }
+            } label: {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "megaphone.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(.white.opacity(0.15), in: Circle())
+                    if !viewModel.dedications.isEmpty {
+                        Text("\(viewModel.dedications.count)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(4)
+                            .background(theme.colors.destructive, in: Circle())
+                            .offset(x: 4, y: -4)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(s.dedicationsLabel))
+
             Spacer()
 
             Button {
@@ -288,5 +346,167 @@ public struct LiveRoomView: View {
                 .background(.white.opacity(0.15), in: Circle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// Bannière de confirmation/décision de dédicace (fan) — auto-masquée après quelques
+    /// secondes (voir `.onChange(of: viewModel.dedicationFeedback)`).
+    private func dedicationFeedbackBanner(_ text: String) -> some View {
+        Text(text)
+            .font(DMFont.caption).bold()
+            .foregroundStyle(.white)
+            .padding(.horizontal, theme.spacing.md)
+            .padding(.vertical, theme.spacing.sm)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    /// Hôte : réglage des dédicaces pour ce live (on/off + prix minimum), appliqué en
+    /// direct — visible par tous immédiatement (événement temps réel `settings`).
+    private var dedicationSettingsRow: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.sm) {
+            Button {
+                viewModel.setDedicationsEnabled(!viewModel.liveAllowsDedications)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "megaphone.fill")
+                    Text(viewModel.liveAllowsDedications ? s.dedicationsEnabledOn : s.dedicationsEnabledOff)
+                }
+                .font(DMFont.caption).bold()
+                .foregroundStyle(.white)
+                .padding(.horizontal, theme.spacing.md)
+                .padding(.vertical, theme.spacing.sm)
+                .background(
+                    viewModel.liveAllowsDedications ? theme.colors.primary : .black.opacity(0.35),
+                    in: Capsule()
+                )
+            }
+            .buttonStyle(.plain)
+
+            if viewModel.liveAllowsDedications {
+                HStack(spacing: theme.spacing.sm) {
+                    TextField(s.dedicationMinPriceLive, text: $minPriceText)
+                        .keyboardType(.numberPad)
+                        .textFieldStyle(.plain)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, theme.spacing.md)
+                        .padding(.vertical, theme.spacing.sm)
+                        .background(.white.opacity(0.15), in: Capsule())
+                    Button {
+                        if let price = Double(minPriceText), price > 0 {
+                            viewModel.setDedicationMinPrice(price)
+                        }
+                        minPriceText = ""
+                    } label: {
+                        Text(s.confirm)
+                            .font(DMFont.caption).bold()
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, theme.spacing.md)
+                            .padding(.vertical, theme.spacing.sm)
+                            .background(theme.colors.primary, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .onAppear { minPriceText = "" }
+    }
+
+    /// Feuille fan : compose et envoie une dédicace (prix jamais sous le minimum de l'hôte).
+    private var dedicationRequestSheet: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text(s.dedication).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+            Text(s.dedicationHint).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            DMTextField(s.dedication, text: $dedicationMessage, placeholder: s.saySomething, axis: .vertical)
+            DMTextField(
+                "\(s.credits) (min \(Int(viewModel.dedicationMinPriceCredits)))",
+                text: $dedicationPriceText,
+                keyboard: .numberPad
+            )
+            DMButton("\(s.send) (\(dedicationPriceValue) \(s.credits))") {
+                Task {
+                    await viewModel.dedicate(message: dedicationMessage, price: Double(dedicationPriceValue))
+                    dedicationMessage = ""
+                    showDedicationSheet = false
+                }
+            }
+            Spacer()
+        }
+        .padding(theme.spacing.lg)
+        .presentationDetents([.medium])
+        .dmScreenBackground()
+    }
+
+    /// Prix saisi par le fan, jamais sous le minimum effectif de ce live.
+    private var dedicationPriceValue: Int {
+        max(Int(dedicationPriceText) ?? Int(viewModel.dedicationMinPriceCredits), Int(viewModel.dedicationMinPriceCredits))
+    }
+
+    /// Feuille hôte : demandes en attente (accepter/rejeter) + historique (marquer comme livrée).
+    private var dedicationRequestsSheet: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: theme.spacing.md) {
+                Text(s.dedicationsLabel).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+
+                if viewModel.dedications.isEmpty && viewModel.dedicationHistory.isEmpty {
+                    Text(s.noDedicationsYet).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                }
+
+                if !viewModel.dedications.isEmpty {
+                    DMSectionTitle("\(s.pendingLabel) (\(viewModel.dedications.count))")
+                    ForEach(viewModel.dedications) { dedication in
+                        pendingDedicationRow(dedication)
+                    }
+                }
+
+                if !viewModel.dedicationHistory.isEmpty {
+                    DMSectionTitle("\(s.dedicationsAcceptedDelivered) (\(viewModel.dedicationHistory.count))")
+                    ForEach(viewModel.dedicationHistory) { dedication in
+                        historyDedicationRow(dedication)
+                    }
+                }
+            }
+            .padding(theme.spacing.lg)
+        }
+        .presentationDetents([.medium, .large])
+        .dmScreenBackground()
+    }
+
+    /// Ligne d'une demande de dédicace en attente : accepter (débite maintenant) ou rejeter.
+    private func pendingDedicationRow(_ dedication: LiveDedication) -> some View {
+        DMCard {
+            VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                Text("\(dedication.fanName)  ·  \(Int(dedication.priceCredits)) \(s.credits)")
+                    .font(DMFont.caption).bold()
+                    .foregroundStyle(theme.colors.accent)
+                Text(dedication.message)
+                    .font(DMFont.body)
+                    .foregroundStyle(theme.colors.foreground)
+                HStack(spacing: theme.spacing.sm) {
+                    DMButton(s.accept) { Task { await viewModel.acceptDedication(id: dedication.id) } }
+                    DMButton(s.rejectAction, style: .destructive) { Task { await viewModel.rejectDedication(id: dedication.id) } }
+                }
+            }
+        }
+    }
+
+    /// Ligne d'une dédicace acceptée/livrée : marquer comme interprétée (si pas déjà livrée).
+    private func historyDedicationRow(_ dedication: LiveDedication) -> some View {
+        DMCard {
+            VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                Text("\(dedication.fanName)  ·  \(Int(dedication.priceCredits)) \(s.credits)")
+                    .font(DMFont.caption).bold()
+                    .foregroundStyle(theme.colors.accent)
+                Text(dedication.message)
+                    .font(DMFont.body)
+                    .foregroundStyle(theme.colors.foreground)
+                if dedication.status == "delivered" {
+                    Text("✅ \(s.delivered)")
+                        .font(DMFont.caption).bold()
+                        .foregroundStyle(theme.colors.primary)
+                } else {
+                    DMButton(s.markDelivered) { Task { await viewModel.deliverDedication(id: dedication.id) } }
+                }
+            }
+        }
     }
 }

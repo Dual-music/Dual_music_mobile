@@ -69,6 +69,14 @@ public enum Realtime {
         public static let chatMessage = "message"
         /// `/notifications` — nouvelle notification in-app. Payload ``AppNotification``.
         public static let notification = "notification"
+        /// `/live` · room event — réglages modifiés par l'hôte (dédicaces/invités/chat).
+        /// Payload ``LiveSettingsPayload``.
+        public static let settings = "settings"
+        /// `/live` · room live — nouvelle demande de dédicace. Payload ``DedicationEventPayload``.
+        public static let dedicationNew = "dedication:new"
+        /// `/live` · room live — dédicace acceptée/rejetée/livrée. Payload
+        /// ``DedicationEventPayload``.
+        public static let dedicationUpdate = "dedication:update"
     }
 }
 
@@ -252,5 +260,55 @@ public struct ChatMessagePayload: Decodable, Sendable {
         content = c.val(String.self, .content, "")
         createdAt = c.opt(String.self, .createdAt)
         user = c.opt(DisplayProfile.self, .user)
+    }
+}
+
+/// `settings` — réglages d'un live modifiés par l'hôte, en direct (dédicaces/invités/chat).
+/// `dedicationMinPriceCredits` absent = pas de surcharge sur CE live (garder le prix déjà
+/// chargé), à ne pas confondre avec 0.
+public struct LiveSettingsPayload: Decodable, Sendable {
+    public let allowsDedications: Bool
+    public let dedicationMinPriceCredits: Double?
+    public let allowGuests: Bool
+    public let chatEnabled: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case allowsDedications = "allows_dedications"
+        case dedicationMinPriceCredits = "dedication_min_price_credits"
+        case allowGuests = "allow_guests"
+        case chatEnabled = "chat_enabled"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        allowsDedications = c.bool(.allowsDedications, true)
+        dedicationMinPriceCredits = c.amountIfPresent(.dedicationMinPriceCredits)
+        allowGuests = c.bool(.allowGuests, true)
+        chatEnabled = c.opt(Bool.self, .chatEnabled)
+    }
+}
+
+/// `dedication:new` / `dedication:update` — même room que `join:live`. Sert seulement à
+/// détecter "est-ce que ça me concerne" (fan) ou "dois-je recharger" (hôte) : l'état fait
+/// toujours l'objet d'un rechargement REST complet, jamais appliqué depuis ce payload.
+public struct DedicationEventPayload: Decodable, Sendable {
+    public let dedicationId: String?
+    public let fanId: String?
+    public let status: String?
+    public let priceCredits: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case dedicationId = "dedication_id"
+        case fanId = "fan_id"
+        case status
+        case priceCredits = "price_credits"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        dedicationId = c.opt(String.self, .dedicationId)
+        fanId = c.opt(String.self, .fanId)
+        status = c.opt(String.self, .status)
+        priceCredits = c.amountIfPresent(.priceCredits)
     }
 }

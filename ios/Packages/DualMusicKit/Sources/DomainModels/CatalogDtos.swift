@@ -102,11 +102,16 @@ public struct DedicationRequest: Encodable, Sendable {
     public let concertId: String
     public let concertType: String
     public let message: String
+    public let priceCredits: Double
 
-    public init(concertId: String, concertType: String = "artist_concert", message: String) {
+    /// - Parameter priceCredits: **obligatoire** côté backend — l'omettre échoue en 400.
+    ///   Absent de ce DTO jusqu'à ce correctif (le flux d'achat de dédicace concert n'a
+    ///   jamais été branché à une UI côté iOS, donc jamais exercé).
+    public init(concertId: String, concertType: String = "artist_concert", message: String, priceCredits: Double) {
         self.concertId = concertId
         self.concertType = concertType
         self.message = message
+        self.priceCredits = priceCredits
     }
 }
 

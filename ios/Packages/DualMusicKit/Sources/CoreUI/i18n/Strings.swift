@@ -400,6 +400,19 @@ public struct DMStrings: Sendable {
     public let dedicationsLabel: String
     public let guestsLabel: String
     public let minDedicationPrice: String
+    // Dédicaces en direct (fan + hôte).
+    public let dedication: String
+    public let dedicationHint: String
+    public let send: String
+    public let noDedicationsYet: String
+    public let pendingLabel: String
+    public let dedicationsAcceptedDelivered: String
+    public let rejectAction: String
+    public let markDelivered: String
+    public let delivered: String
+    public let dedicationsEnabledOn: String
+    public let dedicationsEnabledOff: String
+    public let dedicationMinPriceLive: String
 }
 
 // MARK: - Tables de traduction
@@ -767,7 +780,19 @@ public extension DMStrings {
         endLive: "Terminer",
         dedicationsLabel: "Dédicaces",
         guestsLabel: "Invités",
-        minDedicationPrice: "Prix minimum dédicace (vide = défaut)"
+        minDedicationPrice: "Prix minimum dédicace (vide = défaut)",
+        dedication: "Dédicace",
+        dedicationHint: "Envoyez un message dédié à l'artiste",
+        send: "Envoyer",
+        noDedicationsYet: "Aucune dédicace pour l'instant.",
+        pendingLabel: "En attente",
+        dedicationsAcceptedDelivered: "Acceptées / livrées",
+        rejectAction: "Rejeter",
+        markDelivered: "Marquer comme livrée",
+        delivered: "Livrée",
+        dedicationsEnabledOn: "Dédicaces activées",
+        dedicationsEnabledOff: "Dédicaces coupées",
+        dedicationMinPriceLive: "Prix minimum dédicace"
     )
 
     /// Chaînes **anglaises**.
@@ -1131,7 +1156,19 @@ public extension DMStrings {
         endLive: "End",
         dedicationsLabel: "Dedications",
         guestsLabel: "Guests",
-        minDedicationPrice: "Minimum dedication price (blank = default)"
+        minDedicationPrice: "Minimum dedication price (blank = default)",
+        dedication: "Dedication",
+        dedicationHint: "Send a dedicated message to the artist",
+        send: "Send",
+        noDedicationsYet: "No dedications yet.",
+        pendingLabel: "Pending",
+        dedicationsAcceptedDelivered: "Accepted / delivered",
+        rejectAction: "Reject",
+        markDelivered: "Mark as delivered",
+        delivered: "Delivered",
+        dedicationsEnabledOn: "Dedications on",
+        dedicationsEnabledOff: "Dedications off",
+        dedicationMinPriceLive: "Minimum dedication price"
     )
 
     /// Renvoie la table de chaînes d'une langue.

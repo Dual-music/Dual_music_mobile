@@ -73,6 +73,8 @@ public enum LiveEndpoints {
     public static func detail(_ id: String) -> String { "/lives/\(id)" }
     public static func messages(_ id: String) -> String { "/lives/\(id)/messages" }
     public static func end(_ id: String) -> String { "/lives/\(id)/end" }
+    /// Hôte : réglages du live (dédicaces/invités/chat), mise à jour partielle.
+    public static func settings(_ id: String) -> String { "/lives/\(id)/settings" }
 }
 
 /// Chemins des duels.
@@ -103,6 +105,12 @@ public enum ConcertEndpoints {
     public static func artistDetail(_ id: String) -> String { "/artist-concerts/\(id)" }
     public static func ticketInfo(_ id: String) -> String { "/concerts/\(id)/ticket-info" }
     public static func reminder(_ id: String) -> String { "/concerts/\(id)/reminder" }
+    /// Hôte : accepte une dédicace EN ATTENTE — débite le fan maintenant.
+    public static func dedicationAccept(_ id: String) -> String { "/concerts/dedications/\(id)/accept" }
+    /// Hôte : rejette une dédicace EN ATTENTE — aucun débit.
+    public static func dedicationReject(_ id: String) -> String { "/concerts/dedications/\(id)/reject" }
+    /// Hôte : marque une dédicace acceptée comme interprétée en direct.
+    public static func dedicationDeliver(_ id: String) -> String { "/concerts/dedications/\(id)/deliver" }
 }
 
 /// Chemins des compétitions.

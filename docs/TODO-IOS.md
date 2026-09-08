@@ -8,8 +8,8 @@ suivante.
 > **Correctif du 2026-09-07 (après premier passage d'implémentation)** : `PARITE-ANDROID-IOS.md`
 > marque les écrans de room temps réel (Live/Duel/Compétition/Concert) ✅, mais un comptage de
 > lignes montre qu'iOS n'a que **10 à 20 % du volume de code Android** sur ces 4 écrans — ce
-> sont des squelettes spectateur, sans mode hôte/manager. Voir **Étape 1.0** ci-dessous, ajoutée
-> avant le reste de l'étape 1. Les modules plus simples (Auth, Wallet, Profil, Créateur,
+> sont des squelettes spectateur, sans mode hôte/manager. Voir **Étape 1.0 — Mode hôte Live**
+> ci-dessous. Les modules plus simples (Auth, Wallet, Profil, Créateur,
 > Sponsor) sont eux à 50-70 % du volume Android, un écart de portage normal — pas concernés par
 > ce correctif.
 
@@ -59,6 +59,51 @@ pour ne pas avoir à redécouvrir ces causes en cas de régression.
 ## Étape 1 — Compléter la parité fonctionnelle manquante
 
 Écart vérifié dans le code (Android a la fonctionnalité, iOS ne l'a pas du tout) :
+
+### 1.0 Mode hôte Live 🚧 EN COURS (dédicaces ✅, invités/modérateurs à venir)
+
+Priorité de l'utilisateur : report/ban d'abord (fait, voir 1.1), puis mode hôte Live —
+dédicaces, invités sur scène, modérateurs — le plus gros chantier restant après le report/ban.
+
+- **Diffusion hôte** (2026-09-07) : `LiveViewModel`/`LiveRoomView` distinguent hôte/spectateur
+  (`isHost`) — démarrage caméra/micro, coupe/rétablit micro et caméra, bascule caméra
+  avant/arrière, fin de live (`POST /lives/:id/end` + arrêt local). L'hôte voit son propre
+  aperçu (`localVideoTrack`), pas le flux `primary` (réservé au spectateur).
+- **« Mes lives »** (2026-09-07) : `MyLivesView`/`MyLivesViewModel` — liste des lives de
+  l'artiste (`GET /lives?artistId=`), formulaire de lancement (titre, dédicaces/invités
+  on-off, prix minimum), reprise du live actif, historique des lives terminés. Accessible
+  depuis le profil, réservé aux artistes (`ProfileView.isArtist`, les managers n'hébergent
+  pas de live).
+- **Dédicaces en direct** (2026-09-08) : pas de ressource REST dédiée — réutilise
+  `POST /concerts/dedications` (`concertType: "artist_live"`, `concertId` = id du live).
+  Fan : bouton mégaphone dans la barre d'action (visible seulement si `liveAllowsDedications`)
+  ouvrant une feuille message + prix (plancher = prix minimum effectif du live, jamais en
+  dessous). Hôte : bouton mégaphone avec badge (nombre de demandes en attente) ouvrant une
+  feuille « en attente » (accepter = débite le fan maintenant / rejeter = aucun débit) +
+  « acceptées/livrées » (marquer comme interprétée) ; réglage on/off + prix minimum du live,
+  appliqué en direct (`PATCH /lives/:id/settings`, mise à jour partielle). Temps réel :
+  `settings` (réglages changés par l'hôte, tout le monde réagit aussitôt), `dedication:new` /
+  `dedication:update` (l'hôte recharge sa liste, le fan concerné voit une bannière de
+  décision) — l'état fait toujours l'objet d'un rechargement REST complet, jamais appliqué
+  depuis le seul payload temps réel (parité Android : `LiveViewModel.kt`).
+  - Correctif au passage : `Live.liveKitRoom` dérivait `"live:\(id)"` (deux-points) au lieu de
+    `"live-\(id)"` (tiret, comme Android/backend) en repli sur `room_id` absent — corrigé,
+    sinon la mauvaise room LiveKit aurait été rejointe pour tout live sans `room_id` explicite.
+  - Correctif au passage : `DedicationRequest` (réutilisé de `FeatureConcert`) n'avait pas de
+    champ `priceCredits`, pourtant obligatoire côté backend (400 sans lui) — le seul appelant
+    existant (`ConcertFeature.purchaseDedication`, jamais branché à une UI) était mort, donc
+    correctif sans risque.
+- [ ] Invités sur scène (« lever la main », accepter/retirer un invité, partage de room
+      LiveKit multi-participants) — pas commencé. Regarder `LiveViewModel.kt` côté Android
+      (`requestJoin`/`acceptGuest`/`removeGuest`/`reconcileGuestSubscriptions`) avant de
+      porter : sensiblement plus complexe que les dédicaces (partage de contexte
+      EGL/LiveKit entre plusieurs participants actifs).
+  - `Live.allowGuests` et le toggle hôte existent déjà côté données (`updateLiveSettings`),
+      mais rien ne les exploite encore côté UI invités.
+- [ ] Modérateurs désignés (jusqu'à 2 spectateurs nommés par l'hôte, peuvent bannir/masquer un
+      message mais jamais couper le chat) — pas commencé.
+- [ ] Chat on/off par l'hôte (`Live.chatEnabled` existe déjà côté données/décodage, jamais
+      exposé dans `LiveRoomView`) — petit, à faire avec les modérateurs.
 
 ### 1.1 Signalement + bannissement (report/ban) ✅ FAIT (partiellement) le 2026-09-07
 

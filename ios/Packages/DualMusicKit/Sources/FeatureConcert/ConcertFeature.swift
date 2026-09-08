@@ -38,16 +38,18 @@ public struct ConcertRepository: Sendable {
     /// - Parameters:
     ///   - concertId: concert ciblé.
     ///   - message: texte lu par l'artiste pendant le concert.
+    ///   - priceCredits: montant en crédits (obligatoire côté backend).
     ///   - idempotencyKey: clé unique de l'action.
     public func purchaseDedication(
         concertId: String,
         message: String,
+        priceCredits: Double,
         idempotencyKey: String = UUID().uuidString
     ) async throws {
         try await http.send(
             .post(
                 ConcertEndpoints.dedicationsPurchase,
-                body: DedicationRequest(concertId: concertId, message: message),
+                body: DedicationRequest(concertId: concertId, message: message, priceCredits: priceCredits),
                 idempotencyKey: idempotencyKey
             )
         )
