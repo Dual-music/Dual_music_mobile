@@ -62,6 +62,14 @@ struct StreamBanBody: Encodable, Sendable {
     let reason: String?
 }
 
+/// Corps de `POST /lives`.
+struct CreateLiveBody: Encodable, Sendable {
+    let title: String
+    let allowsDedications: Bool
+    let allowGuests: Bool
+    let dedicationMinPriceCredits: Double?
+}
+
 /// Accès REST aux actions et à l'historique d'un live.
 ///
 /// Le temps réel (messages, cadeaux, présence) passe par Socket.IO ; ce repository couvre
@@ -120,5 +128,41 @@ public struct LiveRepository: Sendable {
                 body: StreamBanBody(streamId: streamId, streamType: "live", bannedUserId: bannedUserId, reason: reason)
             )
         )
+    }
+
+    /// Lives de l'artiste passé (`GET /lives?artistId=`) — alimente « Mes lives ».
+    public func myLives(artistId: String) async throws -> [Live] {
+        try await http.request(.get(LiveEndpoints.list, query: ["artistId": artistId]), as: [Live].self)
+    }
+
+    /// Lance un nouveau live (hôte).
+    /// - Parameters:
+    ///   - title: titre affiché (vide → « Live » côté backend).
+    ///   - allowsDedications: dédicaces activées pour ce live.
+    ///   - allowGuests: demandes d'invité (« lever la main ») activées.
+    ///   - dedicationMinPriceCredits: prix minimum propre à ce live (`nil` = défaut global).
+    public func createLive(
+        title: String,
+        allowsDedications: Bool = true,
+        allowGuests: Bool = true,
+        dedicationMinPriceCredits: Double? = nil
+    ) async throws -> Live {
+        try await http.request(
+            .post(
+                LiveEndpoints.list,
+                body: CreateLiveBody(
+                    title: title.isEmpty ? "Live" : title,
+                    allowsDedications: allowsDedications,
+                    allowGuests: allowGuests,
+                    dedicationMinPriceCredits: dedicationMinPriceCredits
+                )
+            ),
+            as: Live.self
+        )
+    }
+
+    /// Termine le live actif (hôte).
+    public func endLive(liveId: String) async throws {
+        try await http.send(.post(LiveEndpoints.end(liveId)))
     }
 }

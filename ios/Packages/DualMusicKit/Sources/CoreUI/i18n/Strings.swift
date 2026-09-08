@@ -390,6 +390,16 @@ public struct DMStrings: Sendable {
     public let reportSent: String
     public let banAction: String
     public let banConfirmMessage: String
+    // « Mes lives » (hôte).
+    public let myLives: String
+    public let myLivesHint: String
+    public let liveTitle: String
+    public let startLive: String
+    public let liveActive: String
+    public let endLive: String
+    public let dedicationsLabel: String
+    public let guestsLabel: String
+    public let minDedicationPrice: String
 }
 
 // MARK: - Tables de traduction
@@ -748,7 +758,16 @@ public extension DMStrings {
         reportViolence: "Violence",
         reportSent: "Signalement envoyé",
         banAction: "Bannir",
-        banConfirmMessage: "Cette personne ne pourra plus écrire ni rejoindre, et ses messages seront masqués pour tout le monde."
+        banConfirmMessage: "Cette personne ne pourra plus écrire ni rejoindre, et ses messages seront masqués pour tout le monde.",
+        myLives: "Mes Lives",
+        myLivesHint: "Gérez vos lives passés et lancez-en un nouveau",
+        liveTitle: "Titre du live",
+        startLive: "Lancer un Live",
+        liveActive: "Live en cours",
+        endLive: "Terminer",
+        dedicationsLabel: "Dédicaces",
+        guestsLabel: "Invités",
+        minDedicationPrice: "Prix minimum dédicace (vide = défaut)"
     )
 
     /// Chaînes **anglaises**.
@@ -1103,7 +1122,16 @@ public extension DMStrings {
         reportViolence: "Violence",
         reportSent: "Report sent",
         banAction: "Ban",
-        banConfirmMessage: "This person won't be able to write or rejoin anymore, and their messages will be hidden for everyone."
+        banConfirmMessage: "This person won't be able to write or rejoin anymore, and their messages will be hidden for everyone.",
+        myLives: "My Lives",
+        myLivesHint: "Manage your past lives and start a new one",
+        liveTitle: "Live title",
+        startLive: "Start a Live",
+        liveActive: "Live in progress",
+        endLive: "End",
+        dedicationsLabel: "Dedications",
+        guestsLabel: "Guests",
+        minDedicationPrice: "Minimum dedication price (blank = default)"
     )
 
     /// Renvoie la table de chaînes d'une langue.

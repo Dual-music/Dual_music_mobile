@@ -28,6 +28,10 @@ public final class ProfileViewModel {
     /// Vrai si l'utilisateur est administrateur.
     public var isAdmin: Bool { roles.contains(.admin) }
 
+    /// Vrai si l'utilisateur est artiste — seul rôle qui héberge des lives (« Mes lives »).
+    /// Un manager crée des duels/compétitions, pas des lives.
+    public var isArtist: Bool { roles.contains(.artist) }
+
     /// Vrai si l'utilisateur n'est **que** fan (aucun rôle créateur).
     public var isPureFan: Bool { !canCreate }
 

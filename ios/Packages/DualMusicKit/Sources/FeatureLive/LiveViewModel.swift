@@ -83,7 +83,7 @@ public final class LiveViewModel {
 
         // La vidéo, l'historique et le temps réel démarrent en parallèle : aucun n'attend
         // l'autre (l'utilisateur voit le chat même si le SFU est lent, et inversement).
-        Task { await media.join(roomName: roomName, isHost: false, prewarmedToken: prewarmedToken) }
+        Task { await media.join(roomName: roomName, isHost: isHost, prewarmedToken: prewarmedToken) }
         Task { [weak self] in
             guard let self else { return }
             if let history = try? await self.repository.chatHistory(liveId: self.liveId) {
@@ -137,6 +137,32 @@ public final class LiveViewModel {
         } catch {
             bannedUserIds.remove(userId)
         }
+    }
+
+    /// Hôte : démarre la diffusion caméra/micro sur la room déjà rejointe.
+    public func startBroadcast() async {
+        await media.startBroadcast()
+    }
+
+    /// Hôte : coupe/rétablit le micro.
+    public func toggleMic() async {
+        await media.setMicrophone(enabled: !media.isMicrophoneEnabled)
+    }
+
+    /// Hôte : coupe/rétablit la caméra.
+    public func toggleCamera() async {
+        await media.setCamera(enabled: !media.isCameraEnabled)
+    }
+
+    /// Hôte : bascule caméra avant/arrière.
+    public func switchCamera() async {
+        await media.switchCamera()
+    }
+
+    /// Hôte : termine ce live côté backend (arrête aussi la diffusion locale).
+    public func endLive() async throws {
+        try await repository.endLive(liveId: liveId)
+        await media.stopBroadcast()
     }
 
     /// Retire le cadeau le plus ancien après son animation.

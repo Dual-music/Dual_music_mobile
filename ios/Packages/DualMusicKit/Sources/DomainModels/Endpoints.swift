@@ -72,6 +72,7 @@ public enum LiveEndpoints {
     public static let list = "/lives"
     public static func detail(_ id: String) -> String { "/lives/\(id)" }
     public static func messages(_ id: String) -> String { "/lives/\(id)/messages" }
+    public static func end(_ id: String) -> String { "/lives/\(id)/end" }
 }
 
 /// Chemins des duels.

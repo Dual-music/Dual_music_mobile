@@ -348,6 +348,31 @@ public final class AppContainer {
         return viewModel
     }
 
+    /// ViewModel de diffusion pour l'**hôte** d'un live (nouveau ou déjà actif, depuis « Mes
+    /// lives ») — pas mémoïsé par `live.id` comme le feed spectateur : une session hôte est
+    /// éphémère, recréée à chaque ouverture.
+    func hostLiveRoom(for live: Live) -> LiveViewModel {
+        LiveViewModel(
+            liveId: live.id,
+            roomName: live.liveKitRoom,
+            media: LiveRoomClient(tokenService: liveKitTokens),
+            realtime: realtime,
+            repository: liveRepository,
+            isHost: true
+        )
+    }
+
+    /// ViewModel « Mes lives » (hôte), mémoïsé — `nil` tant que le profil n'est pas chargé
+    /// (voir `profile.load()`, appelé à l'ouverture de la section profil).
+    @ObservationIgnored private var myLivesViewModel: MyLivesViewModel?
+    func myLives() -> MyLivesViewModel? {
+        if let existing = myLivesViewModel { return existing }
+        guard let artistId = profile.me?.user.id else { return nil }
+        let viewModel = MyLivesViewModel(artistId: artistId, repository: liveRepository)
+        myLivesViewModel = viewModel
+        return viewModel
+    }
+
     /// ViewModel de lecture d'un replay (accès + déblocage).
     func replayPlayer(for replay: ReplayVideo) -> ReplayPlayerViewModel {
         if let existing = replayPlayers[replay.id] { return existing }
@@ -424,5 +449,6 @@ public final class AppContainer {
         competitionRooms.removeAll()
         liveRooms.removeAll()
         replayPlayers.removeAll()
+        myLivesViewModel = nil
     }
 }

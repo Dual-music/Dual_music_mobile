@@ -18,6 +18,7 @@ public struct LiveRoomView: View {
     private let hostUserId: String
     private let quickGiftId: String
     private let prewarmedToken: LiveKitToken?
+    private let onEnded: () -> Void
 
     @State private var draft = ""
     @State private var showReport = false
@@ -28,29 +29,37 @@ public struct LiveRoomView: View {
     ///   - hostUserId: destinataire des cadeaux.
     ///   - quickGiftId: cadeau rapide (vide → bouton inactif tant qu'aucun cadeau choisi).
     ///   - prewarmedToken: jeton LiveKit pré-chauffé par le feed.
+    ///   - onEnded: hôte uniquement — appelé une fois le live terminé (retour à « Mes lives »).
     public init(
         viewModel: LiveViewModel,
         hostUserId: String,
         quickGiftId: String = "",
-        prewarmedToken: LiveKitToken? = nil
+        prewarmedToken: LiveKitToken? = nil,
+        onEnded: @escaping () -> Void = {}
     ) {
         self.viewModel = viewModel
         self.hostUserId = hostUserId
         self.quickGiftId = quickGiftId
         self.prewarmedToken = prewarmedToken
+        self.onEnded = onEnded
     }
 
     public var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            // --- Couche vidéo ---
-            if let track = viewModel.media.primaryVideoTrack {
+            // --- Couche vidéo --- (l'hôte voit SON propre aperçu, pas le flux "primary" —
+            // celui-ci n'existe que côté spectateur, alimenté par un participant DISTANT).
+            if let track = displayTrack {
                 SwiftUIVideoView(track, layoutMode: .fill)
                     .ignoresSafeArea()
             } else {
                 theme.gradients.hero.ignoresSafeArea()
-                if case .connecting = viewModel.media.connectionState {
+                if viewModel.isHost {
+                    if !viewModel.media.isCameraEnabled {
+                        startBroadcastButton
+                    }
+                } else if case .connecting = viewModel.media.connectionState {
                     DMLoadingBox()
                 }
             }
@@ -77,7 +86,11 @@ public struct LiveRoomView: View {
                 viewerBadge
                 Spacer()
                 chatOverlay
-                actionBar
+                if viewModel.isHost {
+                    hostControls
+                } else {
+                    actionBar
+                }
             }
             .padding(theme.spacing.md)
         }
@@ -204,5 +217,76 @@ public struct LiveRoomView: View {
         let text = draft
         draft = ""
         Task { await viewModel.sendMessage(text) }
+    }
+
+    /// Piste à afficher en plein écran : l'aperçu de l'hôte lui-même, ou le flux du host
+    /// pour un spectateur.
+    private var displayTrack: VideoTrack? {
+        viewModel.isHost ? viewModel.media.localVideoTrack : viewModel.media.primaryVideoTrack
+    }
+
+    /// Bouton central affiché avant que l'hôte n'ait démarré sa diffusion.
+    private var startBroadcastButton: some View {
+        Button {
+            Task { await viewModel.startBroadcast() }
+        } label: {
+            HStack(spacing: theme.spacing.sm) {
+                Image(systemName: "video.fill")
+                Text(s.startLive)
+            }
+            .font(DMFont.body).bold()
+            .foregroundStyle(.white)
+            .padding(.horizontal, theme.spacing.lg)
+            .padding(.vertical, theme.spacing.md)
+            .background(theme.gradients.primary, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .dmGlow()
+    }
+
+    /// Barre de contrôles hôte : micro, caméra, bascule caméra, terminer.
+    private var hostControls: some View {
+        HStack(spacing: theme.spacing.md) {
+            controlButton(viewModel.media.isMicrophoneEnabled ? "mic.fill" : "mic.slash.fill") {
+                Task { await viewModel.toggleMic() }
+            }
+
+            controlButton(viewModel.media.isCameraEnabled ? "video.fill" : "video.slash.fill") {
+                Task { await viewModel.toggleCamera() }
+            }
+
+            controlButton("arrow.triangle.2.circlepath.camera.fill") {
+                Task { await viewModel.switchCamera() }
+            }
+
+            Spacer()
+
+            Button {
+                Task {
+                    try? await viewModel.endLive()
+                    onEnded()
+                }
+            } label: {
+                Text(s.endLive)
+                    .font(DMFont.caption).bold()
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, theme.spacing.md)
+                    .padding(.vertical, theme.spacing.sm)
+                    .background(theme.colors.destructive, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// Petit bouton rond de la barre de contrôles hôte (icône seule).
+    private func controlButton(_ systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(.white.opacity(0.15), in: Circle())
+        }
+        .buttonStyle(.plain)
     }
 }

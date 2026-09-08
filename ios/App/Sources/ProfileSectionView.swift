@@ -4,6 +4,7 @@ import DomainModels
 import FeatureArtists
 import FeatureCreator
 import FeatureGiftShop
+import FeatureLive
 import FeatureNotifications
 import FeatureProfile
 import FeatureReferral
@@ -38,6 +39,7 @@ enum ProfileRoute: Hashable {
     case preferences
     case following
     case admin
+    case myLives
 }
 
 /// Section profil (ouverte via l'avatar de la barre du haut) avec sa propre sous-navigation.
@@ -56,12 +58,23 @@ struct ProfileSectionView: View {
     @State private var route: ProfileRoute = .root
     @State private var managerEnabled = false
     @State private var openedReplay: ReplayVideo?
+    /// Live en cours de diffusion (hôte) — plein écran, hors de la sous-navigation profil.
+    @State private var broadcastingLive: Live?
 
     var body: some View {
         content
             .task {
                 managerEnabled = await container.managerRequestsEnabled()
                 await container.profile.load()
+            }
+            // Plein écran, hors de la pile de sous-navigation : quitter la diffusion ne doit
+            // pas ramener à un sous-écran profil intermédiaire.
+            .fullScreenCover(item: $broadcastingLive) { live in
+                LiveRoomView(
+                    viewModel: container.hostLiveRoom(for: live),
+                    hostUserId: live.artistId,
+                    onEnded: { broadcastingLive = nil }
+                )
             }
     }
 
@@ -78,6 +91,7 @@ struct ProfileSectionView: View {
                     canCreate: container.profile.canCreate,
                     managerEnabled: managerEnabled,
                     isAdmin: container.profile.isAdmin,
+                    isArtist: container.profile.isArtist,
                     onNavigate: { route = $0 },
                     onSignOut: {
                         Task {
@@ -167,6 +181,15 @@ struct ProfileSectionView: View {
             SubScreen(title: s.menuAdminSpace, onBack: { route = .menu }) {
                 AdminView(viewModel: container.admin)
             }
+
+        case .myLives:
+            SubScreen(title: s.myLives, onBack: { route = .menu }) {
+                if let viewModel = container.myLives() {
+                    MyLivesView(viewModel: viewModel) { live in broadcastingLive = live }
+                } else {
+                    DMLoadingBox()
+                }
+            }
         }
     }
 
@@ -198,6 +221,7 @@ struct ProfileMenuView: View {
     let canCreate: Bool
     let managerEnabled: Bool
     let isAdmin: Bool
+    let isArtist: Bool
     let onNavigate: (ProfileRoute) -> Void
     let onSignOut: () -> Void
 
@@ -221,6 +245,10 @@ struct ProfileMenuView: View {
 
                 // Réservé artiste/manager/admin : outils créateur + revenus.
                 if canCreate {
+                    // Réservé artiste : seul rôle qui héberge des lives.
+                    if isArtist {
+                        row("video.fill", s.myLives) { onNavigate(.myLives) }
+                    }
                     row("star.fill", s.menuCreatorSpace) { onNavigate(.creator) }
                     row("wallet.pass.fill", s.menuWithdraw) { onNavigate(.withdrawal) }
                     row("play.rectangle.fill", s.menuReplays) { onNavigate(.replays) }
