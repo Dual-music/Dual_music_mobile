@@ -72,7 +72,7 @@ pour ne pas avoir à redécouvrir ces causes en cas de régression.
 
 Écart vérifié dans le code (Android a la fonctionnalité, iOS ne l'a pas du tout) :
 
-### 1.0 Mode hôte Live 🚧 EN COURS (diffusion + Mes lives + dédicaces + invités ✅, modérateurs à venir)
+### 1.0 Mode hôte Live 🚧 EN COURS (diffusion + Mes lives + dédicaces + invités ✅ CI verte le 2026-09-08 — première tentative, sans retry —, modérateurs à venir)
 
 Priorité de l'utilisateur : report/ban d'abord (fait, voir 1.1), puis mode hôte Live —
 dédicaces, invités sur scène, modérateurs — le plus gros chantier restant après le report/ban.
