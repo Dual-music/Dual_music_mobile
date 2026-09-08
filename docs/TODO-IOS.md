@@ -183,21 +183,73 @@ Restant, non bloquant pour l'App Store (le report, lui, est en place partout où
 - [ ] Construire l'écran de room/direct pour Concert (actuellement inexistant) avant de pouvoir
       y brancher quoi que ce soit.
 
-### 1.2 Achats intégrés StoreKit pour la recharge de crédits — absent
+### 1.2 Achats intégrés StoreKit pour la recharge de crédits 🚧 CODE FAIT le 2026-09-08, setup manuel restant
 
-`Package.swift` ne déclare aucune dépendance StoreKit et `FeatureWallet/RechargeView.swift`
-ne propose que la page CinetPay hébergée (comme Android). Or Apple interdit un moyen de
-paiement externe pour de la monnaie virtuelle consommée dans l'app (règle 3.1.1) — **c'est le
-point de blocage le plus sérieux**, cf. `RELEASE-IOS.md` §6.1.
+Décision produit prise avec l'utilisateur (option 1 de `RELEASE-IOS.md` §6.1, recommandée) :
+StoreKit natif REMPLACE CinetPay/Stripe **dans l'écran de recharge iOS uniquement** — Android
+et le web gardent CinetPay/Stripe inchangés (code Kotlin/web séparé, aucune modification).
+Paliers de test décidés avec l'utilisateur : les prix/montants **définitifs de production
+restent à trancher par l'équipe** avant publication (juste modifier deux fichiers, voir
+ci-dessous — aucune migration de schéma).
 
-- [ ] Décision produit à prendre avant de coder (3 options détaillées dans `RELEASE-IOS.md`
-      §6.1) : StoreKit natif pour iOS (recommandé, `RechargeProvider.APPLE_IAP` déjà prévu côté
-      `shared-domain`), app iOS « lecture seule » sans recharge, ou entitlement de lien externe.
-- [ ] Si StoreKit : créer les produits de recharge dans App Store Connect (paliers de crédits),
-      ajouter un module `FeatureIAP` (StoreKit 2 : `Product.products(for:)`,
-      `Transaction.currentEntitlements`, validation du reçu).
-- [ ] Étendre le backend : endpoint de validation de reçu StoreKit → crédit du wallet (même
-      esprit que la vérification CinetPay existante).
+⚠️ Pas de module `FeatureIAP` séparé contrairement à ce que ce TODO envisageait avant
+implémentation — StoreKit est un framework système (aucune dépendance SPM à ajouter), et le
+flux entier ne concerne que `FeatureWallet` : ajouté directement dans
+`RechargeView.swift`/`RechargeViewModel` (mêmes noms qu'avant, même signature d'init
+`RechargeViewModel(http:)` → **zéro changement requis dans `AppContainer`/`ProfileSectionView`**),
+plutôt qu'une cible SPM dédiée qui aurait juste ajouté de la cérémonie sans bénéfice ici.
+
+**Fait (iOS)** :
+- `RechargeView.swift` réécrit entièrement : liste de paliers StoreKit (`Product.products(for:)`,
+  5 ids `com.dualmusic.app.credits.tier1..5`) au lieu du formulaire CinetPay (montant libre +
+  pays + opérateur + téléphone). Achat via `product.purchase()` ; transaction vérifiée
+  localement (`VerificationResult`) puis réglée côté serveur (`POST /payments/apple/verify`,
+  `Idempotency-Key` = id de transaction) — `transaction.finish()` **seulement** après règlement
+  serveur réussi, pour ne jamais perdre un achat déjà payé si l'appel réseau échoue (StoreKit
+  la represente alors, via `Transaction.updates`, écouté en continu depuis l'`init` du
+  ViewModel — écouteur qui vit toute la session, pas l'écran, comme recommandé par Apple).
+  Anciens DTOs CinetPay (`CinetpayInitRequest`/`CinetpayInitResponse`/`CinetpayCountry`/
+  `CinetpayOperator` dans `PaymentDtos.swift`) laissés en place mais désormais inutilisés
+  côté iOS (gardés au cas où, pas supprimés sans qu'on le demande).
+- `PaymentEndpoints.appleVerify` ajouté (`DomainModels/Endpoints.swift`).
+
+**Fait (backend — ⚠️ voir note critique plus bas)** :
+- `POST /payments/apple/verify` (authentifié, idempotent comme les autres endpoints
+  financiers) : reçoit SEULEMENT `transactionId` — ne fait JAMAIS confiance au client pour
+  `productId`/`credits`. Revérifie la transaction auprès d'Apple via l'App Store Server API
+  officielle (`@apple/app-store-server-library`, package npm officiel Apple — installé),
+  `AppStoreServerAPIClient.getTransactionInfo` + `SignedDataVerifier.verifyAndDecodeTransaction`
+  (chaîne de certificats Apple, `src/config/certs/AppleRootCA-G3.cer` téléchargé et vendu dans
+  le repo), rejette une transaction révoquée/remboursée (`revocationDate`). Lit `credits` dans
+  `src/config/appleIAPProducts.js` (catalogue statique `productId → credits`, à ajuster par
+  l'équipe avec les paliers définitifs). Crédite via une nouvelle procédure stockée
+  `credit_wallet_apple` (sœur de `credit_wallet_stripe`, idempotente sur `transactionId`,
+  `src/procedures/credits.sql` — à appliquer via `npm run db:procedures`).
+- Nouvelles variables d'env (`.env.example` documenté) : `APPLE_IAP_ISSUER_ID`,
+  `APPLE_IAP_KEY_ID`, `APPLE_IAP_PRIVATE_KEY` (PEM du .p8), `APPLE_IAP_BUNDLE_ID` (défaut
+  `com.dualmusic.app`), `APPLE_IAP_ENVIRONMENT` (`sandbox`/`production`),
+  `APPLE_IAP_APP_APPLE_ID` (obligatoire en production).
+
+**⚠️ NON COMMITÉ côté backend** — `Dual_music_backend` a ~13 jours de travail non commité,
+sans rapport avec ce chantier (temps réel, modération, enregistrement, compétition, concert,
+wallet — dizaines de fichiers, dernier commit 26/08). Mes ajouts StoreKit sont insérés
+proprement dedans (vérifié fichier par fichier, rien d'écrasé), mais je n'ai PAS commité —
+ni ce travail existant qui n'est pas le mien, ni le mien mélangé dedans sans autorisation
+explicite. Le code est là, prêt, mais reste à l'état de modifications non indexées dans
+l'arbre de travail du backend tant que l'utilisateur n'a pas tranché comment il veut gérer ça
+(`git add -p` pour isoler juste mes ajouts, ou une revue/commit groupée de leur côté).
+
+**Restant, hors code** :
+- [ ] Créer les 5 produits consommables dans App Store Connect avec CES MÊMES ids
+      (`com.dualmusic.app.credits.tier1..5`) et des paliers de prix cohérents.
+- [ ] Générer une clé API App Store Connect « In-App Purchase » (issuer id, key id, .p8) et
+      renseigner les variables d'env ci-dessus.
+- [ ] Trancher les paliers/prix définitifs de production (équipe) — modifier
+      `appleIAPProducts.js` (backend) + la liste `productIDs` (iOS `RechargeViewModel`) si les
+      ids changent.
+- [ ] `npm run db:procedures` pour déployer `credit_wallet_apple` en base.
+- [ ] Test réel impossible sans device/TestFlight (bac à sable StoreKit) — à faire une fois
+      l'accès matériel disponible, cf. le constat général de `GUIDE-TEST-IOS.md`.
 
 ### 1.3 Sign in with Apple — absent
 

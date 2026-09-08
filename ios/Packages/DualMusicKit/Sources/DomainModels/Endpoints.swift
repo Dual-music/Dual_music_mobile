@@ -65,6 +65,9 @@ public enum PaymentEndpoints {
     public static let cinetpayCountries = "/payments/cinetpay/countries"
     public static let stripeSubscription = "/payments/stripe/subscription"
     public static let history = "/payments/history"
+    /// Règle l'achat StoreKit déjà payé côté client (`transactionId`) — le serveur
+    /// re-vérifie auprès d'Apple et ne fait jamais confiance au crédit annoncé.
+    public static let appleVerify = "/payments/apple/verify"
 }
 
 /// Chemins des lives (feed vertical).

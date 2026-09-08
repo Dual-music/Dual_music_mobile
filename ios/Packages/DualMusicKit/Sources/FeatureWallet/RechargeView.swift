@@ -1,113 +1,158 @@
 import SwiftUI
 import Observation
+import StoreKit
 import CoreNetwork
 import CoreUI
 import DomainModels
 
-/// ViewModel de la recharge de crédits par **Mobile Money** (CinetPay).
+/// Erreur locale : une transaction StoreKit dont la signature n'a pas pu être vérifiée
+/// (JWS invalide) — ne devrait jamais survenir hors jailbreak/appareil compromis.
+private struct StoreKitVerificationError: Error {}
+
+/// ViewModel de la recharge de crédits par **StoreKit** (achats intégrés Apple).
 ///
-/// Récupère le catalogue de pays, initie le paiement (avec `Idempotency-Key`) et expose
-/// l'URL hébergée à ouvrir. Le crédit du compte se fait ensuite côté serveur (webhook) :
-/// l'app n'ajoute jamais de crédits elle-même. Miroir de `RechargeViewModel` Android.
+/// ⚠️ iOS uniquement : Apple impose que toute monnaie virtuelle consommée dans l'app passe
+/// par StoreKit (règle 3.1.1) — CinetPay/Stripe restent la voie sur le web et Android
+/// (`RechargeScreen.kt`, code Kotlin séparé, inchangé), mais ne peuvent pas cohabiter avec
+/// StoreKit dans CET écran iOS. Contrairement à CinetPay (le serveur initie le paiement,
+/// webhook crédite ensuite), le flux est inversé ici : le client achète directement via
+/// `Product.purchase()`, puis envoie l'id de transaction au serveur pour règlement — celui-ci
+/// revérifie TOUJOURS auprès d'Apple (App Store Server API) et lit le nombre de crédits dans
+/// SON PROPRE catalogue (jamais le client) avant de créditer, voir
+/// `POST /payments/apple/verify` (backend, `payments.service.js#verifyAppleCredits`).
 @Observable
 @MainActor
 public final class RechargeViewModel {
 
-    public private(set) var countries: [CinetpayCountry] = []
-    public private(set) var selected: CinetpayCountry?
-    /// Code de l'opérateur Mobile Money choisi (ex. `OM`, `MOMO`).
-    public private(set) var selectedOperator: String?
-    public var amount: String = ""
-    public var phone: String = ""
+    /// Paliers de crédits disponibles (achats consommables), triés par prix croissant.
+    public private(set) var products: [Product] = []
     public private(set) var isLoading = false
+    /// Id du produit en cours d'achat — désactive son bouton pendant la transaction.
+    public private(set) var purchasingProductId: String?
     public private(set) var message: String?
-    /// URL de paiement à ouvrir (consommée par la vue puis remise à `nil`).
-    public private(set) var paymentURL: URL?
+    public private(set) var messageIsError = false
 
     private let http: HTTPClient
+    private var updatesTask: Task<Void, Never>?
+
+    /// Identifiants App Store Connect des paliers — DOIVENT exister tels quels côté Apple
+    /// (Fonctionnalités de l'app → Achats intégrés → Consommable) et rester en phase avec
+    /// le catalogue serveur (`appleIAPProducts.js`). Paliers de test, prix/paliers définitifs
+    /// à trancher par l'équipe avant publication — modifier cette liste suffit.
+    private static let productIDs = [
+        "com.dualmusic.app.credits.tier1",
+        "com.dualmusic.app.credits.tier2",
+        "com.dualmusic.app.credits.tier3",
+        "com.dualmusic.app.credits.tier4",
+        "com.dualmusic.app.credits.tier5",
+    ]
 
     /// - Parameter http: client HTTP applicatif.
     public init(http: HTTPClient) {
         self.http = http
+        // Écoute permanente des transactions (StoreKit peut en redélivrer une hors du flux
+        // d'achat direct — ex. app tuée juste après paiement) : démarrée une fois pour toute
+        // la session, jamais arrêtée — c'est le fonctionnement voulu par Apple pour ce
+        // listener (pas lié au cycle de vie d'un écran).
+        updatesTask = Task { [weak self] in await self?.observeTransactionUpdates() }
     }
 
-    /// Charge la liste des pays Mobile Money disponibles et présélectionne le premier.
+    /// Charge le catalogue de paliers depuis l'App Store.
     public func load() async {
-        let list = (try? await http.request(
-            .get(PaymentEndpoints.cinetpayCountries, anonymous: true),
-            as: [CinetpayCountry].self
-        )) ?? []
-        countries = list
-        if selected == nil {
-            selected = list.first
-            selectedOperator = list.first?.operators.first?.code
-        }
-    }
-
-    /// Sélectionne un pays et réinitialise l'opérateur sur le premier disponible.
-    public func select(country: CinetpayCountry) {
-        selected = country
-        selectedOperator = country.operators.first?.code
-        message = nil
-    }
-
-    /// Sélectionne l'opérateur Mobile Money.
-    public func select(operatorCode: String) {
-        selectedOperator = operatorCode
-        message = nil
-    }
-
-    /// Initie le paiement ; en cas de succès, expose l'URL hébergée à ouvrir.
-    public func pay() async {
-        let s = AppStrings.current
-        guard let credits = Int(amount.digitsOnly), credits >= 1 else {
-            message = s.errEnterValidAmount
-            return
-        }
-        guard let country = selected else {
-            message = s.errChooseCountry
-            return
-        }
+        guard products.isEmpty else { return }
         isLoading = true
-        message = nil
         defer { isLoading = false }
         do {
-            let response: CinetpayInitResponse = try await http.request(
-                .post(
-                    PaymentEndpoints.cinetpayInit,
-                    body: CinetpayInitRequest(
-                        amount: credits,
-                        countryCode: country.countryCode,
-                        phone: phone.nilIfBlank,
-                        paymentMethod: selectedOperator ?? country.operators.first?.code
-                    ),
-                    idempotencyKey: UUID().uuidString
-                ),
-                as: CinetpayInitResponse.self
-            )
-            paymentURL = URL(string: response.paymentUrl)
-            message = s.openingPayment
+            let fetched = try await Product.products(for: Self.productIDs)
+            products = fetched.sorted { $0.price < $1.price }
         } catch {
-            message = (error as? APIError)?.message ?? s.errRechargeFailed
+            message = AppStrings.current.errRechargeFailed
+            messageIsError = true
         }
     }
 
-    /// À appeler après avoir ouvert l'URL, pour éviter de la rouvrir.
-    public func consumePaymentURL() {
-        paymentURL = nil
+    /// Achète un palier, puis règle la transaction côté serveur.
+    public func purchase(_ product: Product) async {
+        purchasingProductId = product.id
+        message = nil
+        defer { purchasingProductId = nil }
+        do {
+            let result = try await product.purchase()
+            switch result {
+            case .success(let verification):
+                let transaction = try Self.checkVerified(verification)
+                await settle(transaction)
+            case .userCancelled:
+                break
+            case .pending:
+                message = AppStrings.current.purchasePending
+                messageIsError = false
+            @unknown default:
+                break
+            }
+        } catch {
+            message = AppStrings.current.errRechargeFailed
+            messageIsError = true
+        }
+    }
+
+    /// Règle une transaction StoreKit vérifiée : le serveur revérifie auprès d'Apple et
+    /// crédite. `finish()` seulement APRÈS un règlement réussi — sinon StoreKit la
+    /// reproposera à la prochaine occasion (voulu : un achat déjà payé ne doit jamais se
+    /// perdre à cause d'un appel réseau raté).
+    private func settle(_ transaction: Transaction) async {
+        do {
+            let response = try await http.request(
+                .post(
+                    PaymentEndpoints.appleVerify,
+                    body: VerifyAppleTransactionRequest(transactionId: String(transaction.id)),
+                    idempotencyKey: String(transaction.id)
+                ),
+                as: VerifyAppleTransactionResponse.self
+            )
+            await transaction.finish()
+            message = "🎉 \(Int(response.credits)) \(AppStrings.current.creditsAdded)"
+            messageIsError = false
+        } catch {
+            message = (error as? APIError)?.message ?? AppStrings.current.errRechargeFailed
+            messageIsError = true
+        }
+    }
+
+    /// Écoute les transactions terminées hors du flux d'achat direct.
+    private func observeTransactionUpdates() async {
+        for await update in Transaction.updates {
+            guard let transaction = try? Self.checkVerified(update) else { continue }
+            await settle(transaction)
+        }
+    }
+
+    private static func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
+        switch result {
+        case .unverified: throw StoreKitVerificationError()
+        case .verified(let safe): return safe
+        }
     }
 }
 
-/// Écran de recharge : montant en crédits + pays + opérateur + numéro Mobile Money →
-/// ouvre le paiement hébergé. Le compte est crédité automatiquement après paiement.
-///
-/// Miroir de `RechargeScreen` Android ; l'ouverture de l'URL utilise `openURL`
-/// (Safari View Controller système) au lieu d'un `Intent`.
+/// Corps de `POST /payments/apple/verify`.
+private struct VerifyAppleTransactionRequest: Encodable, Sendable {
+    let transactionId: String
+}
+
+/// Réponse de `POST /payments/apple/verify`.
+private struct VerifyAppleTransactionResponse: Decodable, Sendable {
+    let credits: Double
+    let already: Bool
+}
+
+/// Écran de recharge : liste des paliers StoreKit, achat en un tap. Le compte est crédité
+/// automatiquement après règlement server-to-server (pas de webhook à attendre ici,
+/// contrairement à CinetPay — la réponse de `/payments/apple/verify` est immédiate).
 @MainActor
 public struct RechargeView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
-    @Environment(\.openURL) private var openURL
 
     @Bindable private var viewModel: RechargeViewModel
 
@@ -122,85 +167,58 @@ public struct RechargeView: View {
                 Text(s.rechargeCredits)
                     .font(DMFont.headline)
                     .foregroundStyle(theme.colors.foreground)
-                Text(s.rechargeHint)
+                Text(s.chooseCreditsPack)
                     .font(DMFont.caption)
                     .foregroundStyle(theme.colors.mutedForeground)
 
-                DMCard {
-                    VStack(spacing: theme.spacing.md) {
-                        DMTextField(
-                            s.amountCredits,
-                            text: $viewModel.amount,
-                            keyboard: .numberPad,
-                            autocapitalization: .never
-                        )
-                        .onChange(of: viewModel.amount) { _, newValue in
-                            let digits = newValue.digitsOnly
-                            if digits != newValue { viewModel.amount = digits }
-                        }
+                if let message = viewModel.message {
+                    DMMessage(message, kind: viewModel.messageIsError ? .error : .info)
+                }
 
-                        DMPicker(
-                            label: s.country,
-                            selection: viewModel.selected?.displayName ?? s.chooseDots,
-                            options: viewModel.countries
-                        ) { country in
-                            Text("\(country.displayName) \(country.phonePrefix ?? "")")
-                        } onSelect: { country in
-                            viewModel.select(country: country)
-                        }
-
-                        if let operators = viewModel.selected?.operators, !operators.isEmpty {
-                            DMPicker(
-                                label: s.operatorLabel,
-                                selection: currentOperatorLabel(operators),
-                                options: operators
-                            ) { op in
-                                Text(op.displayLabel)
-                            } onSelect: { op in
-                                viewModel.select(operatorCode: op.code)
-                            }
-                        }
-
-                        DMTextField(
-                            s.mobileMoneyNumber,
-                            text: $viewModel.phone,
-                            placeholder: "\(viewModel.selected?.phonePrefix ?? "")…",
-                            keyboard: .phonePad,
-                            autocapitalization: .never
-                        )
-
-                        if let message = viewModel.message { DMMessage(message) }
-
-                        DMButton(
-                            viewModel.isLoading ? s.initializing : s.payByMobileMoney,
-                            isLoading: viewModel.isLoading,
-                            isEnabled: !viewModel.isLoading
-                        ) {
-                            Task { await viewModel.pay() }
+                if viewModel.isLoading {
+                    DMLoadingBox()
+                } else if viewModel.products.isEmpty {
+                    DMEmptyState(title: s.noCreditPacksAvailable, systemImage: "creditcard")
+                } else {
+                    VStack(spacing: theme.spacing.sm) {
+                        ForEach(viewModel.products) { product in
+                            productRow(product)
                         }
                     }
                 }
             }
             .padding(theme.spacing.lg)
         }
-        .scrollDismissesKeyboard(.interactively)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .dmScreenBackground()
         .task { await viewModel.load() }
-        // Ouvre la page de paiement hébergée dès qu'elle est disponible, puis la consomme.
-        .onChange(of: viewModel.paymentURL) { _, url in
-            guard let url else { return }
-            openURL(url)
-            viewModel.consumePaymentURL()
-        }
     }
 
-    /// Libellé de l'opérateur courant (repli sur le code puis sur « Choisir… »).
-    private func currentOperatorLabel(_ operators: [CinetpayOperator]) -> String {
-        if let code = viewModel.selectedOperator,
-           let match = operators.first(where: { $0.code == code }) {
-            return match.displayLabel
+    /// Une ligne de palier : nom/description du produit + bouton d'achat au prix localisé
+    /// (`displayPrice` — formaté par StoreKit dans la devise du compte App Store du caller).
+    private func productRow(_ product: Product) -> some View {
+        DMCard {
+            HStack(spacing: theme.spacing.md) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(product.displayName.isEmpty ? product.id : product.displayName)
+                        .font(DMFont.body).bold()
+                        .foregroundStyle(theme.colors.foreground)
+                    if !product.description.isEmpty {
+                        Text(product.description)
+                            .font(DMFont.caption)
+                            .foregroundStyle(theme.colors.mutedForeground)
+                    }
+                }
+                Spacer()
+                DMButton(
+                    viewModel.purchasingProductId == product.id ? s.purchasing : "\(s.buyAction) \(product.displayPrice)",
+                    isLoading: viewModel.purchasingProductId == product.id,
+                    isEnabled: viewModel.purchasingProductId == nil
+                ) {
+                    Task { await viewModel.purchase(product) }
+                }
+                .frame(maxWidth: 170)
+            }
         }
-        return viewModel.selectedOperator ?? s.chooseDots
     }
 }

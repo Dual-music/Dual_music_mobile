@@ -436,6 +436,13 @@ public struct DMStrings: Sendable {
     public let chatDisabled: String
     public let chatEnabledOn: String
     public let chatEnabledOff: String
+    // Recharge StoreKit (iOS).
+    public let chooseCreditsPack: String
+    public let buyAction: String
+    public let purchasing: String
+    public let purchasePending: String
+    public let noCreditPacksAvailable: String
+    public let creditsAdded: String
 }
 
 // MARK: - Tables de traduction
@@ -835,7 +842,13 @@ public extension DMStrings {
         revokeAction: "Révoquer",
         chatDisabled: "Chat désactivé",
         chatEnabledOn: "Chat activé",
-        chatEnabledOff: "Chat coupé"
+        chatEnabledOff: "Chat coupé",
+        chooseCreditsPack: "Choisis un pack de crédits.",
+        buyAction: "Acheter",
+        purchasing: "Achat…",
+        purchasePending: "Achat en attente d'approbation.",
+        noCreditPacksAvailable: "Aucun pack disponible pour le moment.",
+        creditsAdded: "crédits ajoutés !"
     )
 
     /// Chaînes **anglaises**.
@@ -1231,7 +1244,13 @@ public extension DMStrings {
         revokeAction: "Revoke",
         chatDisabled: "Chat disabled",
         chatEnabledOn: "Chat on",
-        chatEnabledOff: "Chat off"
+        chatEnabledOff: "Chat off",
+        chooseCreditsPack: "Choose a credits pack.",
+        buyAction: "Buy",
+        purchasing: "Purchasing…",
+        purchasePending: "Purchase pending approval.",
+        noCreditPacksAvailable: "No packs available right now.",
+        creditsAdded: "credits added!"
     )
 
     /// Renvoie la table de chaînes d'une langue.
