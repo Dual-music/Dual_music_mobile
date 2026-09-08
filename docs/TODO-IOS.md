@@ -183,7 +183,7 @@ Restant, non bloquant pour l'App Store (le report, lui, est en place partout où
 - [ ] Construire l'écran de room/direct pour Concert (actuellement inexistant) avant de pouvoir
       y brancher quoi que ce soit.
 
-### 1.2 Achats intégrés StoreKit pour la recharge de crédits 🚧 CODE FAIT le 2026-09-08, setup manuel restant
+### 1.2 Achats intégrés StoreKit pour la recharge de crédits 🚧 CODE iOS FAIT + CI verte le 2026-09-08, setup manuel restant
 
 Décision produit prise avec l'utilisateur (option 1 de `RELEASE-IOS.md` §6.1, recommandée) :
 StoreKit natif REMPLACE CinetPay/Stripe **dans l'écran de recharge iOS uniquement** — Android
@@ -212,6 +212,10 @@ plutôt qu'une cible SPM dédiée qui aurait juste ajouté de la cérémonie san
   `CinetpayOperator` dans `PaymentDtos.swift`) laissés en place mais désormais inutilisés
   côté iOS (gardés au cas où, pas supprimés sans qu'on le demande).
 - `PaymentEndpoints.appleVerify` ajouté (`DomainModels/Endpoints.swift`).
+- **Piège Swift rencontré** : `import SwiftUI` + `import StoreKit` dans le même fichier rend le
+  nom nu `Transaction` ambigu — SwiftUI ET StoreKit exportent chacun un type `Transaction`
+  (celui de SwiftUI sert au contexte d'animation). Toujours qualifier `StoreKit.Transaction`
+  dès qu'un fichier utilisant l'API StoreKit importe aussi SwiftUI (systématique côté écrans).
 
 **Fait (backend — ⚠️ voir note critique plus bas)** :
 - `POST /payments/apple/verify` (authentifié, idempotent comme les autres endpoints
