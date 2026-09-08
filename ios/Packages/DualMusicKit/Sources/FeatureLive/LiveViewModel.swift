@@ -73,6 +73,20 @@ public final class LiveViewModel {
     /// `live-guest-<liveId>-<userId>`, `canPublish: false`.
     public private(set) var guestClients: [String: LiveRoomClient] = [:]
 
+    /// Modérateurs désignés de ce live (hôte + jusqu'à ``maxEventModerators`` spectateurs) —
+    /// visible par tous, pour que chacun sache qui d'autre a le pouvoir de bannir.
+    public private(set) var moderators: [EventModerator] = []
+    /// Hôte : spectateurs actuellement connectés (vivier du picker de désignation).
+    public private(set) var viewers: [DisplayProfile] = []
+    /// Vrai si le caller est un modérateur désigné (jamais vrai pour l'hôte lui-même, qui a
+    /// déjà tous les pouvoirs via ``isHost``).
+    public var isModerator: Bool {
+        guard let callerId else { return false }
+        return moderators.contains { $0.userId == callerId }
+    }
+    /// Vrai si le caller peut bannir/masquer un message : l'hôte ou un modérateur désigné.
+    public var canModerate: Bool { isHost || isModerator }
+
     private let liveId: String
     private let roomName: String
     private let callerId: String?
@@ -136,6 +150,7 @@ public final class LiveViewModel {
             }
         }
         Task { [weak self] in await self?.loadLiveSettings() }
+        Task { [weak self] in await self?.loadModerators() }
         if isHost {
             Task { [weak self] in await self?.loadDedications() }
             Task { [weak self] in await self?.loadJoinRequests() }
@@ -204,8 +219,9 @@ public final class LiveViewModel {
         try? await repository.reportLive(liveId: liveId, reason: reason)
     }
 
-    /// Hôte : bannit un spectateur (optimiste + persistant). Il ne peut plus écrire ni
-    /// rejoindre ; ses messages passés sont masqués (``visibleMessages``).
+    /// Hôte OU modérateur désigné (``canModerate``) : bannit un spectateur (optimiste +
+    /// persistant). Il ne peut plus écrire ni rejoindre ; ses messages passés sont masqués
+    /// (``visibleMessages``).
     /// - Parameters:
     ///   - userId: spectateur ciblé.
     ///   - reason: motif libre (ex. le message signalé), optionnel.
@@ -428,6 +444,32 @@ public final class LiveViewModel {
         await guestMedia.setCamera(enabled: !guestMedia.isCameraEnabled)
     }
 
+    // MARK: - Modérateurs désignés
+
+    /// (Re)charge les modérateurs désignés — appelé au démarrage + sur événement temps réel,
+    /// pour TOUT LE MONDE (pas que l'hôte : chacun doit savoir qui d'autre peut bannir).
+    public func loadModerators() async {
+        moderators = (try? await repository.listEventModerators(liveId: liveId)) ?? []
+    }
+
+    /// Hôte : (re)charge les spectateurs connectés (vivier du picker « désigner un modérateur »).
+    public func loadViewers() async {
+        guard isHost else { return }
+        viewers = (try? await repository.listCurrentViewers(liveId: liveId)) ?? []
+    }
+
+    /// Hôte : désigne un spectateur modérateur (ban/masquer message — jamais le chat on/off).
+    public func appointModerator(userId: String) async {
+        try? await repository.appointModerator(liveId: liveId, userId: userId)
+        await loadModerators()
+    }
+
+    /// Hôte : révoque un modérateur désigné.
+    public func revokeModerator(userId: String) async {
+        try? await repository.revokeModerator(liveId: liveId, userId: userId)
+        await loadModerators()
+    }
+
     // MARK: - Temps réel
 
     private func connectRealtime() async {
@@ -531,6 +573,13 @@ public final class LiveViewModel {
             default:
                 break
             }
+        })
+        // Modération : un modérateur a été désigné/révoqué par l'hôte → recharge pour tous.
+        subscriptions.append(live.onEvent(Realtime.Event.moderatorAppointed, as: EventModeratorPayload.self) { [weak self] _ in
+            Task { await self?.loadModerators() }
+        })
+        subscriptions.append(live.onEvent(Realtime.Event.moderatorRevoked, as: EventModeratorPayload.self) { [weak self] _ in
+            Task { await self?.loadModerators() }
         })
 
         await live.connect()

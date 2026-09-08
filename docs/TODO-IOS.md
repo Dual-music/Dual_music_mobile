@@ -72,7 +72,7 @@ pour ne pas avoir à redécouvrir ces causes en cas de régression.
 
 Écart vérifié dans le code (Android a la fonctionnalité, iOS ne l'a pas du tout) :
 
-### 1.0 Mode hôte Live 🚧 EN COURS (diffusion + Mes lives + dédicaces + invités ✅ CI verte le 2026-09-08 — première tentative, sans retry —, modérateurs à venir)
+### 1.0 Mode hôte Live 🚧 EN COURS (diffusion + Mes lives + dédicaces + invités + modérateurs ✅, chat on/off restant)
 
 Priorité de l'utilisateur : report/ban d'abord (fait, voir 1.1), puis mode hôte Live —
 dédicaces, invités sur scène, modérateurs — le plus gros chantier restant après le report/ban.
@@ -133,10 +133,21 @@ dédicaces, invités sur scène, modérateurs — le plus gros chantier restant 
     dans `LiveKitTokenRequest`, juste jamais exposé) — un invité publie avec `canPublish:
     true` sans être `isHost`, distinction nécessaire pour que le backend délivre les bons
     droits LiveKit.
-- [ ] Modérateurs désignés (jusqu'à 2 spectateurs nommés par l'hôte, peuvent bannir/masquer un
-      message mais jamais couper le chat) — pas commencé.
+- **Modérateurs désignés** (2026-09-08) : `ModerationEndpoints`/`EventModerator` — CE DTO EST
+  partagé côté Android (`shared-domain/moderation/ModerationDtos.kt`), contrairement au
+  report/ban de 1.1. Un modérateur = un spectateur nommé par l'hôte (max ``maxEventModerators``
+  = 2) qui hérite du pouvoir de bannir/masquer un message (``LiveViewModel.canModerate =
+  isHost || isModerator``) — jamais celui d'activer/désactiver le chat, réservé à l'hôte.
+  Bouton (icône « person.2 ») visible de l'hôte ET des modérateurs eux-mêmes (pour qu'ils
+  voient qui d'autre a ce pouvoir), ouvrant une feuille : liste des modérateurs (révocables
+  par l'hôte seulement) + section désignation (hôte uniquement — spectateurs connectés,
+  `GET /moderation/events/live/:id/viewers`, filtrés des modérateurs déjà désignés, désactivée
+  à la limite). Le geste de bannissement sur le chat (tap sur l'avatar) était gaté sur
+  `viewModel.isHost` — étendu à `viewModel.canModerate`. Temps réel :
+  `moderator:appointed`/`moderator:revoked` → tout le monde recharge la liste.
 - [ ] Chat on/off par l'hôte (`Live.chatEnabled` existe déjà côté données/décodage, jamais
-      exposé dans `LiveRoomView`) — petit, à faire avec les modérateurs.
+      exposé dans `LiveRoomView`) — dernier petit morceau du mode hôte Live, pouvoir EXCLUSIF
+      de l'hôte (jamais délégué aux modérateurs, voir ci-dessus).
 
 ### 1.1 Signalement + bannissement (report/ban) ✅ FAIT (partiellement) le 2026-09-07
 

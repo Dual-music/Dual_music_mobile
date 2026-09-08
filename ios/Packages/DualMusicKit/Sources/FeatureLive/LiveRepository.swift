@@ -371,4 +371,24 @@ public struct LiveRepository: Sendable {
     public func kickGuest(requestId: String) async throws {
         try await http.send(.post(LiveEndpoints.respondJoin(requestId), body: RespondJoinBody(status: "ended")))
     }
+
+    /// Hôte : spectateurs actuellement connectés (403 sinon) — vivier du picker de désignation.
+    public func listCurrentViewers(liveId: String) async throws -> [DisplayProfile] {
+        try await http.request(.get(ModerationEndpoints.viewers("live", liveId)), as: [DisplayProfile].self)
+    }
+
+    /// Modérateurs désignés de ce live (hôte + jusqu'à ``maxEventModerators`` spectateurs).
+    public func listEventModerators(liveId: String) async throws -> [EventModerator] {
+        try await http.request(.get(ModerationEndpoints.moderators("live", liveId)), as: [EventModerator].self)
+    }
+
+    /// Hôte : désigne un spectateur modérateur.
+    public func appointModerator(liveId: String, userId: String) async throws {
+        try await http.send(.post(ModerationEndpoints.moderators("live", liveId), body: AppointModeratorBody(userId: userId)))
+    }
+
+    /// Hôte : révoque un modérateur désigné.
+    public func revokeModerator(liveId: String, userId: String) async throws {
+        try await http.send(.delete(ModerationEndpoints.revokeModerator("live", liveId, userId)))
+    }
 }

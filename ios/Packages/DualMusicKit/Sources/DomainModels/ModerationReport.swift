@@ -36,3 +36,61 @@ public enum ReportReason: String, Sendable, CaseIterable {
     case spam
     case violence
 }
+
+/// Modération par évènement — hôte principal (artiste pour live/concert, manager pour
+/// duel/compétition) + jusqu'à ``maxEventModerators`` spectateurs qu'il désigne pour
+/// l'accompagner (bannir, masquer un message — jamais activer/désactiver le chat, réservé à
+/// l'hôte). Miroir de `shared-domain/moderation/ModerationDtos.kt` (DTO Kotlin PARTAGÉ,
+/// contrairement au signalement/bannissement ci-dessus).
+public enum ModerationEndpoints {
+    /// Spectateurs actuellement connectés à la room (hôte uniquement) — vivier du picker.
+    public static func viewers(_ type: String, _ id: String) -> String { "/moderation/events/\(type)/\(id)/viewers" }
+    /// Modérateurs désignés de cet évènement.
+    public static func moderators(_ type: String, _ id: String) -> String { "/moderation/events/\(type)/\(id)/moderators" }
+    /// Révoque un modérateur désigné (hôte uniquement).
+    public static func revokeModerator(_ type: String, _ id: String, _ userId: String) -> String {
+        "/moderation/events/\(type)/\(id)/moderators/\(userId)"
+    }
+}
+
+/// Nombre maximum de modérateurs désignés par évènement (miroir du backend).
+public let maxEventModerators = 2
+
+/// Un modérateur désigné, hydraté avec son profil d'affichage.
+public struct EventModerator: Decodable, Sendable, Identifiable, Equatable {
+    public let id: String
+    public let eventType: String
+    public let eventId: String
+    public let userId: String
+    public let appointedBy: String
+    public let user: DisplayProfile?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case eventType = "event_type"
+        case eventId = "event_id"
+        case userId = "user_id"
+        case appointedBy = "appointed_by"
+        case user
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.val(String.self, .id, "")
+        eventType = c.val(String.self, .eventType, "")
+        eventId = c.val(String.self, .eventId, "")
+        userId = c.val(String.self, .userId, "")
+        appointedBy = c.val(String.self, .appointedBy, "")
+        user = c.opt(DisplayProfile.self, .user)
+    }
+
+    /// Nom à afficher : profil hydraté, sinon les 8 premiers caractères de l'id.
+    @MainActor
+    public var displayName: String { user?.displayName ?? String(userId.prefix(8)) }
+}
+
+/// Corps de `POST /moderation/events/:type/:id/moderators`.
+public struct AppointModeratorBody: Encodable, Sendable {
+    public let userId: String
+    public init(userId: String) { self.userId = userId }
+}

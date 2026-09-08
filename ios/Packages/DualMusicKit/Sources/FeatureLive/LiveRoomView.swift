@@ -29,6 +29,7 @@ public struct LiveRoomView: View {
     @State private var dedicationPriceText = ""
     @State private var minPriceText = ""
     @State private var showGuestsSheet = false
+    @State private var showModeratorsSheet = false
 
     /// - Parameters:
     ///   - viewModel: état + actions du live.
@@ -126,6 +127,8 @@ public struct LiveRoomView: View {
         .sheet(isPresented: $showDedicationRequests) { dedicationRequestsSheet }
         // Hôte : demandes d'invité en attente (accepter/rejeter) + invités actifs (retirer).
         .sheet(isPresented: $showGuestsSheet) { guestsSheet }
+        // Hôte ET modérateurs (pour voir qui d'autre a ce pouvoir) : liste + désignation.
+        .sheet(isPresented: $showModeratorsSheet) { moderatorsSheet }
         // Feuille de motifs (viewer uniquement — voir bouton drapeau de `viewerBadge`).
         .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
             ForEach(ReportReason.allCases, id: \.self) { reason in
@@ -150,7 +153,7 @@ public struct LiveRoomView: View {
         }
     }
 
-    /// Compteur de spectateurs + bouton signaler, en haut.
+    /// Compteur de spectateurs + boutons signaler/modérateurs, en haut.
     private var viewerBadge: some View {
         HStack {
             if !viewModel.isHost {
@@ -163,6 +166,22 @@ public struct LiveRoomView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text(s.reportAction))
+            }
+            // Visible de l'hôte ET des modérateurs eux-mêmes (pour qu'ils voient qui d'autre a
+            // ce pouvoir) — pas seulement l'hôte.
+            if viewModel.canModerate {
+                Button {
+                    showModeratorsSheet = true
+                    if viewModel.isHost { Task { await viewModel.loadViewers() } }
+                } label: {
+                    Image(systemName: "person.2.fill")
+                        .font(DMFont.caption)
+                        .foregroundStyle(.white)
+                        .padding(theme.spacing.xs)
+                        .background(.black.opacity(0.4), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(s.moderators))
             }
             Spacer()
             HStack(spacing: 4) {
@@ -187,7 +206,7 @@ public struct LiveRoomView: View {
                         .font(DMFont.caption).bold()
                         .foregroundStyle(theme.colors.accent)
                         .onTapGesture {
-                            guard viewModel.isHost, message.userId != hostUserId else { return }
+                            guard viewModel.canModerate, message.userId != hostUserId else { return }
                             banTarget = message
                         }
                     Text(message.content)
@@ -728,6 +747,84 @@ public struct LiveRoomView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text(s.removeGuestAction))
+            }
+        }
+    }
+
+    // MARK: - Modérateurs désignés
+
+    /// Feuille : modérateurs désignés (révocables par l'hôte) + désignation d'un spectateur
+    /// connecté (hôte uniquement). Visible aussi des modérateurs eux-mêmes, en lecture seule
+    /// pour la partie désignation.
+    private var moderatorsSheet: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text(s.moderators).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+            Text(s.moderatorsHint).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+
+            if viewModel.moderators.isEmpty {
+                Text(s.noModeratorsYet).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            } else {
+                ForEach(viewModel.moderators) { moderator in
+                    moderatorRow(moderator)
+                }
+            }
+
+            if viewModel.isHost {
+                Divider()
+                Text(s.designateViewer).font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+                designateViewerSection
+            }
+
+            Spacer()
+        }
+        .padding(theme.spacing.lg)
+        .presentationDetents([.medium])
+        .dmScreenBackground()
+    }
+
+    /// Ligne d'un modérateur désigné — révocable par l'hôte seulement.
+    private func moderatorRow(_ moderator: EventModerator) -> some View {
+        HStack {
+            Text(moderator.displayName).font(DMFont.body).foregroundStyle(theme.colors.foreground)
+            Spacer()
+            if viewModel.isHost {
+                Button { Task { await viewModel.revokeModerator(userId: moderator.userId) } } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(theme.colors.destructive)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(s.revokeAction))
+            }
+        }
+    }
+
+    /// Picker de désignation (hôte uniquement) : spectateurs connectés, hors modérateurs déjà
+    /// désignés, désactivé à la limite (``maxEventModerators``).
+    private var designateViewerSection: some View {
+        let appointedIds = Set(viewModel.moderators.map(\.userId))
+        let pickable = viewModel.viewers.filter { !appointedIds.contains($0.id) }
+        return Group {
+            if viewModel.moderators.count >= maxEventModerators {
+                Text(s.atModeratorLimit).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            } else if pickable.isEmpty {
+                Text(s.noViewersConnected).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                        ForEach(pickable) { viewer in
+                            HStack {
+                                Text(viewer.displayName).font(DMFont.body).foregroundStyle(theme.colors.foreground)
+                                Spacer()
+                                Button(s.appointAction) { Task { await viewModel.appointModerator(userId: viewer.id) } }
+                                    .font(DMFont.caption).bold()
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(theme.colors.primary)
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 180)
             }
         }
     }

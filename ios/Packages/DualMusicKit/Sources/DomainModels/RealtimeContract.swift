@@ -83,6 +83,12 @@ public enum Realtime {
         /// `/live` · room live — demande d'invité acceptée/rejetée/terminée/annulée. Payload
         /// ``JoinEventPayload``.
         public static let joinUpdate = "join:update"
+        /// `/live` · room live — un modérateur d'évènement a été désigné. Payload
+        /// ``EventModeratorPayload``.
+        public static let moderatorAppointed = "moderator:appointed"
+        /// `/live` · room live — un modérateur d'évènement a été révoqué. Payload
+        /// ``EventModeratorPayload``.
+        public static let moderatorRevoked = "moderator:revoked"
     }
 }
 
@@ -339,5 +345,25 @@ public struct JoinEventPayload: Decodable, Sendable {
         liveId = c.opt(String.self, .liveId)
         userId = c.opt(String.self, .userId)
         status = c.opt(String.self, .status)
+    }
+}
+
+/// `moderator:appointed` / `moderator:revoked` — un modérateur d'évènement a été nommé/révoqué.
+public struct EventModeratorPayload: Decodable, Sendable {
+    public let eventType: String?
+    public let eventId: String?
+    public let userId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case eventType = "event_type"
+        case eventId = "event_id"
+        case userId = "user_id"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        eventType = c.opt(String.self, .eventType)
+        eventId = c.opt(String.self, .eventId)
+        userId = c.opt(String.self, .userId)
     }
 }

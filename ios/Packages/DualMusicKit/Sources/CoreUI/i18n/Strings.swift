@@ -423,6 +423,15 @@ public struct DMStrings: Sendable {
     public let leaveStageAction: String
     public let guestsEnabledOn: String
     public let guestsEnabledOff: String
+    // Modérateurs désignés (hôte + fan).
+    public let moderators: String
+    public let moderatorsHint: String
+    public let noModeratorsYet: String
+    public let designateViewer: String
+    public let atModeratorLimit: String
+    public let noViewersConnected: String
+    public let appointAction: String
+    public let revokeAction: String
 }
 
 // MARK: - Tables de traduction
@@ -811,7 +820,15 @@ public extension DMStrings {
         removeGuestAction: "Retirer l'invité",
         leaveStageAction: "Descendre de scène",
         guestsEnabledOn: "Invités activés",
-        guestsEnabledOff: "Invités coupés"
+        guestsEnabledOff: "Invités coupés",
+        moderators: "Modérateurs",
+        moderatorsHint: "Un modérateur peut bannir un spectateur ou masquer un message, comme vous.",
+        noModeratorsYet: "Aucun modérateur désigné.",
+        designateViewer: "Désigner un spectateur",
+        atModeratorLimit: "Nombre maximum de modérateurs atteint (2).",
+        noViewersConnected: "Aucun spectateur connecté pour le moment.",
+        appointAction: "Nommer",
+        revokeAction: "Révoquer"
     )
 
     /// Chaînes **anglaises**.
@@ -1196,7 +1213,15 @@ public extension DMStrings {
         removeGuestAction: "Remove guest",
         leaveStageAction: "Leave stage",
         guestsEnabledOn: "Guests on",
-        guestsEnabledOff: "Guests off"
+        guestsEnabledOff: "Guests off",
+        moderators: "Moderators",
+        moderatorsHint: "A moderator can ban a viewer or hide a message, just like you.",
+        noModeratorsYet: "No moderator designated yet.",
+        designateViewer: "Designate a viewer",
+        atModeratorLimit: "Maximum number of moderators reached (2).",
+        noViewersConnected: "No viewers connected right now.",
+        appointAction: "Appoint",
+        revokeAction: "Revoke"
     )
 
     /// Renvoie la table de chaînes d'une langue.
