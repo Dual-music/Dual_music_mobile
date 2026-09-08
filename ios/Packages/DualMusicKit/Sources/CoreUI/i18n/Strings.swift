@@ -432,6 +432,10 @@ public struct DMStrings: Sendable {
     public let noViewersConnected: String
     public let appointAction: String
     public let revokeAction: String
+    // Chat on/off (hôte).
+    public let chatDisabled: String
+    public let chatEnabledOn: String
+    public let chatEnabledOff: String
 }
 
 // MARK: - Tables de traduction
@@ -828,7 +832,10 @@ public extension DMStrings {
         atModeratorLimit: "Nombre maximum de modérateurs atteint (2).",
         noViewersConnected: "Aucun spectateur connecté pour le moment.",
         appointAction: "Nommer",
-        revokeAction: "Révoquer"
+        revokeAction: "Révoquer",
+        chatDisabled: "Chat désactivé",
+        chatEnabledOn: "Chat activé",
+        chatEnabledOff: "Chat coupé"
     )
 
     /// Chaînes **anglaises**.
@@ -1221,7 +1228,10 @@ public extension DMStrings {
         atModeratorLimit: "Maximum number of moderators reached (2).",
         noViewersConnected: "No viewers connected right now.",
         appointAction: "Appoint",
-        revokeAction: "Revoke"
+        revokeAction: "Revoke",
+        chatDisabled: "Chat disabled",
+        chatEnabledOn: "Chat on",
+        chatEnabledOff: "Chat off"
     )
 
     /// Renvoie la table de chaînes d'une langue.

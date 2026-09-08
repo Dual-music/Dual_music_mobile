@@ -101,6 +101,7 @@ public struct LiveRoomView: View {
                     hostControls
                     dedicationSettingsRow
                     guestSettingsRow
+                    chatSettingsRow
                 } else {
                     if viewModel.isGuestAccepted { guestSelfControls }
                     actionBar
@@ -228,17 +229,32 @@ public struct LiveRoomView: View {
         }
     }
 
-    /// Barre d'action : saisie de message + bouton cadeau.
+    /// Barre d'action : saisie de message + bouton cadeau. La saisie est verrouillée si l'hôte
+    /// a désactivé le chat pour tous (parité web) — le reste (dédicace, lever la main, cadeau)
+    /// reste disponible, seule la messagerie est concernée.
     private var actionBar: some View {
         HStack(spacing: theme.spacing.sm) {
-            TextField(s.saySomething, text: $draft)
-                .textFieldStyle(.plain)
-                .foregroundStyle(.white)
+            if viewModel.liveChatEnabled {
+                TextField(s.saySomething, text: $draft)
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, theme.spacing.md)
+                    .padding(.vertical, theme.spacing.sm)
+                    .background(.white.opacity(0.15), in: Capsule())
+                    .submitLabel(.send)
+                    .onSubmit(send)
+            } else {
+                HStack(spacing: 6) {
+                    Image(systemName: "lock.fill")
+                    Text(s.chatDisabled)
+                }
+                .font(DMFont.caption)
+                .foregroundStyle(.white.opacity(0.7))
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, theme.spacing.md)
                 .padding(.vertical, theme.spacing.sm)
                 .background(.white.opacity(0.15), in: Capsule())
-                .submitLabel(.send)
-                .onSubmit(send)
+            }
 
             if !viewModel.isGuestAccepted && viewModel.liveAllowGuests {
                 Button {
@@ -664,6 +680,25 @@ public struct LiveRoomView: View {
             .padding(.horizontal, theme.spacing.md)
             .padding(.vertical, theme.spacing.sm)
             .background(viewModel.liveAllowGuests ? theme.colors.primary : .black.opacity(0.35), in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Hôte : réglage du chat pour ce live — pouvoir EXCLUSIF de l'hôte, jamais délégué aux
+    /// modérateurs désignés (eux ne peuvent que bannir/masquer un message).
+    private var chatSettingsRow: some View {
+        Button {
+            viewModel.setChatEnabled(!viewModel.liveChatEnabled)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                Text(viewModel.liveChatEnabled ? s.chatEnabledOn : s.chatEnabledOff)
+            }
+            .font(DMFont.caption).bold()
+            .foregroundStyle(.white)
+            .padding(.horizontal, theme.spacing.md)
+            .padding(.vertical, theme.spacing.sm)
+            .background(viewModel.liveChatEnabled ? theme.colors.primary : .black.opacity(0.35), in: Capsule())
         }
         .buttonStyle(.plain)
     }

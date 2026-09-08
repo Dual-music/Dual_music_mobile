@@ -72,7 +72,7 @@ pour ne pas avoir à redécouvrir ces causes en cas de régression.
 
 Écart vérifié dans le code (Android a la fonctionnalité, iOS ne l'a pas du tout) :
 
-### 1.0 Mode hôte Live 🚧 EN COURS (diffusion + Mes lives + dédicaces + invités + modérateurs ✅ CI verte le 2026-09-08, chat on/off restant)
+### 1.0 Mode hôte Live ✅ TERMINÉ le 2026-09-08
 
 Priorité de l'utilisateur : report/ban d'abord (fait, voir 1.1), puis mode hôte Live —
 dédicaces, invités sur scène, modérateurs — le plus gros chantier restant après le report/ban.
@@ -145,9 +145,15 @@ dédicaces, invités sur scène, modérateurs — le plus gros chantier restant 
   à la limite). Le geste de bannissement sur le chat (tap sur l'avatar) était gaté sur
   `viewModel.isHost` — étendu à `viewModel.canModerate`. Temps réel :
   `moderator:appointed`/`moderator:revoked` → tout le monde recharge la liste.
-- [ ] Chat on/off par l'hôte (`Live.chatEnabled` existe déjà côté données/décodage, jamais
-      exposé dans `LiveRoomView`) — dernier petit morceau du mode hôte Live, pouvoir EXCLUSIF
-      de l'hôte (jamais délégué aux modérateurs, voir ci-dessus).
+- **Chat on/off** (2026-09-08) : `Live.chatEnabled`/`LiveSettingsPayload.chatEnabled`
+  existaient déjà côté données/décodage, jamais exposés dans `LiveRoomView` — dernier petit
+  morceau du mode hôte Live. Toggle hôte (pouvoir EXCLUSIF, jamais délégué aux modérateurs) ;
+  côté fan, la saisie de message se verrouille (icône cadenas + « Chat désactivé ») quand
+  désactivé, mais dédicace/lever la main/cadeau restent disponibles — seule la messagerie est
+  concernée, parité web.
+
+**Étape 1.0 terminée** — mode hôte Live complet (diffusion, Mes lives, dédicaces, invités sur
+scène, modérateurs désignés, chat on/off), tout vérifié CI verte.
 
 ### 1.1 Signalement + bannissement (report/ban) ✅ FAIT (partiellement) le 2026-09-07
 

@@ -52,6 +52,9 @@ public final class LiveViewModel {
     public private(set) var liveAllowsDedications: Bool = true
     /// Demandes d'invité (« lever la main ») activées pour CE live (réglage hôte).
     public private(set) var liveAllowGuests: Bool = true
+    /// Chat activé pour CE live (réglage hôte, réactif en direct via `settings`) — pouvoir
+    /// EXCLUSIF de l'hôte, jamais délégué aux modérateurs désignés.
+    public private(set) var liveChatEnabled: Bool = true
     /// Confirmation « dédicace envoyée » (ou message d'échec/décision de l'hôte) affichée au fan.
     public private(set) var dedicationFeedback: String?
     public func clearDedicationFeedback() { dedicationFeedback = nil }
@@ -168,6 +171,7 @@ public final class LiveViewModel {
         if let live = try? await repository.live(id: liveId) {
             liveAllowsDedications = live.allowsDedications
             liveAllowGuests = live.allowGuests
+            liveChatEnabled = live.chatEnabled
             dedicationMinPriceCredits = live.dedicationMinPriceCredits ?? globalDefault
         } else {
             dedicationMinPriceCredits = globalDefault
@@ -444,6 +448,13 @@ public final class LiveViewModel {
         await guestMedia.setCamera(enabled: !guestMedia.isCameraEnabled)
     }
 
+    /// Hôte : active/désactive le chat pour ce live, en direct — pouvoir EXCLUSIF de l'hôte,
+    /// jamais délégué aux modérateurs désignés.
+    public func setChatEnabled(_ enabled: Bool) {
+        liveChatEnabled = enabled
+        Task { try? await repository.updateLiveSettings(liveId: liveId, chatEnabled: enabled) }
+    }
+
     // MARK: - Modérateurs désignés
 
     /// (Re)charge les modérateurs désignés — appelé au démarrage + sur événement temps réel,
@@ -517,6 +528,7 @@ public final class LiveViewModel {
             self.liveAllowsDedications = payload.allowsDedications
             self.liveAllowGuests = payload.allowGuests
             if let price = payload.dedicationMinPriceCredits { self.dedicationMinPriceCredits = price }
+            if let chatEnabled = payload.chatEnabled { self.liveChatEnabled = chatEnabled }
         })
         // Dédicaces : (a) hôte — badge + liste auto-rafraîchis sans avoir à ouvrir la feuille ;
         // (b) fan concerné — bannière immédiate de la décision de l'hôte (accepté = débité
