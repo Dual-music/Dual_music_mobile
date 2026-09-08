@@ -100,7 +100,7 @@ public final class RechargeViewModel {
     /// crédite. `finish()` seulement APRÈS un règlement réussi — sinon StoreKit la
     /// reproposera à la prochaine occasion (voulu : un achat déjà payé ne doit jamais se
     /// perdre à cause d'un appel réseau raté).
-    private func settle(_ transaction: Transaction) async {
+    private func settle(_ transaction: StoreKit.Transaction) async {
         do {
             let response = try await http.request(
                 .post(
@@ -121,7 +121,7 @@ public final class RechargeViewModel {
 
     /// Écoute les transactions terminées hors du flux d'achat direct.
     private func observeTransactionUpdates() async {
-        for await update in Transaction.updates {
+        for await update in StoreKit.Transaction.updates {
             guard let transaction = try? Self.checkVerified(update) else { continue }
             await settle(transaction)
         }
