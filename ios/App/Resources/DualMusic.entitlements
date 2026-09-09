@@ -8,8 +8,18 @@
 	  `aps-environment` : notifications push. `development` en local ; Xcode/Fastlane le
 	  bascule automatiquement en `production` lors d'un archivage App Store, à condition que
 	  la capacité « Push Notifications » soit activée sur l'App ID (developer.apple.com).
+
+	  `com.apple.developer.applesignin` : Sign in with Apple (règle App Store 4.8, requise
+	  dès qu'une connexion sociale tierce comme Google est proposée). Ne suffit PAS seule :
+	  la capacité « Sign In with Apple » doit AUSSI être activée manuellement sur l'App ID
+	  (developer.apple.com → Certificates, Identifiers & Profiles → Identifiers → App ID),
+	  sinon l'authentification échoue au runtime (pas d'erreur de compilation).
 	-->
 	<key>aps-environment</key>
 	<string>development</string>
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
 </dict>
 </plist>

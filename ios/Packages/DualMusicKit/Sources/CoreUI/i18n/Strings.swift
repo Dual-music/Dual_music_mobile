@@ -368,6 +368,7 @@ public struct DMStrings: Sendable {
     public let errCreateFailed: String
     public let errCodeInvalid: String
     public let errGoogleSignInFailed: String
+    public let errAppleSignInFailed: String
     public let errNameRequired: String
     public let errPaymentFailed: String
     public let errWalletLoadFailed: String
@@ -781,6 +782,7 @@ public extension DMStrings {
         errCreateFailed: "Création impossible.",
         errCodeInvalid: "Code incorrect ou expiré.",
         errGoogleSignInFailed: "Connexion Google impossible.",
+        errAppleSignInFailed: "Connexion Apple impossible.",
         errNameRequired: "Le nom est requis.",
         errPaymentFailed: "Paiement impossible.",
         errWalletLoadFailed: "Impossible de charger le portefeuille.",
@@ -1183,6 +1185,7 @@ public extension DMStrings {
         errCreateFailed: "Creation failed.",
         errCodeInvalid: "Wrong or expired code.",
         errGoogleSignInFailed: "Google sign-in failed.",
+        errAppleSignInFailed: "Apple sign-in failed.",
         errNameRequired: "Name is required.",
         errPaymentFailed: "Payment failed.",
         errWalletLoadFailed: "Could not load the wallet.",

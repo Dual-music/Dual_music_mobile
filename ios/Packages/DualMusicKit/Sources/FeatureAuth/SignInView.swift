@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 import CoreUI
 import DomainModels
 
@@ -11,6 +12,7 @@ import DomainModels
 public struct SignInView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
+    @Environment(\.colorScheme) private var colorScheme
 
     @Bindable private var viewModel: AuthViewModel
 
@@ -43,6 +45,24 @@ public struct SignInView: View {
                             isEnabled: viewModel.canSubmit
                         ) {
                             Task { await viewModel.submit() }
+                        }
+
+                        // Bouton système Apple : ni SDK tiers ni fournisseur à injecter
+                        // (contrairement à Google) — `AuthenticationServices` est un
+                        // framework Apple standard, toujours disponible. Requis par la
+                        // règle App Store 4.8 dès qu'une connexion sociale tierce (Google)
+                        // est proposée ; le texte/logo sont imposés par Apple, non
+                        // personnalisables (Human Interface Guidelines).
+                        if viewModel.mode == .login {
+                            SignInWithAppleButton(
+                                .signIn,
+                                onRequest: { request in request.requestedScopes = [.fullName, .email] },
+                                onCompletion: { result in handleAppleSignIn(result) }
+                            )
+                            .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                            .frame(height: 50)
+                            .clipShape(RoundedRectangle(cornerRadius: theme.radius.md, style: .continuous))
+                            .disabled(viewModel.isSubmitting)
                         }
 
                         if viewModel.mode == .login, viewModel.googleIdTokenProvider != nil {
@@ -118,6 +138,26 @@ public struct SignInView: View {
     private var mismatchHelp: String? {
         guard !viewModel.confirmPassword.isEmpty, viewModel.confirmPassword != viewModel.password else { return nil }
         return s.passwordsDontMatch
+    }
+
+    /// Extrait l'identity token (+ le nom complet, seulement s'il vient d'être fourni par
+    /// Apple — première autorisation uniquement) du résultat `SignInWithAppleButton`, puis
+    /// délègue à `AuthViewModel`. Un échec/annulation reste silencieux (`.canceled` n'est
+    /// pas une erreur à afficher), exactement comme un utilisateur qui ferme le sélecteur
+    /// de compte Google sans choisir.
+    private func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) {
+        guard case let .success(authorization) = result,
+              let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let tokenData = credential.identityToken,
+              let identityToken = String(data: tokenData, encoding: .utf8)
+        else { return }
+
+        let fullName = credential.fullName.flatMap { components -> String? in
+            let formatted = PersonNameComponentsFormatter.localizedString(from: components, style: .default)
+            return formatted.trimmed.nilIfBlank
+        }
+
+        Task { await viewModel.signInWithApple(identityToken: identityToken, fullName: fullName) }
     }
 
     // MARK: - Liens de bascule

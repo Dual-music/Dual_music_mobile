@@ -199,6 +199,21 @@ public struct GoogleNativeRequest: Encodable, Sendable {
     public init(idToken: String) { self.idToken = idToken }
 }
 
+/// Corps de `POST /auth/oauth/apple/native`.
+///
+/// `fullName` : Apple ne le fournit QUE lors de la toute première autorisation (jamais aux
+/// connexions suivantes) — absent (`nil`) la plupart du temps, le backend garde alors le
+/// profil sans nom (à compléter depuis l'écran profil), exactement comme pour Google quand
+/// `profile.name` est absent.
+public struct AppleNativeRequest: Encodable, Sendable {
+    public let identityToken: String
+    public let fullName: String?
+    public init(identityToken: String, fullName: String? = nil) {
+        self.identityToken = identityToken
+        self.fullName = fullName
+    }
+}
+
 /// Corps de `POST /notifications/devices` — enregistrement du jeton push de l'appareil.
 public struct DeviceTokenRequest: Encodable, Sendable {
     public let token: String

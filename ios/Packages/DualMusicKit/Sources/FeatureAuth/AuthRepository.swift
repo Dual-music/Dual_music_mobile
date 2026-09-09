@@ -59,6 +59,27 @@ public struct AuthRepository: Sendable {
         return session
     }
 
+    /// Connexion Apple **native** (`ASAuthorizationController`) : envoie l'identity token
+    /// (+ le nom complet si Apple vient de le fournir, uniquement à la toute première
+    /// autorisation) au backend, qui le vérifie, résout/crée le compte et renvoie une
+    /// session. La persiste.
+    /// - Parameters:
+    ///   - identityToken: JWT signé par Apple (`ASAuthorizationAppleIDCredential`).
+    ///   - fullName: nom complet, uniquement disponible au premier login.
+    @discardableResult
+    public func loginWithApple(identityToken: String, fullName: String?) async throws -> AuthSession {
+        let session: AuthSession = try await http.request(
+            .post(
+                AuthEndpoints.oauthAppleNative,
+                body: AppleNativeRequest(identityToken: identityToken, fullName: fullName),
+                anonymous: true
+            ),
+            as: AuthSession.self
+        )
+        await tokenStore.setTokens(access: session.accessToken, refresh: session.refreshToken)
+        return session
+    }
+
     /// Utilisateur courant (`GET /auth/me`) — réhydratation au démarrage.
     public func me() async throws -> MeResponse {
         try await http.request(.get(AuthEndpoints.me), as: MeResponse.self)

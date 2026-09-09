@@ -27,6 +27,8 @@ public enum AuthEndpoints {
     public static let oauthGoogleStart = "/auth/oauth/google"
     /// Échange natif de l'ID token Google (mobile).
     public static let oauthGoogleNative = "/auth/oauth/google/native"
+    /// Échange natif de l'identity token Apple (Sign in with Apple, iOS).
+    public static let oauthAppleNative = "/auth/oauth/apple/native"
 }
 
 /// Chemins du profil / utilisateur.

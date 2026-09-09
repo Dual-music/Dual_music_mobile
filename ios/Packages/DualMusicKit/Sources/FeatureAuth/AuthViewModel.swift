@@ -205,6 +205,25 @@ public final class AuthViewModel {
         }
     }
 
+    /// Connexion Apple native : reçoit l'identity token déjà extrait par la vue (le bouton
+    /// système `SignInWithAppleButton` gère lui-même le SDK `AuthenticationServices`, aucun
+    /// fournisseur à injecter contrairement à Google — framework système, pas un SDK tiers).
+    /// - Parameters:
+    ///   - identityToken: JWT signé par Apple.
+    ///   - fullName: nom complet, seulement si Apple vient de le fournir (premier login).
+    public func signInWithApple(identityToken: String, fullName: String?) async {
+        isSubmitting = true
+        errorMessage = nil
+        defer { isSubmitting = false }
+        do {
+            let session = try await repository.loginWithApple(identityToken: identityToken, fullName: fullName)
+            authState = .signedIn(user: session.user)
+            onSignedIn?()
+        } catch {
+            errorMessage = (error as? APIError)?.message ?? AppStrings.current.errAppleSignInFailed
+        }
+    }
+
     /// Vérifie le code email ; en cas de succès, passe à la saisie des infos de profil.
     public func verifyEmail() async {
         guard case let .pendingEmailVerification(user, _) = authState else { return }
