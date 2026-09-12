@@ -212,19 +212,36 @@ propre JSON — `moderation/reports/live` pour live/duel/concert, `moderation/re
   - Navigation câblée : `MainShellView`'s onglet Concerts n'avait jamais son `onOpen` branché
     (`ConcertsListView(viewModel: container.concerts)` sans callback) — ajouté `concertsTab`
     (même patron que `duelsTab`/`competitionsTab`).
-  - Écart assumé avec Android, délibérément repoussé (scope MVP validé) : **dédicaces en
-    direct avec accepter/rejeter côté artiste** (Concert n'a aujourd'hui que l'achat one-shot
-    `ConcertFeature.purchaseDedication`, jamais branché à une UI — contrairement à Live qui a
-    la feuille complète), **modérateurs désignés** (`EventModerator`, déjà générique,
-    réutilisable sans repartir de zéro), **likes + réactions emoji**, et **filtre couleur
-    vidéo** (`setColorFilter` côté Android — nécessiterait une capacité de traitement vidéo
-    absente de `CoreLiveMedia` iOS aujourd'hui, chantier à part entière).
+  - Écarts initialement dépriorisés (scope MVP), **tous comblés le 2026-09-12** sauf le
+    dernier (voir « Restant » ci-dessous) :
+    - **Modérateurs désignés** — répliqué depuis Live vers **Duel, Compétition ET Concert**
+      (`EventModerator`/`ModerationEndpoints` déjà génériques, juste paramétrés par type
+      d'évènement) : `loadModerators`/`loadViewers`/`appointModerator`/`revokeModerator` +
+      `moderatorsSheet`, `canModerate` (manager/hôte OU modérateur) remplace le garde
+      manager-seul du tap-to-ban partout où il n'existait que ça.
+    - **Dédicaces en direct avec accepter/rejeter côté artiste** pour Concert — réutilise le
+      même contrat REST partagé que Live (`concertType: "artist_concert"`,
+      `dedicationsArtistMine`/`dedicationAccept`/`dedicationReject`/`dedicationDeliver`).
+      Différence réelle avec Live : **pas de surcharge de prix minimum par concert ni de
+      toggle on/off depuis la room** côté backend (`allowsDedications` fixé à la création,
+      seul `economic_config.dedication` — jamais `dedication_live` — donne le prix plancher).
+    - **Likes + réactions emoji** pour Concert — a nécessité un **ajout d'infrastructure**
+      réutilisable partout : `NamespaceSession` (`CoreRealtime`) n'avait aucune méthode
+      d'émission générique vers le serveur (seulement `join`/`leave`/écoute) ; ajouté
+      `broadcast(channel:event:payload:)` + le contrat `BroadcastEnvelope`/`BroadcastPayload`
+      (miroir de `shared-domain/realtime/BroadcastEnvelope.kt`, scope actuel limité à
+      `emoji`/`count` — extensible si un futur chantier a besoin des autres champs Kotlin
+      `slot`/`artistId`/`identity`/…). `sendLike` diffuse un **compteur absolu**, jamais un
+      delta (une valeur plus ancienne reçue en désordre est ignorée). Réutilise
+      `GiftBurstView` pour l'animation plutôt qu'un nouveau composant — affiche une réaction à
+      la fois (pas l'essaim de bulles multiple d'Android), compromis jugé raisonnable pour ce
+      chantier.
 
 Restant, non bloquant pour l'App Store :
-- [ ] Vérifier la CI iOS pour ce commit (Concert) avant de considérer l'Étape 1.1 réellement
-      terminée.
-- [ ] Dédicaces en direct, modérateurs désignés, likes/réactions, filtre couleur pour Concert
-      (voir écarts ci-dessus) — aucun n'est bloquant, à faire si/quand utile.
+- [ ] **Filtre couleur vidéo** pour Concert (`setColorFilter` côté Android) — nécessiterait une
+      capacité de traitement vidéo (pipeline `VideoProcessor` custom) absente de
+      `CoreLiveMedia` iOS aujourd'hui. Chantier de nature différente des précédents (pas de
+      réutilisation de pattern existant) — à cadrer sérieusement avant de s'y lancer.
 
 ### 1.2 Achats intégrés StoreKit pour la recharge de crédits ✅ CODE FAIT + CI verte (iOS + backend) le 2026-09-09, setup manuel restant
 
