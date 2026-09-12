@@ -237,11 +237,24 @@ propre JSON — `moderation/reports/live` pour live/duel/concert, `moderation/re
       la fois (pas l'essaim de bulles multiple d'Android), compromis jugé raisonnable pour ce
       chantier.
 
-Restant, non bloquant pour l'App Store :
-- [ ] **Filtre couleur vidéo** pour Concert (`setColorFilter` côté Android) — nécessiterait une
-      capacité de traitement vidéo (pipeline `VideoProcessor` custom) absente de
-      `CoreLiveMedia` iOS aujourd'hui. Chantier de nature différente des précédents (pas de
-      réutilisation de pattern existant) — à cadrer sérieusement avant de s'y lancer.
+**Filtre couleur vidéo** (2026-09-12) — fait, dernier extra de la série. Contrairement à
+Android (qui a dû contourner une visibilité package-private du SDK LiveKit pour écrire un
+shader GL custom, `livekit.org.webrtc.ColorFilterGlDrawer`), le SDK LiveKit **Swift** expose un
+protocole `VideoProcessor` **public** (`weak var processor` réglable directement sur
+`LocalVideoTrack`) — vérifié en lisant le code source réel du SDK
+(`Sources/LiveKit/Protocols/VideoProcessor.swift`,
+`Sources/LiveKit/VideoProcessors/BackgroundBlurVideoProcessor.swift` comme référence de bonnes
+pratiques), pas une doc tierce. `VideoFilterPresets.swift` porte les 12 presets
+`ColorFilterVideoProcessor.kt` à l'identique (mêmes ids/valeurs numériques/ordre de
+composition, gardé en ligne-major — pas de conversion colonne-major nécessaire, `CIColorMatrix`
+attend directement les coefficients par canal). `ColorFilterVideoProcessor.swift` applique la
+matrice via Core Image, rendu **toujours dans un buffer de sortie séparé et réutilisé (pool)**,
+jamais dans le buffer source (pattern copié du `BackgroundBlurVideoProcessor` officiel, pour
+éviter les artefacts de lecture/écriture simultanée). Câblé dans `LiveRoomClient` (partagé par
+Live/Duel/Concert/Compétition) — le processor est réattaché à chaque (ré)activation caméra, la
+piste locale changeant d'identité à chaque fois. UI (picker en grille) ajoutée pour Concert
+uniquement pour l'instant ; les 3 autres écrans peuvent réutiliser la même capacité sans coût
+d'infrastructure supplémentaire, juste le picker à ajouter.
 
 ### 1.2 Achats intégrés StoreKit pour la recharge de crédits ✅ CODE FAIT + CI verte (iOS + backend) le 2026-09-09, setup manuel restant
 
