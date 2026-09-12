@@ -182,6 +182,22 @@ public struct ConcertRepository: Sendable {
     public func deliverDedication(id: String) async throws {
         try await http.send(.post(ConcertEndpoints.dedicationDeliver(id)))
     }
+
+    /// Compteur de « j'aime » persistant (endpoint générique des lives, réutilisé tel quel).
+    /// Best-effort : une erreur réseau donne juste `0`.
+    public func likesCount(concertId: String) async -> Int {
+        (try? await http.request(.get("/lives/\(concertId)/likes"), as: LikesResponse.self))?.likes ?? 0
+    }
+
+    /// Ajoute un « j'aime » persistant. Best-effort, jamais bloquant pour l'utilisateur.
+    public func likeConcert(concertId: String) async {
+        try? await http.send(.post("/lives/\(concertId)/likes"))
+    }
+}
+
+/// Réponse de `GET /lives/:id/likes`.
+struct LikesResponse: Decodable, Sendable {
+    let likes: Int
 }
 
 /// Corps de `POST /concerts/:id/messages`.

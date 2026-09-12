@@ -56,6 +56,13 @@ public struct ConcertGift: Identifiable, Sendable, Equatable {
     public let value: Double
 }
 
+/// Réaction emoji flottante à animer (la mienne ou celle d'un autre spectateur, relayées
+/// identiquement une fois émises).
+public struct FloatingEmoji: Identifiable, Sendable, Equatable {
+    public let id: Int
+    public let emoji: String
+}
+
 /// Orchestre l'expérience d'un concert (viewer + artiste) : vidéo LiveKit + chat/cadeaux/
 /// présence temps réel (Socket.IO) + billetterie + report/ban.
 ///
@@ -73,6 +80,10 @@ public final class ConcertRoomViewModel {
     public private(set) var giftFeed: [ConcertGift] = []
     public private(set) var viewerCount: Int = 0
     public private(set) var errorMessage: String?
+    /// Compteur de « j'aime » partagé (persistant + valeur absolue relayée en direct, jamais
+    /// un delta — une valeur plus ancienne reçue en désordre est ignorée).
+    public private(set) var likes: Int = 0
+    public private(set) var emojiFeed: [FloatingEmoji] = []
 
     /// Spectateurs bannis de ce concert (ids) — leurs messages restent en mémoire mais sont
     /// masqués de l'affichage (``visibleMessages``), pas supprimés.
@@ -124,6 +135,7 @@ public final class ConcertRoomViewModel {
     private let repository: ConcertRepository
 
     private var giftCounter = 0
+    private var emojiCounter = 0
     private var subscriptions: [Subscription] = []
     private var liveSession: NamespaceSession?
     private var chatSession: NamespaceSession?
@@ -188,6 +200,10 @@ public final class ConcertRoomViewModel {
             self.bannedUserIds.formUnion(banned)
         }
         Task { [weak self] in await self?.loadModerators() }
+        Task { [weak self] in
+            guard let self else { return }
+            self.likes = await self.repository.likesCount(concertId: self.concertId)
+        }
         if allowsDedications {
             Task { [weak self] in
                 guard let self else { return }
@@ -285,6 +301,33 @@ public final class ConcertRoomViewModel {
     /// Retire le cadeau le plus ancien après son animation.
     public func consumeOldestGift() {
         if !giftFeed.isEmpty { giftFeed.removeFirst() }
+    }
+
+    // MARK: - Likes + réactions emoji
+
+    /// « J'aime » : incrément local + compteur partagé (broadcast) + persistance + réaction
+    /// cœur flottante (parité Android : un like déclenche aussi une réaction ❤️).
+    public func sendLike() {
+        likes += 1
+        liveSession?.broadcast(channel: "concert-likes-\(concertId)", event: "like", payload: ["count": likes])
+        sendReaction("❤️")
+        Task { await repository.likeConcert(concertId: concertId) }
+    }
+
+    /// Envoie une réaction emoji : effet local + relais aux autres membres de la room.
+    public func sendReaction(_ emoji: String) {
+        pushEmoji(emoji)
+        liveSession?.broadcast(channel: "concert-emojis-\(concertId)", event: "emoji_reaction", payload: ["emoji": emoji])
+    }
+
+    private func pushEmoji(_ emoji: String) {
+        emojiCounter += 1
+        emojiFeed = (emojiFeed + [FloatingEmoji(id: emojiCounter, emoji: emoji)]).suffix(12).map { $0 }
+    }
+
+    /// Retire la réaction la plus ancienne après son animation.
+    public func consumeOldestEmoji() {
+        if !emojiFeed.isEmpty { emojiFeed.removeFirst() }
     }
 
     // MARK: - Modérateurs désignés
@@ -424,6 +467,19 @@ public final class ConcertRoomViewModel {
             guard let self else { return }
             if self.isHost { Task { await self.loadDedications() } }
         })
+        // Relais broadcast (jamais reçu par l'émetteur lui-même) : réactions emoji + compteur
+        // de likes partagé.
+        subscriptions.append(live.onEvent(Realtime.Event.broadcast, as: BroadcastEnvelope.self) { [weak self] envelope in
+            guard let self else { return }
+            switch envelope.event {
+            case "emoji_reaction":
+                if let emoji = envelope.payload?.emoji { self.pushEmoji(emoji) }
+            case "like":
+                if let count = envelope.payload?.count, count > self.likes { self.likes = count }
+            default:
+                break
+            }
+        })
 
         await live.connect()
         await chat.connect()
@@ -454,6 +510,7 @@ public struct ConcertRoomView: View {
     @State private var showDedicationRequests = false
     @State private var dedicationMessage = ""
     @State private var dedicationPriceText = ""
+    @State private var showReactionBar = false
 
     /// - Parameters:
     ///   - viewModel: état + actions du concert.
@@ -499,10 +556,16 @@ public struct ConcertRoomView: View {
                     .id(gift.id)
             }
 
+            if let reaction = viewModel.emojiFeed.last {
+                GiftBurstView(symbol: reaction.emoji) { viewModel.consumeOldestEmoji() }
+                    .id(reaction.id)
+            }
+
             VStack {
                 viewerBadge
                 Spacer()
                 chatOverlay
+                if showReactionBar { reactionBar }
                 if let feedback = viewModel.dedicationFeedback {
                     dedicationFeedbackBanner(feedback)
                 }
@@ -619,6 +682,27 @@ public struct ConcertRoomView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Barre d'emojis réactions (togglée par le bouton emoji de ``actionBar``).
+    private var reactionBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: theme.spacing.sm) {
+                ForEach(Self.reactionEmojis, id: \.self) { emoji in
+                    Button {
+                        viewModel.sendReaction(emoji)
+                    } label: {
+                        Text(emoji)
+                            .padding(theme.spacing.sm)
+                            .background(.black.opacity(0.35), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    /// Réactions rapides proposées (parité `ConcertReactionEmojis` Android).
+    private static let reactionEmojis = ["🔥", "😍", "👏", "🎵", "💎", "🎶", "⚡", "🌟", "😂"]
+
     /// Libellé localisé d'un motif de signalement.
     private func reportLabel(_ reason: ReportReason) -> String {
         switch reason {
@@ -661,6 +745,34 @@ public struct ConcertRoomView: View {
             }
             .buttonStyle(.plain)
             .disabled(draft.trimmed.isEmpty)
+            Button {
+                viewModel.sendLike()
+            } label: {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "heart.fill")
+                        .foregroundStyle(.white)
+                        .padding(theme.spacing.sm)
+                        .background(.black.opacity(0.4), in: Circle())
+                    if viewModel.likes > 0 {
+                        Text("\(viewModel.likes)")
+                            .font(.system(size: 10)).bold()
+                            .foregroundStyle(.white)
+                            .padding(4)
+                            .background(theme.colors.accent, in: Circle())
+                            .offset(x: 4, y: -4)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            Button {
+                showReactionBar.toggle()
+            } label: {
+                Image(systemName: "face.smiling.fill")
+                    .foregroundStyle(.white)
+                    .padding(theme.spacing.sm)
+                    .background(.black.opacity(0.4), in: Circle())
+            }
+            .buttonStyle(.plain)
             if viewModel.allowsDedications {
                 Button {
                     showDedicationSheet = true

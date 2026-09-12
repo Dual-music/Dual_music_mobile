@@ -96,6 +96,10 @@ public enum Realtime {
         /// `/live` — un spectateur ou candidat vient d'être banni d'une compétition (mécanisme
         /// dédié, distinct de ``streamBanned``). Payload ``CompetitionBannedPayload``.
         public static let competitionBanned = "competition:banned"
+        /// `/live` — relais broadcast éphémère (réactions emoji, compteur de likes partagé…),
+        /// réémis par le serveur à tous les autres membres de la room. Payload
+        /// ``BroadcastEnvelope``.
+        public static let broadcast = "broadcast"
     }
 }
 
@@ -410,4 +414,39 @@ public struct CompetitionBannedPayload: Decodable, Sendable {
         userId = c.val(String.self, .userId, "")
         competitionId = c.opt(String.self, .competitionId)
     }
+}
+
+/// `broadcast` — enveloppe du relais éphémère (`{channel, event, payload}`), partagée par les
+/// overlays temps réel (duel, concert, compétition). Miroir de
+/// `shared-domain/realtime/BroadcastEnvelope.kt` — seuls les champs utiles au périmètre iOS
+/// actuel (réactions emoji, likes) sont repris ; à étoffer si un futur chantier en a besoin
+/// (`slot`, `artistId`, `identity`… côté Kotlin).
+public struct BroadcastEnvelope: Decodable, Sendable {
+    public let channel: String?
+    public let event: String?
+    public let payload: BroadcastPayload?
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        channel = c.opt(String.self, .channel)
+        event = c.opt(String.self, .event)
+        payload = c.opt(BroadcastPayload.self, .payload)
+    }
+
+    enum CodingKeys: String, CodingKey { case channel, event, payload }
+}
+
+/// Charge utile du relais broadcast — `emoji_reaction` → ``emoji`` ; `like` → ``count``
+/// (compteur ABSOLU partagé, pas un delta).
+public struct BroadcastPayload: Decodable, Sendable {
+    public let emoji: String?
+    public let count: Int?
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        emoji = c.opt(String.self, .emoji)
+        count = c.opt(Int.self, .count)
+    }
+
+    enum CodingKeys: String, CodingKey { case emoji, count }
 }

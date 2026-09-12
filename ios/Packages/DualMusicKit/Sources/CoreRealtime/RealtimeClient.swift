@@ -137,6 +137,19 @@ public final class NamespaceSession {
         socket.emit(Realtime.eventLeave, ["type": type.rawValue, "id": id])
     }
 
+    /// Relais broadcast éphémère à la room déjà rejointe (réactions emoji, compteur de likes
+    /// partagé…) — émet `broadcast { channel, event, payload }`, réémis par le serveur à tous
+    /// les autres membres de la room (jamais à l'émetteur lui-même). `channel` sert de
+    /// regroupement logique côté serveur (pas de filtrage côté client — seul `event` pilote le
+    /// dispatch, voir ``BroadcastEnvelope``).
+    /// - Parameters:
+    ///   - channel: canal logique (ex. `"concert-likes-<id>"`).
+    ///   - event: nom d'événement applicatif (ex. `"like"`, `"emoji_reaction"`).
+    ///   - payload: charge utile libre, encodable JSON (`String`/`Int`/`Bool`/`[String: Any]`…).
+    public func broadcast(channel: String, event: String, payload: [String: Any]) {
+        socket.emit("broadcast", ["channel": channel, "event": event, "payload": payload])
+    }
+
     /// Callback de connexion établie — indispensable pour **(re)joindre** les rooms après
     /// chaque reconnexion (le serveur ne les mémorise pas).
     /// - Parameter handler: exécuté sur la file principale.
