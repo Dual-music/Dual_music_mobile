@@ -292,6 +292,12 @@ public final class ConcertRoomViewModel {
         await media.switchCamera()
     }
 
+    /// Artiste : applique un filtre couleur à la diffusion (persiste tant que la caméra reste
+    /// active, voir ``LiveRoomClient/setColorFilter(id:matrix:)``).
+    public func setColorFilter(id: String, matrix: [Float]?) {
+        media.setColorFilter(id: id, matrix: matrix)
+    }
+
     /// Artiste : termine ce concert côté backend (arrête aussi la diffusion locale).
     public func endConcert() async throws {
         try await repository.endConcert(concertId: concertId)
@@ -511,6 +517,7 @@ public struct ConcertRoomView: View {
     @State private var dedicationMessage = ""
     @State private var dedicationPriceText = ""
     @State private var showReactionBar = false
+    @State private var showFilterSheet = false
 
     /// - Parameters:
     ///   - viewModel: état + actions du concert.
@@ -586,6 +593,7 @@ public struct ConcertRoomView: View {
             }
         }
         .sheet(isPresented: $showModeratorsSheet) { moderatorsSheet }
+        .sheet(isPresented: $showFilterSheet) { filterSheet }
         // Fan : demande de dédicace (message + prix, prix plancher forcé par l'artiste).
         .sheet(isPresented: $showDedicationSheet) { dedicationRequestSheet }
         // Artiste : demandes en attente (accepter/rejeter) + historique (marquer comme livrée).
@@ -809,6 +817,9 @@ public struct ConcertRoomView: View {
             }
             controlButton("arrow.triangle.2.circlepath.camera.fill") {
                 Task { await viewModel.switchCamera() }
+            }
+            controlButton("camera.filters") {
+                showFilterSheet = true
             }
             if viewModel.allowsDedications {
                 Button {
@@ -1066,6 +1077,58 @@ public struct ConcertRoomView: View {
                 }
                 .frame(maxHeight: 180)
             }
+        }
+    }
+
+    /// Feuille artiste : grille des filtres couleur (voir ``VideoFilterPresets/all``).
+    private var filterSheet: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: theme.spacing.md) {
+                Text(s.colorFilters).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 84))], spacing: theme.spacing.md) {
+                    ForEach(VideoFilterPresets.all) { preset in
+                        Button {
+                            viewModel.setColorFilter(id: preset.id, matrix: preset.matrix)
+                        } label: {
+                            VStack(spacing: theme.spacing.xs) {
+                                Text(preset.emoji).font(.system(size: 28))
+                                Text(filterLabel(preset.id))
+                                    .font(DMFont.caption)
+                                    .foregroundStyle(theme.colors.foreground)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(theme.spacing.sm)
+                            .background(
+                                viewModel.media.activeFilterId == preset.id ? theme.colors.accent.opacity(0.25) : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(theme.spacing.lg)
+        }
+        .presentationDetents([.medium])
+        .dmScreenBackground()
+    }
+
+    /// Libellé localisé d'un filtre couleur.
+    private func filterLabel(_ id: String) -> String {
+        switch id {
+        case "beauty": return s.filterBeauty
+        case "smooth": return s.filterSmooth
+        case "glow": return s.filterGlow
+        case "warm": return s.filterWarm
+        case "cool": return s.filterCool
+        case "vivid": return s.filterVivid
+        case "vintage": return s.filterVintage
+        case "noir": return s.filterNoir
+        case "studio": return s.filterStudio
+        case "neon": return s.filterNeon
+        case "dream": return s.filterDream
+        default: return s.filterNone
         }
     }
 }

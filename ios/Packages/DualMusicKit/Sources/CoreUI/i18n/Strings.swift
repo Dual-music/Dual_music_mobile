@@ -446,6 +446,20 @@ public struct DMStrings: Sendable {
     public let purchasePending: String
     public let noCreditPacksAvailable: String
     public let creditsAdded: String
+    // Filtres couleur vidéo (diffusion).
+    public let colorFilters: String
+    public let filterNone: String
+    public let filterBeauty: String
+    public let filterSmooth: String
+    public let filterGlow: String
+    public let filterWarm: String
+    public let filterCool: String
+    public let filterVivid: String
+    public let filterVintage: String
+    public let filterNoir: String
+    public let filterStudio: String
+    public let filterNeon: String
+    public let filterDream: String
 }
 
 // MARK: - Tables de traduction
@@ -854,7 +868,20 @@ public extension DMStrings {
         purchasing: "Achat…",
         purchasePending: "Achat en attente d'approbation.",
         noCreditPacksAvailable: "Aucun pack disponible pour le moment.",
-        creditsAdded: "crédits ajoutés !"
+        creditsAdded: "crédits ajoutés !",
+        colorFilters: "Filtres",
+        filterNone: "Aucun",
+        filterBeauty: "Beauté",
+        filterSmooth: "Lissé",
+        filterGlow: "Lumineux",
+        filterWarm: "Chaud",
+        filterCool: "Froid",
+        filterVivid: "Vif",
+        filterVintage: "Vintage",
+        filterNoir: "N&B",
+        filterStudio: "Studio",
+        filterNeon: "Néon",
+        filterDream: "Rêve"
     )
 
     /// Chaînes **anglaises**.
@@ -1259,7 +1286,20 @@ public extension DMStrings {
         purchasing: "Purchasing…",
         purchasePending: "Purchase pending approval.",
         noCreditPacksAvailable: "No packs available right now.",
-        creditsAdded: "credits added!"
+        creditsAdded: "credits added!",
+        colorFilters: "Filters",
+        filterNone: "None",
+        filterBeauty: "Beauty",
+        filterSmooth: "Smooth",
+        filterGlow: "Glow",
+        filterWarm: "Warm",
+        filterCool: "Cool",
+        filterVivid: "Vivid",
+        filterVintage: "Vintage",
+        filterNoir: "Noir",
+        filterStudio: "Studio",
+        filterNeon: "Neon",
+        filterDream: "Dream"
     )
 
     /// Renvoie la table de chaînes d'une langue.

@@ -48,7 +48,11 @@ public final class LiveRoomClient {
     /// Vrai si MON micro est actif (publié).
     public private(set) var isMicrophoneEnabled = false
 
+    /// Filtre couleur actif (id de ``VideoFilterPresets/all``, `"none"` par défaut).
+    public private(set) var activeFilterId = "none"
+
     private let tokenService: LiveKitTokenService
+    private let colorFilterProcessor = ColorFilterVideoProcessor()
     private var delegateProxy: RoomDelegateProxy?
     private var pollTask: Task<Void, Never>?
 
@@ -108,6 +112,8 @@ public final class LiveRoomClient {
         localVideoTrack = nil
         isCameraEnabled = false
         isMicrophoneEnabled = false
+        colorFilterProcessor.matrix = nil
+        activeFilterId = "none"
         connectionState = .idle
     }
 
@@ -133,6 +139,9 @@ public final class LiveRoomClient {
         do {
             let publication = try await room.localParticipant.setCamera(enabled: enabled)
             localVideoTrack = enabled ? (publication?.track as? LocalVideoTrack) : nil
+            // La piste locale change d'identité à chaque (ré)activation caméra : le filtre
+            // doit être réattaché à chaque fois pour survivre à un cycle coupure/rétablissement.
+            localVideoTrack?.processor = colorFilterProcessor
             isCameraEnabled = enabled
         } catch {
             // Échec (permission refusée, appareil occupé…) : l'état affiché reste inchangé,
@@ -157,6 +166,17 @@ public final class LiveRoomClient {
             let camera = track.capturer as? CameraCapturer
         else { return }
         _ = try? await camera.switchCameraPosition()
+    }
+
+    /// Applique un filtre couleur (voir ``VideoFilterPresets/all``). Persiste même si la
+    /// caméra est coupée/rétablie ensuite — la matrice est réappliquée à la nouvelle piste
+    /// locale par ``setCamera(enabled:)``.
+    /// - Parameters:
+    ///   - id: identifiant du preset (juste pour ``activeFilterId``, l'affichage du picker).
+    ///   - matrix: matrice 4×4 ligne-major, `nil` = passthrough (« Aucun »).
+    public func setColorFilter(id: String, matrix: [Float]?) {
+        colorFilterProcessor.matrix = matrix
+        activeFilterId = id
     }
 
     // MARK: - Interne
