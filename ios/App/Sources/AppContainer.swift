@@ -329,7 +329,8 @@ public final class AppContainer {
         let viewModel = CompetitionRoomViewModel(
             competitionId: competition.id,
             repository: competitionRepository,
-            realtime: realtime
+            realtime: realtime,
+            callerId: profile.me?.user.id
         )
         competitionRooms[competition.id] = viewModel
         return viewModel

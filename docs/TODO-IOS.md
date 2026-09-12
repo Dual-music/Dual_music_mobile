@@ -181,19 +181,27 @@ propre JSON — `moderation/reports/live` pour live/duel/concert, `moderation/re
     après coup, ou un modérateur/manager sur un autre appareil, ne voyait donc pas les bans
     déjà décidés. Ajouté `listStreamBans`/`StreamBanRow` (repository, GET) et
     `Realtime.Event.streamBanned`/`StreamBannedPayload` (contrat temps réel) aux deux.
-- **Compétition** : toujours room existante, chat non affiché — même chantier que Duel l'était,
-  reste à faire.
+- **Compétition** (2026-09-12) : chat + ban désormais **complets**, construits depuis zéro
+  (contrairement à Duel, aucune donnée n'existait déjà — ni `messages`, ni `chatHistory`, ni
+  `sendMessage`). Mécanisme de bannissement **entièrement dédié** (comme le report),
+  distinct du générique `stream-bans` des trois autres types : `GET`/`POST
+  /moderation/competition-bans` (`competitionId`, pas `streamId`/`streamType`), événement
+  temps réel `competition:banned` (`CompetitionBannedPayload`). Chat : `/competitions/:id/messages`
+  — ⚠️ clé JSON `message` (pas `content`) et auteur hydraté sous `author` (pas `user`), une
+  convention propre à Compétition (`CompetitionChatMessage` en tient compte). Réservé au
+  **manager** (`competition.managerId`), ne peut pas se bannir lui-même. Écart assumé avec
+  Android : pas de fil de réponse (`parentId`, chat threadé) ni de modérateurs désignés côté
+  Compétition — hors du scope validé pour ce chantier (chat + ban simple), tous deux ajoutables
+  plus tard sans replomberie (`EventModerator` déjà générique, `parentId` déjà dans le contrat
+  Android à reproduire si besoin).
 - **Concert** : couche données seulement (`reportLive`/`createStreamBan` sur
   `ConcertRepository`) — **il n'existe pas encore d'écran de room/direct pour les concerts
   côté iOS du tout** (catalogue + achat de dédicace seulement), donc rien à brancher.
 
 Restant, non bloquant pour l'App Store (le report, lui, est en place partout où il y a un
 écran à l'utiliser) :
-- [ ] Construire l'affichage du chat dans `CompetitionRoomView` (à vérifier si la donnée
-      existe déjà comme pour Duel, ou si c'est à construire depuis zéro) puis y brancher le
-      ban par tap, comme pour Live/Duel.
 - [ ] Construire l'écran de room/direct pour Concert (actuellement inexistant) avant de pouvoir
-      y brancher quoi que ce soit.
+      y brancher quoi que ce soit — dernier morceau de l'Étape 1.1.
 
 ### 1.2 Achats intégrés StoreKit pour la recharge de crédits ✅ CODE FAIT + CI verte (iOS + backend) le 2026-09-09, setup manuel restant
 

@@ -134,6 +134,7 @@ public enum CompetitionEndpoints {
     public static let ticketsMine = "/competitions/tickets/mine"
     public static func detail(_ id: String) -> String { "/competitions/\(id)" }
     public static func candidates(_ id: String) -> String { "/competitions/\(id)/candidates" }
+    public static func messages(_ id: String) -> String { "/competitions/\(id)/messages" }
     public static func vote(_ id: String) -> String { "/competitions/\(id)/vote" }
     public static func gifts(_ id: String) -> String { "/competitions/\(id)/gifts" }
     public static func tickets(_ id: String) -> String { "/competitions/\(id)/tickets" }

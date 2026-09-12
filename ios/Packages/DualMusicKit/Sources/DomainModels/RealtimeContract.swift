@@ -93,6 +93,9 @@ public enum Realtime {
         /// serveur, y compris à ceux qui n'ont pas fait le bannissement). Payload
         /// ``StreamBannedPayload``.
         public static let streamBanned = "stream:banned"
+        /// `/live` — un spectateur ou candidat vient d'être banni d'une compétition (mécanisme
+        /// dédié, distinct de ``streamBanned``). Payload ``CompetitionBannedPayload``.
+        public static let competitionBanned = "competition:banned"
     }
 }
 
@@ -387,5 +390,24 @@ public struct StreamBannedPayload: Decodable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         userId = c.val(String.self, .userId, "")
         streamId = c.opt(String.self, .streamId)
+    }
+}
+
+/// `competition:banned` — un spectateur ou candidat vient d'être banni d'une compétition
+/// (mécanisme dédié, table/canal distincts de ``StreamBannedPayload``). `competitionId`
+/// absent (ou différent du contexte courant) → l'événement ne concerne pas cette room.
+public struct CompetitionBannedPayload: Decodable, Sendable {
+    public let userId: String
+    public let competitionId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
+        case competitionId = "competition_id"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userId = c.val(String.self, .userId, "")
+        competitionId = c.opt(String.self, .competitionId)
     }
 }
