@@ -151,11 +151,96 @@ public struct ConcertRepository: Sendable {
     public func revokeModerator(concertId: String, userId: String) async throws {
         try await http.send(.delete(ModerationEndpoints.revokeModerator("concert", concertId, userId)))
     }
+
+    /// Prix minimum d'une dédicace de CONCERT (`economic_config.dedication` — jamais
+    /// `dedication_live`, propre à Live, pas de surcharge par concert côté backend).
+    public func dedicationMinPrice() async throws -> Double {
+        let setting = try await http.request(
+            .get(RoleEndpoints.publicSetting("economic_config")),
+            as: ConcertEconomicConfigSetting.self
+        )
+        return setting.value?.dedication?.minPriceCredits ?? 10
+    }
+
+    /// Artiste : dédicaces reçues sur TOUS ses évènements (concerts + lives) — l'appelant
+    /// filtre par `concertId == self.concertId`.
+    public func artistDedications() async throws -> [ConcertDedication] {
+        try await http.request(.get(ConcertEndpoints.dedicationsArtistMine), as: [ConcertDedication].self)
+    }
+
+    /// Artiste : accepte une dédicace EN ATTENTE — débite le fan maintenant.
+    public func acceptDedication(id: String) async throws {
+        try await http.send(.post(ConcertEndpoints.dedicationAccept(id)))
+    }
+
+    /// Artiste : rejette une dédicace EN ATTENTE — aucun débit.
+    public func rejectDedication(id: String) async throws {
+        try await http.send(.post(ConcertEndpoints.dedicationReject(id)))
+    }
+
+    /// Artiste : marque une dédicace acceptée comme interprétée en direct.
+    public func deliverDedication(id: String) async throws {
+        try await http.send(.post(ConcertEndpoints.dedicationDeliver(id)))
+    }
 }
 
 /// Corps de `POST /concerts/:id/messages`.
 struct ConcertMessageBody: Encodable, Sendable {
     let message: String
+}
+
+/// Réglage public `economic_config` (`GET /settings/public/economic_config`) — seul le prix
+/// minimum de dédicace de concert nous intéresse ici (pas de section `dedication_live`).
+struct ConcertEconomicConfigSetting: Decodable, Sendable {
+    let value: ConcertEconomicConfigValue?
+}
+struct ConcertEconomicConfigValue: Decodable, Sendable {
+    let dedication: ConcertDedicationConfigSection?
+}
+struct ConcertDedicationConfigSection: Decodable, Sendable {
+    let minPriceCredits: Double?
+    enum CodingKeys: String, CodingKey { case minPriceCredits = "min_price_credits" }
+}
+
+/// Dédicace payante reçue par l'artiste (`concert_dedications`, `concert_type="artist_concert"`).
+/// `status` : `pending` (à traiter) | `paid`/`delivered` (déjà acceptée, éventuellement
+/// livrée) | `rejected`.
+public struct ConcertDedication: Decodable, Sendable, Identifiable, Equatable {
+    public let id: String
+    public let fanId: String
+    public let message: String
+    public let priceCredits: Double
+    public let status: String
+    public let concertId: String?
+    public let concertType: String?
+    public let fan: DisplayProfile?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case fanId = "fan_id"
+        case message
+        case priceCredits = "price_credits"
+        case status
+        case concertId = "concert_id"
+        case concertType = "concert_type"
+        case fan
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.val(String.self, .id, "")
+        fanId = c.val(String.self, .fanId, "")
+        message = c.val(String.self, .message, "")
+        priceCredits = c.amount(.priceCredits)
+        status = c.val(String.self, .status, "paid")
+        concertId = c.opt(String.self, .concertId)
+        concertType = c.opt(String.self, .concertType)
+        fan = c.opt(DisplayProfile.self, .fan)
+    }
+
+    /// Nom d'affichage du fan (repli « Fan » comme sur Live).
+    @MainActor
+    public var fanName: String { fan?.displayName ?? AppStrings.current.fan }
 }
 
 /// Corps de `POST /wallet/tickets/concert`.

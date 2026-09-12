@@ -101,6 +101,20 @@ public final class ConcertRoomViewModel {
     /// Vrai si le caller peut bannir/masquer un message : l'artiste ou un modérateur désigné.
     public var canModerate: Bool { isHost || isModerator }
 
+    /// Dédicaces activées pour ce concert (réglage fixé à la création, pas modifiable en
+    /// direct côté backend — contrairement à Live).
+    public let allowsDedications: Bool
+    /// Prix minimum global d'une dédicace (`economic_config.dedication`) — pas de surcharge
+    /// par concert côté backend, contrairement à Live.
+    public private(set) var dedicationMinPriceCredits: Double = 10
+    /// Artiste : demandes de dédicace EN ATTENTE pour ce concert (à accepter/rejeter).
+    public private(set) var dedications: [ConcertDedication] = []
+    /// Artiste : dédicaces déjà ACCEPTÉES ou LIVRÉES (historique, sous les demandes).
+    public private(set) var dedicationHistory: [ConcertDedication] = []
+    /// Confirmation « dédicace envoyée » (ou message d'échec) affichée au fan.
+    public private(set) var dedicationFeedback: String?
+    public func clearDedicationFeedback() { dedicationFeedback = nil }
+
     private let concertId: String
     private let roomName: String
     private let hostUserId: String
@@ -123,6 +137,7 @@ public final class ConcertRoomViewModel {
     ///   - repository: lectures/actions REST du concert.
     ///   - hostUserId: id de l'artiste (exclu du bannissement, destinataire des cadeaux).
     ///   - ticketPrice: prix du billet — `0` = accès libre, jamais de billet requis.
+    ///   - allowsDedications: dédicaces activées pour ce concert (fixé à la création).
     ///   - isHost: vrai pour l'artiste qui diffuse.
     ///   - callerId: id du caller (spectateur) — sert au filtrage des événements temps réel.
     public init(
@@ -133,6 +148,7 @@ public final class ConcertRoomViewModel {
         repository: ConcertRepository,
         hostUserId: String,
         ticketPrice: Double,
+        allowsDedications: Bool,
         isHost: Bool = false,
         callerId: String? = nil
     ) {
@@ -143,6 +159,7 @@ public final class ConcertRoomViewModel {
         self.repository = repository
         self.hostUserId = hostUserId
         self.ticketPrice = ticketPrice
+        self.allowsDedications = allowsDedications
         self.isHost = isHost
         self.callerId = callerId
     }
@@ -171,6 +188,15 @@ public final class ConcertRoomViewModel {
             self.bannedUserIds.formUnion(banned)
         }
         Task { [weak self] in await self?.loadModerators() }
+        if allowsDedications {
+            Task { [weak self] in
+                guard let self else { return }
+                self.dedicationMinPriceCredits = (try? await self.repository.dedicationMinPrice()) ?? 10
+            }
+            if isHost {
+                Task { [weak self] in await self?.loadDedications() }
+            }
+        }
         await connectRealtime()
     }
 
@@ -287,6 +313,58 @@ public final class ConcertRoomViewModel {
         await loadModerators()
     }
 
+    // MARK: - Dédicaces
+
+    /// Fan : envoie une dédicace (message dédié). `price` est choisi par le fan (≥ prix
+    /// minimum global — le champ de saisie le clamp déjà, revalidé ici par sécurité).
+    public func dedicate(message: String, price: Double) async {
+        let text = message.trimmed
+        guard !text.isEmpty else { return }
+        let effectivePrice = max(price, dedicationMinPriceCredits)
+        do {
+            try await repository.purchaseDedication(concertId: concertId, message: text, priceCredits: effectivePrice)
+            dedicationFeedback = "🎤 Dédicace envoyée à l'artiste !"
+        } catch {
+            dedicationFeedback = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Artiste : (re)charge les dédicaces de CE concert — séparées en « en attente » (badge +
+    /// actions accepter/rejeter) et « acceptées/livrées » (historique, même feuille).
+    public func loadDedications() async {
+        guard isHost else { return }
+        let all = (try? await repository.artistDedications()) ?? []
+        let mine = all.filter { $0.concertId == concertId }
+        dedications = mine.filter { $0.status == "pending" }
+        dedicationHistory = mine.filter { $0.status == "paid" || $0.status == "delivered" }
+    }
+
+    /// Artiste : accepte une demande EN ATTENTE — débite le fan MAINTENANT, puis recharge.
+    public func acceptDedication(id: String) async {
+        do {
+            try await repository.acceptDedication(id: id)
+            await loadDedications()
+        } catch {
+            dedicationFeedback = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Artiste : rejette une demande EN ATTENTE — aucun débit, puis recharge.
+    public func rejectDedication(id: String) async {
+        do {
+            try await repository.rejectDedication(id: id)
+            await loadDedications()
+        } catch {
+            dedicationFeedback = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Artiste : marque une dédicace ACCEPTÉE comme livrée (interprétée) puis recharge.
+    public func deliverDedication(id: String) async {
+        try? await repository.deliverDedication(id: id)
+        await loadDedications()
+    }
+
     // MARK: - Temps réel
 
     private func connectRealtime() async {
@@ -336,6 +414,16 @@ public final class ConcertRoomViewModel {
         subscriptions.append(live.onEvent(Realtime.Event.moderatorRevoked, as: EventModeratorPayload.self) { [weak self] _ in
             Task { await self?.loadModerators() }
         })
+        // Dédicaces : l'état fait toujours l'objet d'un rechargement REST complet, jamais
+        // appliqué depuis le seul payload temps réel (parité Live).
+        subscriptions.append(live.onEvent(Realtime.Event.dedicationNew, as: DedicationEventPayload.self) { [weak self] _ in
+            guard let self, self.isHost else { return }
+            Task { await self.loadDedications() }
+        })
+        subscriptions.append(live.onEvent(Realtime.Event.dedicationUpdate, as: DedicationEventPayload.self) { [weak self] _ in
+            guard let self else { return }
+            if self.isHost { Task { await self.loadDedications() } }
+        })
 
         await live.connect()
         await chat.connect()
@@ -362,6 +450,10 @@ public struct ConcertRoomView: View {
     @State private var showReport = false
     @State private var banTarget: ConcertChatMessage?
     @State private var showModeratorsSheet = false
+    @State private var showDedicationSheet = false
+    @State private var showDedicationRequests = false
+    @State private var dedicationMessage = ""
+    @State private var dedicationPriceText = ""
 
     /// - Parameters:
     ///   - viewModel: état + actions du concert.
@@ -411,6 +503,9 @@ public struct ConcertRoomView: View {
                 viewerBadge
                 Spacer()
                 chatOverlay
+                if let feedback = viewModel.dedicationFeedback {
+                    dedicationFeedbackBanner(feedback)
+                }
                 if let error = viewModel.errorMessage { DMMessage(error, kind: .error) }
                 if viewModel.isHost { hostControls } else { actionBar }
             }
@@ -420,7 +515,18 @@ public struct ConcertRoomView: View {
         }
         .task { await viewModel.start() }
         .onDisappear { Task { await viewModel.stop() } }
+        .onChange(of: viewModel.dedicationFeedback) { _, feedback in
+            guard feedback != nil else { return }
+            Task {
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                viewModel.clearDedicationFeedback()
+            }
+        }
         .sheet(isPresented: $showModeratorsSheet) { moderatorsSheet }
+        // Fan : demande de dédicace (message + prix, prix plancher forcé par l'artiste).
+        .sheet(isPresented: $showDedicationSheet) { dedicationRequestSheet }
+        // Artiste : demandes en attente (accepter/rejeter) + historique (marquer comme livrée).
+        .sheet(isPresented: $showDedicationRequests) { dedicationRequestsSheet }
         .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
             ForEach(ReportReason.allCases, id: \.self) { reason in
                 Button(reportLabel(reason)) {
@@ -555,6 +661,17 @@ public struct ConcertRoomView: View {
             }
             .buttonStyle(.plain)
             .disabled(draft.trimmed.isEmpty)
+            if viewModel.allowsDedications {
+                Button {
+                    showDedicationSheet = true
+                } label: {
+                    Image(systemName: "megaphone.fill")
+                        .foregroundStyle(.white)
+                        .padding(theme.spacing.sm)
+                        .background(.black.opacity(0.4), in: Circle())
+                }
+                .buttonStyle(.plain)
+            }
             Button {
                 Task { await viewModel.sendGift(giftId: quickGiftId) }
             } label: {
@@ -568,7 +685,8 @@ public struct ConcertRoomView: View {
         }
     }
 
-    /// Contrôles artiste : mic/caméra/bascule + fin du concert.
+    /// Contrôles artiste : mic/caméra/bascule + dédicaces (badge = demandes en attente) + fin
+    /// du concert.
     private var hostControls: some View {
         HStack(spacing: theme.spacing.md) {
             controlButton(viewModel.media.isMicrophoneEnabled ? "mic.fill" : "mic.slash.fill") {
@@ -579,6 +697,27 @@ public struct ConcertRoomView: View {
             }
             controlButton("arrow.triangle.2.circlepath.camera.fill") {
                 Task { await viewModel.switchCamera() }
+            }
+            if viewModel.allowsDedications {
+                Button {
+                    showDedicationRequests = true
+                } label: {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "megaphone.fill")
+                            .foregroundStyle(.white)
+                            .padding(theme.spacing.sm)
+                            .background(.black.opacity(0.4), in: Circle())
+                        if !viewModel.dedications.isEmpty {
+                            Text("\(viewModel.dedications.count)")
+                                .font(.system(size: 10)).bold()
+                                .foregroundStyle(.white)
+                                .padding(4)
+                                .background(theme.colors.destructive, in: Circle())
+                                .offset(x: 4, y: -4)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
             }
             Spacer()
             Button {
@@ -629,6 +768,117 @@ public struct ConcertRoomView: View {
         let text = draft
         draft = ""
         Task { await viewModel.sendMessage(text) }
+    }
+
+    /// Bannière de confirmation/décision de dédicace (fan) — auto-masquée après quelques
+    /// secondes (voir `.onChange(of: viewModel.dedicationFeedback)`).
+    private func dedicationFeedbackBanner(_ text: String) -> some View {
+        Text(text)
+            .font(DMFont.caption).bold()
+            .foregroundStyle(.white)
+            .padding(.horizontal, theme.spacing.md)
+            .padding(.vertical, theme.spacing.sm)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    /// Feuille fan : compose et envoie une dédicace (prix jamais sous le minimum global).
+    private var dedicationRequestSheet: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text(s.dedication).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+            Text(s.dedicationHint).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            DMTextField(s.dedication, text: $dedicationMessage, placeholder: s.saySomething, axis: .vertical)
+            DMTextField(
+                "\(s.credits) (min \(Int(viewModel.dedicationMinPriceCredits)))",
+                text: $dedicationPriceText,
+                keyboard: .numberPad
+            )
+            DMButton("\(s.send) (\(dedicationPriceValue) \(s.credits))") {
+                Task {
+                    await viewModel.dedicate(message: dedicationMessage, price: Double(dedicationPriceValue))
+                    dedicationMessage = ""
+                    showDedicationSheet = false
+                }
+            }
+            Spacer()
+        }
+        .padding(theme.spacing.lg)
+        .presentationDetents([.medium])
+        .dmScreenBackground()
+    }
+
+    /// Prix saisi par le fan, jamais sous le minimum global effectif.
+    private var dedicationPriceValue: Int {
+        max(Int(dedicationPriceText) ?? Int(viewModel.dedicationMinPriceCredits), Int(viewModel.dedicationMinPriceCredits))
+    }
+
+    /// Feuille artiste : demandes en attente (accepter/rejeter) + historique (marquer livrée).
+    private var dedicationRequestsSheet: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: theme.spacing.md) {
+                Text(s.dedicationsLabel).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+
+                if viewModel.dedications.isEmpty && viewModel.dedicationHistory.isEmpty {
+                    Text(s.noDedicationsYet).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                }
+
+                if !viewModel.dedications.isEmpty {
+                    DMSectionTitle("\(s.pendingLabel) (\(viewModel.dedications.count))")
+                    ForEach(viewModel.dedications) { dedication in
+                        pendingDedicationRow(dedication)
+                    }
+                }
+
+                if !viewModel.dedicationHistory.isEmpty {
+                    DMSectionTitle("\(s.dedicationsAcceptedDelivered) (\(viewModel.dedicationHistory.count))")
+                    ForEach(viewModel.dedicationHistory) { dedication in
+                        historyDedicationRow(dedication)
+                    }
+                }
+            }
+            .padding(theme.spacing.lg)
+        }
+        .presentationDetents([.medium, .large])
+        .dmScreenBackground()
+    }
+
+    /// Ligne d'une demande de dédicace en attente : accepter (débite maintenant) ou rejeter.
+    private func pendingDedicationRow(_ dedication: ConcertDedication) -> some View {
+        DMCard {
+            VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                Text("\(dedication.fanName)  ·  \(Int(dedication.priceCredits)) \(s.credits)")
+                    .font(DMFont.caption).bold()
+                    .foregroundStyle(theme.colors.accent)
+                Text(dedication.message)
+                    .font(DMFont.body)
+                    .foregroundStyle(theme.colors.foreground)
+                HStack(spacing: theme.spacing.sm) {
+                    DMButton(s.accept) { Task { await viewModel.acceptDedication(id: dedication.id) } }
+                    DMButton(s.rejectAction, style: .destructive) { Task { await viewModel.rejectDedication(id: dedication.id) } }
+                }
+            }
+        }
+    }
+
+    /// Ligne d'une dédicace acceptée/livrée : marquer comme interprétée (si pas déjà livrée).
+    private func historyDedicationRow(_ dedication: ConcertDedication) -> some View {
+        DMCard {
+            VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                Text("\(dedication.fanName)  ·  \(Int(dedication.priceCredits)) \(s.credits)")
+                    .font(DMFont.caption).bold()
+                    .foregroundStyle(theme.colors.accent)
+                Text(dedication.message)
+                    .font(DMFont.body)
+                    .foregroundStyle(theme.colors.foreground)
+                if dedication.status == "delivered" {
+                    Text("✅ \(s.delivered)")
+                        .font(DMFont.caption).bold()
+                        .foregroundStyle(theme.colors.primary)
+                } else {
+                    DMButton(s.markDelivered) { Task { await viewModel.deliverDedication(id: dedication.id) } }
+                }
+            }
+        }
     }
 
     /// Feuille : modérateurs désignés (révocables par l'artiste) + désignation d'un

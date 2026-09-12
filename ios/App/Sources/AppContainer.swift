@@ -349,6 +349,7 @@ public final class AppContainer {
             repository: concertRepository,
             hostUserId: concert.artistId,
             ticketPrice: concert.ticketPrice,
+            allowsDedications: concert.allowsDedications,
             isHost: profile.me?.user.id == concert.artistId,
             callerId: profile.me?.user.id
         )
