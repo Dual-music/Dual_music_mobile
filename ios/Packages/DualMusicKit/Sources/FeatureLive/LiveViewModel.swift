@@ -154,6 +154,11 @@ public final class LiveViewModel {
         }
         Task { [weak self] in await self?.loadLiveSettings() }
         Task { [weak self] in await self?.loadModerators() }
+        Task { [weak self] in
+            guard let self else { return }
+            let banned = await self.repository.listStreamBans(liveId: self.liveId)
+            self.bannedUserIds.formUnion(banned)
+        }
         if isHost {
             Task { [weak self] in await self?.loadDedications() }
             Task { [weak self] in await self?.loadJoinRequests() }
@@ -519,6 +524,13 @@ public final class LiveViewModel {
         })
         subscriptions.append(live.onEvent(Realtime.Event.presence, as: PresencePayload.self) { [weak self] payload in
             self?.viewerCount = payload.count
+        })
+        // Bannissement poussé par le serveur — y compris quand ce n'est pas MOI qui ai banni
+        // (un autre modérateur, ou moi depuis un autre appareil) : sans cet écouteur, seul
+        // l'auteur du geste voyait le banni masqué (mise à jour optimiste locale uniquement).
+        subscriptions.append(live.onEvent(Realtime.Event.streamBanned, as: StreamBannedPayload.self) { [weak self] payload in
+            guard let self, payload.streamId == nil || payload.streamId == self.liveId else { return }
+            self.bannedUserIds.insert(payload.userId)
         })
         // Réglages modifiés par l'hôte en direct — tout le monde réagit aussitôt (masque/
         // affiche le bouton de dédicace, etc.). `dedicationMinPriceCredits` absent = pas de

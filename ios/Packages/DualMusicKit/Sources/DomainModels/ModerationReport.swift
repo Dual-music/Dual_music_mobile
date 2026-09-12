@@ -37,6 +37,19 @@ public enum ReportReason: String, Sendable, CaseIterable {
     case violence
 }
 
+/// Ligne de `GET /moderation/stream-bans` — on n'extrait que l'utilisateur banni. Lecture
+/// seule, commune à live/duel/concert (seul `streamType` en query change).
+public struct StreamBanRow: Decodable, Sendable {
+    public let bannedUserId: String?
+
+    enum CodingKeys: String, CodingKey { case bannedUserId = "banned_user_id" }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        bannedUserId = c.opt(String.self, .bannedUserId)
+    }
+}
+
 /// Modération par évènement — hôte principal (artiste pour live/concert, manager pour
 /// duel/compétition) + jusqu'à ``maxEventModerators`` spectateurs qu'il désigne pour
 /// l'accompagner (bannir, masquer un message — jamais activer/désactiver le chat, réservé à

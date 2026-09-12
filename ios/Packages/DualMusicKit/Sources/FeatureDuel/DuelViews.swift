@@ -16,7 +16,9 @@ public struct DuelRoomView: View {
     private let viewModel: DuelViewModel
     private let voteAmount: Double
 
+    @State private var draft = ""
     @State private var showReport = false
+    @State private var banTarget: DuelChatMessage?
 
     /// - Parameters:
     ///   - viewModel: état + actions du duel.
@@ -50,7 +52,9 @@ public struct DuelRoomView: View {
             VStack {
                 header
                 Spacer()
+                chatOverlay
                 votePanel
+                messageBar
             }
             .padding(theme.spacing.lg)
         }
@@ -64,6 +68,77 @@ public struct DuelRoomView: View {
             }
             Button(s.cancel, role: .cancel) {}
         }
+        // Confirmation de bannissement (manager uniquement — tap sur un auteur de message).
+        .alert(
+            "🚫 \(s.banAction) \(banTarget?.authorName ?? "") ?",
+            isPresented: Binding(get: { banTarget != nil }, set: { if !$0 { banTarget = nil } }),
+            presenting: banTarget
+        ) { target in
+            Button(s.cancel, role: .cancel) {}
+            Button(s.banAction, role: .destructive) {
+                Task { await viewModel.banUser(userId: target.userId, reason: String(target.content.prefix(200))) }
+            }
+        } message: { _ in
+            Text(s.banConfirmMessage)
+        }
+    }
+
+    /// Les 6 derniers messages visibles. Le manager peut bannir l'auteur d'un message en
+    /// tapant sur son nom — jamais un des deux artistes en duel, ni lui-même.
+    private var chatOverlay: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(viewModel.visibleMessages.suffix(6)) { message in
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(message.authorName)
+                        .font(DMFont.caption).bold()
+                        .foregroundStyle(theme.colors.accent)
+                        .onTapGesture {
+                            guard viewModel.isManager, !isParticipant(message.userId) else { return }
+                            banTarget = message
+                        }
+                    Text(message.content)
+                        .font(DMFont.caption)
+                        .foregroundStyle(.white)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Vrai pour les deux artistes du duel ou son manager — jamais bannissables.
+    private func isParticipant(_ userId: String) -> Bool {
+        guard let duel = viewModel.duel else { return false }
+        return userId == duel.artist1Id || userId == duel.artist2Id || userId == duel.managerId
+    }
+
+    /// Saisie de message, sous le panneau de vote.
+    private var messageBar: some View {
+        HStack(spacing: theme.spacing.sm) {
+            TextField(s.saySomething, text: $draft)
+                .textFieldStyle(.plain)
+                .foregroundStyle(.white)
+                .padding(.horizontal, theme.spacing.md)
+                .padding(.vertical, theme.spacing.sm)
+                .background(.white.opacity(0.15), in: Capsule())
+                .submitLabel(.send)
+                .onSubmit(send)
+            Button(action: send) {
+                Image(systemName: "paperplane.fill")
+                    .foregroundStyle(.white)
+                    .padding(theme.spacing.sm)
+                    .background(theme.colors.accent, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(draft.trimmed.isEmpty)
+        }
+        .padding(.top, theme.spacing.sm)
+    }
+
+    /// Envoie le brouillon puis vide le champ.
+    private func send() {
+        let text = draft
+        draft = ""
+        Task { await viewModel.sendMessage(text) }
     }
 
     /// Haut : bouton signaler + barre de répartition des votes + minuteur.

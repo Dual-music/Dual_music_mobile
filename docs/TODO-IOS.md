@@ -166,20 +166,32 @@ propre JSON — `moderation/reports/live` pour live/duel/concert, `moderation/re
 - **Live** (le chat y est déjà affiché) : report + ban **complets** — bouton drapeau, feuille
   de motifs, bannissement par tap sur l'auteur d'un message (hôte uniquement), messages du
   banni masqués pour tous.
-- **Duel / Compétition** (room existante, mais chat non affiché à l'écran — la donnée existe
-  déjà côté Duel, `DuelViewModel.messages`, juste jamais rendue) : bouton signaler câblé et
-  fonctionnel ; `createStreamBan`/`createCompetitionBan` existent au niveau repository mais
-  **aucune UI n'appelle le ban** — il n'y a pas encore de liste de messages/participants à
-  laquelle attacher un geste de bannissement.
+- **Duel** (2026-09-12) : chat + ban désormais **complets**, comme Live — `chatOverlay` +
+  barre de saisie ajoutés à `DuelRoomView` (n'existaient pas du tout : `DuelViewModel.messages`
+  était chargé mais jamais rendu, et rien n'appelait `sendMessage`). Bannissement par tap sur
+  l'auteur, réservé au **manager** du duel (`duel.managerId`, pas de modérateurs désignés côté
+  Duel — écart assumé avec Android qui, lui, en a aussi ; `EventModerator` est déjà générique
+  et réutilisable si on veut combler cet écart plus tard). Ne peut pas bannir les deux artistes
+  en duel ni le manager lui-même (parité `DuelRoomScreen.kt` : `isParticipant`).
+  - Correctif au passage (**touche aussi Live**, où le même gap existait silencieusement
+    depuis l'implémentation du 2026-09-07) : ni Live ni Duel ne chargeaient la liste des bans
+    déjà existants au démarrage (`GET /moderation/stream-bans`), ni n'écoutaient l'événement
+    temps réel `stream:banned` — seul l'auteur du geste de bannissement voyait le banni masqué
+    (mise à jour optimiste locale uniquement, jamais synchronisée). Un spectateur arrivant
+    après coup, ou un modérateur/manager sur un autre appareil, ne voyait donc pas les bans
+    déjà décidés. Ajouté `listStreamBans`/`StreamBanRow` (repository, GET) et
+    `Realtime.Event.streamBanned`/`StreamBannedPayload` (contrat temps réel) aux deux.
+- **Compétition** : toujours room existante, chat non affiché — même chantier que Duel l'était,
+  reste à faire.
 - **Concert** : couche données seulement (`reportLive`/`createStreamBan` sur
   `ConcertRepository`) — **il n'existe pas encore d'écran de room/direct pour les concerts
   côté iOS du tout** (catalogue + achat de dédicace seulement), donc rien à brancher.
 
 Restant, non bloquant pour l'App Store (le report, lui, est en place partout où il y a un
 écran à l'utiliser) :
-- [ ] Construire l'affichage du chat dans `DuelRoomView` (la donnée existe) puis y brancher le
-      ban par tap, comme pour Live.
-- [ ] Idem pour Compétition une fois son chat construit.
+- [ ] Construire l'affichage du chat dans `CompetitionRoomView` (à vérifier si la donnée
+      existe déjà comme pour Duel, ou si c'est à construire depuis zéro) puis y brancher le
+      ban par tap, comme pour Live/Duel.
 - [ ] Construire l'écran de room/direct pour Concert (actuellement inexistant) avant de pouvoir
       y brancher quoi que ce soit.
 

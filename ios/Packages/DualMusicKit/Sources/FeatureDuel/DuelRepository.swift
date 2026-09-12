@@ -127,4 +127,14 @@ public struct DuelRepository: Sendable {
             )
         )
     }
+
+    /// Spectateurs déjà bannis de ce duel (ids) — amorce l'affichage pour un arrivant tardif.
+    /// Best-effort : une erreur réseau donne juste une liste vide, jamais un throw bloquant.
+    public func listStreamBans(duelId: String) async -> [String] {
+        let rows = (try? await http.request(
+            .get(ModerationReportEndpoints.streamBans, query: ["streamId": duelId, "streamType": "duel"]),
+            as: [StreamBanRow].self
+        )) ?? []
+        return rows.compactMap(\.bannedUserId)
+    }
 }

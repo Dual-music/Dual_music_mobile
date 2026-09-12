@@ -235,6 +235,16 @@ public struct LiveRepository: Sendable {
         )
     }
 
+    /// Spectateurs déjà bannis de ce live (ids) — amorce l'affichage pour un arrivant tardif.
+    /// Best-effort : une erreur réseau donne juste une liste vide, jamais un throw bloquant.
+    public func listStreamBans(liveId: String) async -> [String] {
+        let rows = (try? await http.request(
+            .get(ModerationReportEndpoints.streamBans, query: ["streamId": liveId, "streamType": "live"]),
+            as: [StreamBanRow].self
+        )) ?? []
+        return rows.compactMap(\.bannedUserId)
+    }
+
     /// Lives de l'artiste passé (`GET /lives?artistId=`) — alimente « Mes lives ».
     public func myLives(artistId: String) async throws -> [Live] {
         try await http.request(.get(LiveEndpoints.list, query: ["artistId": artistId]), as: [Live].self)

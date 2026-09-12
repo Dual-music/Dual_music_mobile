@@ -89,6 +89,10 @@ public enum Realtime {
         /// `/live` · room live — un modérateur d'évènement a été révoqué. Payload
         /// ``EventModeratorPayload``.
         public static let moderatorRevoked = "moderator:revoked"
+        /// `/live` — un spectateur vient d'être banni d'un live/duel/concert (poussé par le
+        /// serveur, y compris à ceux qui n'ont pas fait le bannissement). Payload
+        /// ``StreamBannedPayload``.
+        public static let streamBanned = "stream:banned"
     }
 }
 
@@ -365,5 +369,23 @@ public struct EventModeratorPayload: Decodable, Sendable {
         eventType = c.opt(String.self, .eventType)
         eventId = c.opt(String.self, .eventId)
         userId = c.opt(String.self, .userId)
+    }
+}
+
+/// `stream:banned` — un spectateur vient d'être banni d'un live/duel/concert. `streamId`
+/// absent (ou différent du contexte courant) → l'événement ne concerne pas cette room.
+public struct StreamBannedPayload: Decodable, Sendable {
+    public let userId: String
+    public let streamId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
+        case streamId = "stream_id"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userId = c.val(String.self, .userId, "")
+        streamId = c.opt(String.self, .streamId)
     }
 }

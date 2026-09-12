@@ -53,8 +53,21 @@ public final class DuelViewModel {
     public private(set) var giftFeed: [DuelGift] = []
     public private(set) var errorMessage: String?
 
+    /// Spectateurs bannis de ce duel (ids) — leurs messages restent en mémoire mais sont
+    /// masqués de l'affichage (``visibleMessages``), pas supprimés.
+    public private(set) var bannedUserIds: Set<String> = []
+    /// Messages à afficher : ceux d'un spectateur banni sont masqués pour tout le monde.
+    public var visibleMessages: [DuelChatMessage] { messages.filter { !bannedUserIds.contains($0.userId) } }
+    /// Vrai si le caller est le manager de ce duel — seul rôle autorisé à bannir (parité
+    /// Android : pas de modérateurs désignés côté Duel, contrairement à Live).
+    public var isManager: Bool {
+        guard let callerId, let managerId = duel?.managerId else { return false }
+        return managerId == callerId
+    }
+
     private let duelId: String
     private let roomName: String
+    private let callerId: String?
     private let realtime: RealtimeClient
     private let repository: DuelRepository
     private let wallet: WalletRepository
@@ -72,13 +85,15 @@ public final class DuelViewModel {
     ///   - realtime: client Socket.IO partagé.
     ///   - repository: lectures REST du duel.
     ///   - wallet: opérations de débit (vote).
+    ///   - callerId: id du caller — détermine ``isManager`` une fois le duel chargé.
     public init(
         duelId: String,
         roomName: String,
         media: LiveRoomClient,
         realtime: RealtimeClient,
         repository: DuelRepository,
-        wallet: WalletRepository
+        wallet: WalletRepository,
+        callerId: String? = nil
     ) {
         self.duelId = duelId
         self.roomName = roomName
@@ -86,6 +101,7 @@ public final class DuelViewModel {
         self.realtime = realtime
         self.repository = repository
         self.wallet = wallet
+        self.callerId = callerId
     }
 
     /// Démarre : détail du duel, tallies, vidéo, chat, temps réel.
@@ -107,6 +123,11 @@ public final class DuelViewModel {
             if let history = try? await self.repository.chatHistory(duelId: self.duelId) {
                 self.messages = history
             }
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            let banned = await self.repository.listStreamBans(duelId: self.duelId)
+            self.bannedUserIds.formUnion(banned)
         }
         await connectRealtime()
     }
@@ -149,6 +170,20 @@ public final class DuelViewModel {
     /// Signale ce duel avec un motif (modération).
     public func report(reason: ReportReason) async {
         try? await repository.reportLive(liveId: duelId, reason: reason)
+    }
+
+    /// Manager : bannit un spectateur (optimiste + persistant). Il ne peut plus écrire ni
+    /// rejoindre ; ses messages passés sont masqués (``visibleMessages``).
+    /// - Parameters:
+    ///   - userId: spectateur ciblé.
+    ///   - reason: motif libre (ex. le message signalé), optionnel.
+    public func banUser(userId: String, reason: String?) async {
+        bannedUserIds.insert(userId)
+        do {
+            try await repository.createStreamBan(streamId: duelId, bannedUserId: userId, reason: reason)
+        } catch {
+            bannedUserIds.remove(userId)
+        }
     }
 
     /// Retire le cadeau le plus ancien après son animation.
@@ -211,6 +246,12 @@ public final class DuelViewModel {
             self?.messages.append(
                 DuelChatMessage(id: payload.id, userId: payload.userId, content: payload.content, user: payload.user)
             )
+        })
+        // Bannissement poussé par le serveur — y compris quand ce n'est pas MOI (le manager)
+        // qui ai banni depuis un autre appareil.
+        subscriptions.append(live.onEvent(Realtime.Event.streamBanned, as: StreamBannedPayload.self) { [weak self] payload in
+            guard let self, payload.streamId == nil || payload.streamId == self.duelId else { return }
+            self.bannedUserIds.insert(payload.userId)
         })
 
         await live.connect()

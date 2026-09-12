@@ -316,7 +316,8 @@ public final class AppContainer {
             media: LiveRoomClient(tokenService: liveKitTokens),
             realtime: realtime,
             repository: duelRepository,
-            wallet: walletRepository
+            wallet: walletRepository,
+            callerId: profile.me?.user.id
         )
         duelRooms[duel.id] = viewModel
         return viewModel
