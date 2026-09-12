@@ -98,6 +98,7 @@ public final class LiveRoomClient {
             try await room.connect(url: creds.url, token: creds.token)
             connectionState = .connected
             refreshPrimaryTrack()
+            refreshRemoteTiles()
             startPolling()
         } catch {
             connectionState = .failed(error.localizedDescription)
@@ -109,6 +110,7 @@ public final class LiveRoomClient {
         stopPolling()
         await room.disconnect()
         primaryVideoTrack = nil
+        remoteTiles = [:]
         localVideoTrack = nil
         isCameraEnabled = false
         isMicrophoneEnabled = false
@@ -186,25 +188,44 @@ public final class LiveRoomClient {
         switch event {
         case .tracksChanged:
             refreshPrimaryTrack()
+            refreshRemoteTiles()
         case .reconnecting:
             connectionState = .reconnecting
         case .reconnected:
             connectionState = .connected
             refreshPrimaryTrack()
+            refreshRemoteTiles()
         case .disconnected:
             connectionState = .idle
             primaryVideoTrack = nil
+            remoteTiles = [:]
             stopPolling()
         }
     }
 
-    /// Piste vidéo primaire = première piste vidéo distante souscrite (le host).
+    /// Piste vidéo primaire = première piste vidéo distante souscrite (le host). Convient à
+    /// tout écran à UN SEUL publieur potentiel par room (Live, Duel par slot, Concert).
     private func refreshPrimaryTrack() {
         let track = room.remoteParticipants.values
             .flatMap { $0.videoTracks }
             .compactMap { $0.track as? VideoTrack }
             .first
         if track !== primaryVideoTrack { primaryVideoTrack = track }
+    }
+
+    /// Pistes distantes indexées par identité LiveKit (= userId côté backend) — pour un mode
+    /// multi-diffuseur où PLUSIEURS participants publient dans la MÊME room (ex. Compétition en
+    /// mode `"online"` : manager + candidats approuvés). N'affecte jamais ``primaryVideoTrack``.
+    public private(set) var remoteTiles: [String: VideoTrack] = [:]
+
+    private func refreshRemoteTiles() {
+        var tiles: [String: VideoTrack] = [:]
+        for participant in room.remoteParticipants.values {
+            guard let identity = participant.identity?.stringValue else { continue }
+            guard let track = participant.videoTracks.compactMap({ $0.track as? VideoTrack }).first else { continue }
+            tiles[identity] = track
+        }
+        remoteTiles = tiles
     }
 
     /// Filet de sécurité : recalcule la piste primaire chaque seconde tant qu'on est connecté.
@@ -216,6 +237,7 @@ public final class LiveRoomClient {
                 guard let self else { return }
                 if case .connected = self.connectionState {
                     self.refreshPrimaryTrack()
+                    self.refreshRemoteTiles()
                 } else if case .reconnecting = self.connectionState {
                     continue
                 } else {

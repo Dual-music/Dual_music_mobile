@@ -166,7 +166,14 @@ public struct Duel: Codable, Sendable, Identifiable, Equatable {
 
     /// Room LiveKit effective (repli sur `duel:id` si `room_id` est absent) — même règle
     /// que le conteneur d'injection Android.
-    public var liveKitRoom: String { roomId ?? "duel:\(id)" }
+    /// Room LiveKit de BASE — les rooms réelles où l'on publie/écoute sont
+    /// `"<liveKitRoom>-artist1"`/`"-artist2"`/`"-manager"` (voir le mode diffusion multi-slot).
+    ///
+    /// ⚠️ Le tiret compte : le backend/Android dérivent `"duel-$id"` (tiret) — le repli
+    /// utilisait `"duel:\(id)"` (deux-points) avant ce correctif, ce qui aurait empêché de
+    /// rejoindre les bonnes rooms LiveKit pour tout duel sans `room_id` explicite (bug jamais
+    /// exercé jusqu'ici : aucune room de duel n'était rejointe en pratique avant ce chantier).
+    public var liveKitRoom: String { roomId ?? "duel-\(id)" }
 }
 
 /// Total de votes (crédits) par artiste pour un duel.
@@ -238,14 +245,23 @@ public struct Competition: Codable, Sendable, Identifiable, Equatable {
     public let endAt: String?
     public let rewardAmount: Double
     public let coverURL: String?
+    /// `"online"` (les candidats approuvés diffusent leur caméra, façon meet) ou `"onsite"`
+    /// (présentiel : seul l'appareil du manager filme la scène). Pilote qui peut publier.
+    public let mode: String?
+    /// Room LiveKit — override backend, repli `"comp-<id>"` (voir ``liveKitRoom``).
+    public let livekitRoom: String?
+    /// Caméra épinglée par le manager (identité LiveKit = userId) — focus imposé au chargement.
+    public let forcedFocusParticipantId: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, status
+        case id, title, status, mode
         case managerId = "manager_id"
         case startAt = "start_at"
         case endAt = "end_at"
         case rewardAmount = "reward_amount"
         case coverURL = "cover_url"
+        case livekitRoom = "livekit_room"
+        case forcedFocusParticipantId = "forced_focus_participant_id"
     }
 
     public init(from decoder: Decoder) throws {
@@ -258,7 +274,14 @@ public struct Competition: Codable, Sendable, Identifiable, Equatable {
         endAt = c.opt(String.self, .endAt)
         rewardAmount = c.amount(.rewardAmount)
         coverURL = c.opt(String.self, .coverURL)
+        mode = c.opt(String.self, .mode)
+        livekitRoom = c.opt(String.self, .livekitRoom)
+        forcedFocusParticipantId = c.opt(String.self, .forcedFocusParticipantId)
     }
+
+    /// Room LiveKit effective (repli sur `"comp-<id>"` si `livekit_room` est absent, tiret —
+    /// miroir Android).
+    public var liveKitRoom: String { livekitRoom?.isEmpty == false ? livekitRoom! : "comp-\(id)" }
 }
 
 /// Demande de retrait de crédits par un artiste/manager.

@@ -311,14 +311,28 @@ public final class AppContainer {
     /// - Parameter duel: duel à ouvrir.
     func duelRoom(for duel: Duel) -> DuelViewModel {
         if let existing = duelRooms[duel.id] { return existing }
+        let callerId = profile.me?.user.id
+        let mySlot: String?
+        if callerId != nil, callerId == duel.artist1Id {
+            mySlot = "artist1"
+        } else if callerId != nil, callerId == duel.artist2Id {
+            mySlot = "artist2"
+        } else if callerId != nil, callerId == duel.managerId {
+            mySlot = "manager"
+        } else {
+            mySlot = nil
+        }
         let viewModel = DuelViewModel(
             duelId: duel.id,
-            roomName: duel.liveKitRoom,
-            media: LiveRoomClient(tokenService: liveKitTokens),
+            baseRoom: duel.liveKitRoom,
+            mediaA1: LiveRoomClient(tokenService: liveKitTokens),
+            mediaA2: LiveRoomClient(tokenService: liveKitTokens),
+            mediaMgr: LiveRoomClient(tokenService: liveKitTokens),
+            mySlot: mySlot,
             realtime: realtime,
             repository: duelRepository,
             wallet: walletRepository,
-            callerId: profile.me?.user.id
+            callerId: callerId
         )
         duelRooms[duel.id] = viewModel
         return viewModel
@@ -329,6 +343,7 @@ public final class AppContainer {
         if let existing = competitionRooms[competition.id] { return existing }
         let viewModel = CompetitionRoomViewModel(
             competitionId: competition.id,
+            media: LiveRoomClient(tokenService: liveKitTokens),
             repository: competitionRepository,
             realtime: realtime,
             callerId: profile.me?.user.id

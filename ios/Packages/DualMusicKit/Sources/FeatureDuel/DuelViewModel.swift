@@ -42,8 +42,29 @@ public struct DuelTimer: Sendable, Equatable {
 @MainActor
 public final class DuelViewModel {
 
-    /// Client média (une connexion SFU par duel ouvert).
-    public let media: LiveRoomClient
+    /// Client média de la room de l'artiste 1 (`<baseRoom>-artist1`) — publie si ``mySlot`` ==
+    /// `"artist1"`, sinon visionnage seul.
+    public let mediaA1: LiveRoomClient
+    /// Client média de la room de l'artiste 2 (`<baseRoom>-artist2`).
+    public let mediaA2: LiveRoomClient
+    /// Client média de la room du manager (`<baseRoom>-manager`) — le manager peut aussi
+    /// diffuser (présentation/animation), pas réservé aux deux artistes.
+    public let mediaMgr: LiveRoomClient
+
+    /// Mon rôle de publication (`"artist1"`/`"artist2"`/`"manager"`), `nil` = spectateur pur.
+    /// Déterminé une seule fois à la construction (``AppContainer``), pas par un fetch réseau.
+    public let mySlot: String?
+    /// Vrai si je peux publier dans une des 3 rooms (mon rôle a un slot).
+    public var canPublish: Bool { mySlot != nil }
+    /// Le client média où JE publie — `nil` pour un spectateur pur.
+    public var myMedia: LiveRoomClient? {
+        switch mySlot {
+        case "artist1": mediaA1
+        case "artist2": mediaA2
+        case "manager": mediaMgr
+        default: nil
+        }
+    }
 
     public private(set) var duel: Duel?
     /// Total de crédits votés par artiste (`artistId` → total), mis à jour en direct.
@@ -79,7 +100,7 @@ public final class DuelViewModel {
     public var canModerate: Bool { isManager || isModerator }
 
     private let duelId: String
-    private let roomName: String
+    private let baseRoom: String
     private let callerId: String?
     private let realtime: RealtimeClient
     private let repository: DuelRepository
@@ -93,24 +114,36 @@ public final class DuelViewModel {
 
     /// - Parameters:
     ///   - duelId: identifiant du duel (contexte chat/cadeaux/votes).
-    ///   - roomName: room LiveKit à rejoindre.
-    ///   - media: client média dédié.
+    ///   - baseRoom: room LiveKit de base (`Duel.liveKitRoom`) — les 3 rooms de slot en
+    ///     dérivent (`<baseRoom>-artist1`/`-artist2`/`-manager`).
+    ///   - mediaA1: client média de la room de l'artiste 1.
+    ///   - mediaA2: client média de la room de l'artiste 2.
+    ///   - mediaMgr: client média de la room du manager.
+    ///   - mySlot: mon rôle de publication, précalculé par ``AppContainer``
+    ///     (`"artist1"`/`"artist2"`/`"manager"`/`nil`).
     ///   - realtime: client Socket.IO partagé.
     ///   - repository: lectures REST du duel.
     ///   - wallet: opérations de débit (vote).
-    ///   - callerId: id du caller — détermine ``isManager`` une fois le duel chargé.
+    ///   - callerId: id du caller — détermine ``isManager``/``isModerator`` une fois le duel
+    ///     chargé.
     public init(
         duelId: String,
-        roomName: String,
-        media: LiveRoomClient,
+        baseRoom: String,
+        mediaA1: LiveRoomClient,
+        mediaA2: LiveRoomClient,
+        mediaMgr: LiveRoomClient,
+        mySlot: String?,
         realtime: RealtimeClient,
         repository: DuelRepository,
         wallet: WalletRepository,
         callerId: String? = nil
     ) {
         self.duelId = duelId
-        self.roomName = roomName
-        self.media = media
+        self.baseRoom = baseRoom
+        self.mediaA1 = mediaA1
+        self.mediaA2 = mediaA2
+        self.mediaMgr = mediaMgr
+        self.mySlot = mySlot
         self.realtime = realtime
         self.repository = repository
         self.wallet = wallet
@@ -122,7 +155,11 @@ public final class DuelViewModel {
         guard !started else { return }
         started = true
 
-        Task { await media.join(roomName: roomName, isHost: false) }
+        // Rejoint les 3 rooms de slot (parité Android) : publieur sur MA room, spectateur sur
+        // les 2 autres — chacune indépendante, aucune n'attend les autres.
+        joinSlot(mediaA1, "artist1")
+        joinSlot(mediaA2, "artist2")
+        joinSlot(mediaMgr, "manager")
         Task { [weak self] in
             guard let self else { return }
             if let detail = try? await self.repository.duel(id: self.duelId) {
@@ -146,14 +183,52 @@ public final class DuelViewModel {
         await connectRealtime()
     }
 
-    /// Arrête tout (sortie d'écran).
+    /// Arrête tout (sortie d'écran) : temps réel + les 3 rooms de slot.
     public func stop() async {
         subscriptions.forEach { $0.cancel() }
         subscriptions.removeAll()
         liveSession?.disconnect()
         chatSession?.disconnect()
-        await media.leave()
+        async let leaveA1: Void = mediaA1.leave()
+        async let leaveA2: Void = mediaA2.leave()
+        async let leaveMgr: Void = mediaMgr.leave()
+        _ = await (leaveA1, leaveA2, leaveMgr)
         started = false
+    }
+
+    // MARK: - Diffusion (artiste 1/2 ou manager)
+
+    /// Rejoint la room d'un slot : publieur si c'est MON slot, spectateur sinon.
+    private func joinSlot(_ client: LiveRoomClient, _ slot: String) {
+        let publish = slot == mySlot
+        Task { await client.join(roomName: "\(baseRoom)-\(slot)", isHost: publish, canPublish: publish) }
+    }
+
+    /// Participant : démarre la diffusion caméra + micro dans MA room de slot.
+    public func startBroadcast() async {
+        await myMedia?.startBroadcast()
+    }
+
+    /// Participant : coupe/rétablit MON micro.
+    public func toggleMic() async {
+        guard let m = myMedia else { return }
+        await m.setMicrophone(enabled: !m.isMicrophoneEnabled)
+    }
+
+    /// Participant : coupe/rétablit MA caméra.
+    public func toggleCamera() async {
+        guard let m = myMedia else { return }
+        await m.setCamera(enabled: !m.isCameraEnabled)
+    }
+
+    /// Participant : bascule caméra avant/arrière.
+    public func switchCamera() async {
+        await myMedia?.switchCamera()
+    }
+
+    /// Participant : applique un filtre couleur à MA diffusion.
+    public func setColorFilter(id: String, matrix: [Float]?) {
+        myMedia?.setColorFilter(id: id, matrix: matrix)
     }
 
     /// Vote payant pour un artiste.

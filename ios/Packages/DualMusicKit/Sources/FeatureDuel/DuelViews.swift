@@ -1,5 +1,6 @@
 import SwiftUI
 import LiveKit
+import CoreLiveMedia
 import CoreUI
 import DomainModels
 
@@ -20,6 +21,7 @@ public struct DuelRoomView: View {
     @State private var showReport = false
     @State private var banTarget: DuelChatMessage?
     @State private var showModeratorsSheet = false
+    @State private var showFilterSheet = false
 
     /// - Parameters:
     ///   - viewModel: état + actions du duel.
@@ -33,12 +35,14 @@ public struct DuelRoomView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            // --- Couche vidéo (décodage matériel) ---
-            if let track = viewModel.media.primaryVideoTrack {
-                SwiftUIVideoView(track, layoutMode: .fill).ignoresSafeArea()
-            } else {
-                theme.gradients.hero.ignoresSafeArea()
+            // --- Couche vidéo : deux tuiles côte à côte (artiste 1 | artiste 2). Le manager
+            // peut aussi diffuser (présentation/animation, room dédiée) mais n'a pas de tuile
+            // dans ce premier jet — écart assumé, cf. `TODO-IOS.md`.
+            HStack(spacing: 1) {
+                artistTile(viewModel.mediaA1)
+                artistTile(viewModel.mediaA2)
             }
+            .ignoresSafeArea()
 
             LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .center, endPoint: .bottom)
                 .ignoresSafeArea()
@@ -55,6 +59,7 @@ public struct DuelRoomView: View {
                 Spacer()
                 chatOverlay
                 votePanel
+                if viewModel.canPublish { hostControls }
                 messageBar
             }
             .padding(theme.spacing.lg)
@@ -63,6 +68,7 @@ public struct DuelRoomView: View {
         .onDisappear { Task { await viewModel.stop() } }
         // Manager ET modérateurs (pour voir qui d'autre a ce pouvoir) : liste + désignation.
         .sheet(isPresented: $showModeratorsSheet) { moderatorsSheet }
+        .sheet(isPresented: $showFilterSheet) { filterSheet }
         .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
             ForEach(ReportReason.allCases, id: \.self) { reason in
                 Button(reportLabel(reason)) {
@@ -295,6 +301,117 @@ public struct DuelRoomView: View {
                 }
                 .frame(maxHeight: 180)
             }
+        }
+    }
+
+    /// Une tuile de slot : mon propre aperçu si je publie là, le flux distant sinon, un repli
+    /// dégradé si personne ne diffuse encore.
+    private func artistTile(_ client: LiveRoomClient) -> some View {
+        Group {
+            if let track = client.localVideoTrack ?? client.primaryVideoTrack {
+                SwiftUIVideoView(track, layoutMode: .fill)
+            } else {
+                theme.gradients.hero
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+    }
+
+    /// Contrôles du participant qui publie (artiste 1/2 ou manager) : démarrer la diffusion,
+    /// puis mic/caméra/bascule/filtre une fois lancée.
+    private var hostControls: some View {
+        Group {
+            if let m = viewModel.myMedia, !m.isCameraEnabled, !m.isMicrophoneEnabled {
+                Button {
+                    Task { await viewModel.startBroadcast() }
+                } label: {
+                    Text(s.startLive)
+                        .font(DMFont.caption).bold()
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, theme.spacing.md)
+                        .padding(.vertical, theme.spacing.sm)
+                        .background(theme.colors.accent, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            } else {
+                HStack(spacing: theme.spacing.md) {
+                    controlButton(viewModel.myMedia?.isMicrophoneEnabled == true ? "mic.fill" : "mic.slash.fill") {
+                        Task { await viewModel.toggleMic() }
+                    }
+                    controlButton(viewModel.myMedia?.isCameraEnabled == true ? "video.fill" : "video.slash.fill") {
+                        Task { await viewModel.toggleCamera() }
+                    }
+                    controlButton("arrow.triangle.2.circlepath.camera.fill") {
+                        Task { await viewModel.switchCamera() }
+                    }
+                    controlButton("camera.filters") {
+                        showFilterSheet = true
+                    }
+                }
+            }
+        }
+    }
+
+    private func controlButton(_ systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .foregroundStyle(.white)
+                .padding(theme.spacing.sm)
+                .background(.black.opacity(0.4), in: Circle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Feuille : grille des filtres couleur (voir ``VideoFilterPresets/all``).
+    private var filterSheet: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: theme.spacing.md) {
+                Text(s.colorFilters).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 84))], spacing: theme.spacing.md) {
+                    ForEach(VideoFilterPresets.all) { preset in
+                        Button {
+                            viewModel.setColorFilter(id: preset.id, matrix: preset.matrix)
+                        } label: {
+                            VStack(spacing: theme.spacing.xs) {
+                                Text(preset.emoji).font(.system(size: 28))
+                                Text(filterLabel(preset.id))
+                                    .font(DMFont.caption)
+                                    .foregroundStyle(theme.colors.foreground)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(theme.spacing.sm)
+                            .background(
+                                viewModel.myMedia?.activeFilterId == preset.id ? theme.colors.accent.opacity(0.25) : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(theme.spacing.lg)
+        }
+        .presentationDetents([.medium])
+        .dmScreenBackground()
+    }
+
+    /// Libellé localisé d'un filtre couleur.
+    private func filterLabel(_ id: String) -> String {
+        switch id {
+        case "beauty": return s.filterBeauty
+        case "smooth": return s.filterSmooth
+        case "glow": return s.filterGlow
+        case "warm": return s.filterWarm
+        case "cool": return s.filterCool
+        case "vivid": return s.filterVivid
+        case "vintage": return s.filterVintage
+        case "noir": return s.filterNoir
+        case "studio": return s.filterStudio
+        case "neon": return s.filterNeon
+        case "dream": return s.filterDream
+        default: return s.filterNone
         }
     }
 }

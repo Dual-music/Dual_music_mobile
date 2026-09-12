@@ -1,5 +1,7 @@
 import SwiftUI
 import Observation
+import LiveKit
+import CoreLiveMedia
 import CoreNetwork
 import CoreRealtime
 import CoreUI
@@ -235,11 +237,24 @@ public final class CompetitionsViewModel {
 public final class CompetitionRoomViewModel {
 
     /// Candidats triés par score décroissant (= classement courant).
+    /// Client média — UNE SEULE room partagée par tous les publieurs potentiels (manager +
+    /// candidats approuvés en mode `"online"`), contrairement à Duel (une room par slot).
+    /// ``LiveRoomClient/remoteTiles`` expose les pistes distantes indexées par identité pour
+    /// le rendu multi-tuiles ; ``LiveRoomClient/localVideoTrack`` mon propre aperçu si je
+    /// publie.
+    public let media: LiveRoomClient
+
     public private(set) var candidates: [CompetitionCandidate] = []
     public private(set) var status: String?
     public private(set) var errorMessage: String?
     public private(set) var competition: Competition?
     public private(set) var messages: [CompetitionChatMessage] = []
+
+    /// Vrai si je peux publier ma caméra : le manager, ou un candidat APPROUVÉ en mode
+    /// `"online"` (en mode `"onsite"`, seul l'appareil du manager filme). Recalculé une fois
+    /// la compétition ET les candidats chargés — contrairement à Live/Duel/Concert, pas connu
+    /// avant (le statut d'approbation d'un candidat n'est disponible qu'après un fetch).
+    public private(set) var canPublish = false
 
     /// Spectateurs/candidats bannis de cette compétition (ids) — leurs messages restent en
     /// mémoire mais sont masqués de l'affichage (``visibleMessages``), pas supprimés.
@@ -277,11 +292,20 @@ public final class CompetitionRoomViewModel {
 
     /// - Parameters:
     ///   - competitionId: identifiant de la compétition.
+    ///   - media: client média dédié.
     ///   - repository: lectures + débits.
     ///   - realtime: client Socket.IO (écoute des changements de statut + chat).
-    ///   - callerId: id du caller — détermine ``isManager`` une fois la compétition chargée.
-    public init(competitionId: String, repository: CompetitionRepository, realtime: RealtimeClient, callerId: String? = nil) {
+    ///   - callerId: id du caller — détermine ``isManager``/``canPublish`` une fois la
+    ///     compétition chargée.
+    public init(
+        competitionId: String,
+        media: LiveRoomClient,
+        repository: CompetitionRepository,
+        realtime: RealtimeClient,
+        callerId: String? = nil
+    ) {
         self.competitionId = competitionId
+        self.media = media
         self.repository = repository
         self.realtime = realtime
         self.callerId = callerId
@@ -293,6 +317,14 @@ public final class CompetitionRoomViewModel {
         Task { [weak self] in
             guard let self else { return }
             self.competition = try? await self.repository.competition(id: self.competitionId)
+            // Recalculé maintenant que competition ET candidates (chargés par `refresh()`
+            // juste avant) sont disponibles.
+            let isManagerNow = self.callerId != nil && self.callerId == self.competition?.managerId
+            let approvedCandidate = self.competition?.mode == "online" && self.callerId != nil
+                && self.candidates.contains { $0.artistId == self.callerId && $0.status == "approved" }
+            self.canPublish = isManagerNow || approvedCandidate
+            let roomName = self.competition?.liveKitRoom ?? "comp-\(self.competitionId)"
+            await self.media.join(roomName: roomName, isHost: isManagerNow, canPublish: self.canPublish)
         }
         Task { [weak self] in
             guard let self else { return }
@@ -346,11 +378,39 @@ public final class CompetitionRoomViewModel {
     }
 
     /// Arrête l'écoute temps réel.
-    public func stop() {
+    public func stop() async {
         subscriptions.forEach { $0.cancel() }
         subscriptions.removeAll()
         liveSession?.disconnect()
         chatSession?.disconnect()
+        await media.leave()
+    }
+
+    // MARK: - Diffusion (manager, ou candidat approuvé en mode "online")
+
+    /// Démarre la diffusion caméra + micro (si ``canPublish``).
+    public func startBroadcast() async {
+        await media.startBroadcast()
+    }
+
+    /// Coupe/rétablit MON micro.
+    public func toggleMic() async {
+        await media.setMicrophone(enabled: !media.isMicrophoneEnabled)
+    }
+
+    /// Coupe/rétablit MA caméra.
+    public func toggleCamera() async {
+        await media.setCamera(enabled: !media.isCameraEnabled)
+    }
+
+    /// Bascule caméra avant/arrière.
+    public func switchCamera() async {
+        await media.switchCamera()
+    }
+
+    /// Applique un filtre couleur à MA diffusion.
+    public func setColorFilter(id: String, matrix: [Float]?) {
+        media.setColorFilter(id: id, matrix: matrix)
     }
 
     /// Envoie un message de chat.
@@ -521,6 +581,7 @@ public struct CompetitionRoomView: View {
     @State private var showReport = false
     @State private var banTarget: CompetitionChatMessage?
     @State private var showModeratorsSheet = false
+    @State private var showFilterSheet = false
 
     /// - Parameters:
     ///   - viewModel: état + actions.
@@ -558,6 +619,14 @@ public struct CompetitionRoomView: View {
 
             if let error = viewModel.errorMessage { DMMessage(error, kind: .error) }
 
+            // Vidéo multi-tuiles : moi (si je publie) + les autres publieurs actifs (manager +
+            // candidats approuvés en mode "online"). Absente si personne ne diffuse (mode
+            // "onsite" sans manager connecté, par ex.).
+            if viewModel.canPublish || viewModel.media.localVideoTrack != nil || !viewModel.media.remoteTiles.isEmpty {
+                videoGrid
+                if viewModel.canPublish { hostControls }
+            }
+
             if viewModel.candidates.isEmpty {
                 DMEmptyState(title: s.noCandidates, subtitle: s.noCandidatesHint, systemImage: "star")
                 Spacer()
@@ -580,9 +649,10 @@ public struct CompetitionRoomView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .dmScreenBackground()
         .task { await viewModel.start() }
-        .onDisappear { viewModel.stop() }
+        .onDisappear { Task { await viewModel.stop() } }
         .refreshable { await viewModel.refresh() }
         .sheet(isPresented: $showModeratorsSheet) { moderatorsSheet }
+        .sheet(isPresented: $showFilterSheet) { filterSheet }
         .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
             ForEach(ReportReason.allCases, id: \.self) { reason in
                 Button(reportLabel(reason)) {
@@ -739,6 +809,121 @@ public struct CompetitionRoomView: View {
                 }
                 .frame(maxHeight: 180)
             }
+        }
+    }
+
+    /// Grille des publieurs actifs : moi (aperçu local, si je publie) puis les autres, triés
+    /// par identité pour un ordre stable entre deux rafraîchissements.
+    private var videoGrid: some View {
+        let remote = viewModel.media.remoteTiles.sorted { $0.key < $1.key }
+        return LazyVGrid(columns: [GridItem(.adaptive(minimum: 110))], spacing: theme.spacing.sm) {
+            if let local = viewModel.media.localVideoTrack {
+                SwiftUIVideoView(local, layoutMode: .fill)
+                    .aspectRatio(1, contentMode: .fill)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            ForEach(remote, id: \.key) { _, track in
+                SwiftUIVideoView(track, layoutMode: .fill)
+                    .aspectRatio(1, contentMode: .fill)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+        }
+    }
+
+    /// Contrôles du publieur (manager ou candidat approuvé) : démarrer la diffusion, puis
+    /// mic/caméra/bascule/filtre une fois lancée.
+    private var hostControls: some View {
+        Group {
+            if !viewModel.media.isCameraEnabled, !viewModel.media.isMicrophoneEnabled {
+                Button {
+                    Task { await viewModel.startBroadcast() }
+                } label: {
+                    Text(s.startLive)
+                        .font(DMFont.caption).bold()
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, theme.spacing.md)
+                        .padding(.vertical, theme.spacing.sm)
+                        .background(theme.colors.accent, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            } else {
+                HStack(spacing: theme.spacing.md) {
+                    controlButton(viewModel.media.isMicrophoneEnabled ? "mic.fill" : "mic.slash.fill") {
+                        Task { await viewModel.toggleMic() }
+                    }
+                    controlButton(viewModel.media.isCameraEnabled ? "video.fill" : "video.slash.fill") {
+                        Task { await viewModel.toggleCamera() }
+                    }
+                    controlButton("arrow.triangle.2.circlepath.camera.fill") {
+                        Task { await viewModel.switchCamera() }
+                    }
+                    controlButton("camera.filters") {
+                        showFilterSheet = true
+                    }
+                }
+            }
+        }
+    }
+
+    private func controlButton(_ systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .foregroundStyle(theme.colors.foreground)
+                .padding(theme.spacing.sm)
+                .background(theme.colors.card, in: Circle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Feuille : grille des filtres couleur (voir ``VideoFilterPresets/all``).
+    private var filterSheet: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: theme.spacing.md) {
+                Text(s.colorFilters).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 84))], spacing: theme.spacing.md) {
+                    ForEach(VideoFilterPresets.all) { preset in
+                        Button {
+                            viewModel.setColorFilter(id: preset.id, matrix: preset.matrix)
+                        } label: {
+                            VStack(spacing: theme.spacing.xs) {
+                                Text(preset.emoji).font(.system(size: 28))
+                                Text(filterLabel(preset.id))
+                                    .font(DMFont.caption)
+                                    .foregroundStyle(theme.colors.foreground)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(theme.spacing.sm)
+                            .background(
+                                viewModel.media.activeFilterId == preset.id ? theme.colors.accent.opacity(0.25) : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(theme.spacing.lg)
+        }
+        .presentationDetents([.medium])
+        .dmScreenBackground()
+    }
+
+    /// Libellé localisé d'un filtre couleur.
+    private func filterLabel(_ id: String) -> String {
+        switch id {
+        case "beauty": return s.filterBeauty
+        case "smooth": return s.filterSmooth
+        case "glow": return s.filterGlow
+        case "warm": return s.filterWarm
+        case "cool": return s.filterCool
+        case "vivid": return s.filterVivid
+        case "vintage": return s.filterVintage
+        case "noir": return s.filterNoir
+        case "studio": return s.filterStudio
+        case "neon": return s.filterNeon
+        case "dream": return s.filterDream
+        default: return s.filterNone
         }
     }
 }
