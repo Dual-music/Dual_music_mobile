@@ -86,6 +86,21 @@ public final class ConcertRoomViewModel {
     /// (jamais vrai pour l'artiste, ni pour un concert gratuit).
     public private(set) var needsTicket = false
 
+    /// Modérateurs désignés de ce concert (artiste + jusqu'à ``maxEventModerators``
+    /// spectateurs) — visible par tous, pour que chacun sache qui d'autre a le pouvoir de
+    /// bannir.
+    public private(set) var moderators: [EventModerator] = []
+    /// Artiste : spectateurs actuellement connectés (vivier du picker de désignation).
+    public private(set) var viewers: [DisplayProfile] = []
+    /// Vrai si le caller est un modérateur désigné (jamais vrai pour l'artiste lui-même, qui a
+    /// déjà tous les pouvoirs via ``isHost``).
+    public var isModerator: Bool {
+        guard let callerId else { return false }
+        return moderators.contains { $0.userId == callerId }
+    }
+    /// Vrai si le caller peut bannir/masquer un message : l'artiste ou un modérateur désigné.
+    public var canModerate: Bool { isHost || isModerator }
+
     private let concertId: String
     private let roomName: String
     private let hostUserId: String
@@ -155,6 +170,7 @@ public final class ConcertRoomViewModel {
             let banned = await self.repository.listStreamBans(concertId: self.concertId)
             self.bannedUserIds.formUnion(banned)
         }
+        Task { [weak self] in await self?.loadModerators() }
         await connectRealtime()
     }
 
@@ -245,6 +261,32 @@ public final class ConcertRoomViewModel {
         if !giftFeed.isEmpty { giftFeed.removeFirst() }
     }
 
+    // MARK: - Modérateurs désignés
+
+    /// (Re)charge les modérateurs désignés — appelé au démarrage + sur événement temps réel,
+    /// pour TOUT LE MONDE (pas que l'artiste : chacun doit savoir qui d'autre peut bannir).
+    public func loadModerators() async {
+        moderators = (try? await repository.listEventModerators(concertId: concertId)) ?? []
+    }
+
+    /// Artiste : (re)charge les spectateurs connectés (vivier du picker « désigner »).
+    public func loadViewers() async {
+        guard isHost else { return }
+        viewers = (try? await repository.listCurrentViewers(concertId: concertId)) ?? []
+    }
+
+    /// Artiste : désigne un spectateur modérateur (ban/masquer message).
+    public func appointModerator(userId: String) async {
+        try? await repository.appointModerator(concertId: concertId, userId: userId)
+        await loadModerators()
+    }
+
+    /// Artiste : révoque un modérateur désigné.
+    public func revokeModerator(userId: String) async {
+        try? await repository.revokeModerator(concertId: concertId, userId: userId)
+        await loadModerators()
+    }
+
     // MARK: - Temps réel
 
     private func connectRealtime() async {
@@ -287,6 +329,13 @@ public final class ConcertRoomViewModel {
             guard let self, payload.streamId == nil || payload.streamId == self.concertId else { return }
             self.bannedUserIds.insert(payload.userId)
         })
+        // Modération : un modérateur a été désigné/révoqué par l'artiste → recharge pour tous.
+        subscriptions.append(live.onEvent(Realtime.Event.moderatorAppointed, as: EventModeratorPayload.self) { [weak self] _ in
+            Task { await self?.loadModerators() }
+        })
+        subscriptions.append(live.onEvent(Realtime.Event.moderatorRevoked, as: EventModeratorPayload.self) { [weak self] _ in
+            Task { await self?.loadModerators() }
+        })
 
         await live.connect()
         await chat.connect()
@@ -312,6 +361,7 @@ public struct ConcertRoomView: View {
     @State private var draft = ""
     @State private var showReport = false
     @State private var banTarget: ConcertChatMessage?
+    @State private var showModeratorsSheet = false
 
     /// - Parameters:
     ///   - viewModel: état + actions du concert.
@@ -370,6 +420,7 @@ public struct ConcertRoomView: View {
         }
         .task { await viewModel.start() }
         .onDisappear { Task { await viewModel.stop() } }
+        .sheet(isPresented: $showModeratorsSheet) { moderatorsSheet }
         .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
             ForEach(ReportReason.allCases, id: \.self) { reason in
                 Button(reportLabel(reason)) {
@@ -411,6 +462,22 @@ public struct ConcertRoomView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text(s.reportAction))
             }
+            // Visible de l'artiste ET des modérateurs eux-mêmes (pour qu'ils voient qui
+            // d'autre a ce pouvoir) — pas seulement l'artiste.
+            if viewModel.canModerate {
+                Button {
+                    showModeratorsSheet = true
+                    if viewModel.isHost { Task { await viewModel.loadViewers() } }
+                } label: {
+                    Image(systemName: "person.2.fill")
+                        .font(DMFont.caption)
+                        .foregroundStyle(.white)
+                        .padding(theme.spacing.xs)
+                        .background(.black.opacity(0.4), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(s.moderators))
+            }
             Spacer()
             HStack(spacing: 4) {
                 Image(systemName: "eye.fill")
@@ -434,7 +501,7 @@ public struct ConcertRoomView: View {
                         .font(DMFont.caption).bold()
                         .foregroundStyle(theme.colors.accent)
                         .onTapGesture {
-                            guard viewModel.isHost, message.userId != hostUserId else { return }
+                            guard viewModel.canModerate, message.userId != hostUserId else { return }
                             banTarget = message
                         }
                     Text(message.content)
@@ -562,5 +629,81 @@ public struct ConcertRoomView: View {
         let text = draft
         draft = ""
         Task { await viewModel.sendMessage(text) }
+    }
+
+    /// Feuille : modérateurs désignés (révocables par l'artiste) + désignation d'un
+    /// spectateur connecté (artiste uniquement). Visible aussi des modérateurs eux-mêmes, en
+    /// lecture seule pour la partie désignation.
+    private var moderatorsSheet: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text(s.moderators).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+            Text(s.moderatorsHint).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+
+            if viewModel.moderators.isEmpty {
+                Text(s.noModeratorsYet).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            } else {
+                ForEach(viewModel.moderators) { moderator in
+                    moderatorRow(moderator)
+                }
+            }
+
+            if viewModel.isHost {
+                Divider()
+                Text(s.designateViewer).font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+                designateViewerSection
+            }
+
+            Spacer()
+        }
+        .padding(theme.spacing.lg)
+        .presentationDetents([.medium])
+        .dmScreenBackground()
+    }
+
+    /// Ligne d'un modérateur désigné — révocable par l'artiste seulement.
+    private func moderatorRow(_ moderator: EventModerator) -> some View {
+        HStack {
+            Text(moderator.displayName).font(DMFont.body).foregroundStyle(theme.colors.foreground)
+            Spacer()
+            if viewModel.isHost {
+                Button { Task { await viewModel.revokeModerator(userId: moderator.userId) } } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(theme.colors.destructive)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(s.revokeAction))
+            }
+        }
+    }
+
+    /// Picker de désignation (artiste uniquement) : spectateurs connectés, hors modérateurs
+    /// déjà désignés, désactivé à la limite (``maxEventModerators``).
+    private var designateViewerSection: some View {
+        let appointedIds = Set(viewModel.moderators.map(\.userId))
+        let pickable = viewModel.viewers.filter { !appointedIds.contains($0.id) }
+        return Group {
+            if viewModel.moderators.count >= maxEventModerators {
+                Text(s.atModeratorLimit).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            } else if pickable.isEmpty {
+                Text(s.noViewersConnected).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                        ForEach(pickable) { viewer in
+                            HStack {
+                                Text(viewer.displayName).font(DMFont.body).foregroundStyle(theme.colors.foreground)
+                                Spacer()
+                                Button(s.appointAction) { Task { await viewModel.appointModerator(userId: viewer.id) } }
+                                    .font(DMFont.caption).bold()
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(theme.colors.primary)
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 180)
+            }
+        }
     }
 }

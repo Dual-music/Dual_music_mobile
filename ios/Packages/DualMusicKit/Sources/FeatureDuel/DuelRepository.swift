@@ -137,4 +137,24 @@ public struct DuelRepository: Sendable {
         )) ?? []
         return rows.compactMap(\.bannedUserId)
     }
+
+    /// Spectateurs actuellement connectés (manager uniquement — vivier du picker).
+    public func listCurrentViewers(duelId: String) async throws -> [DisplayProfile] {
+        try await http.request(.get(ModerationEndpoints.viewers("duel", duelId)), as: [DisplayProfile].self)
+    }
+
+    /// Modérateurs désignés de ce duel (manager + jusqu'à ``maxEventModerators`` spectateurs).
+    public func listEventModerators(duelId: String) async throws -> [EventModerator] {
+        try await http.request(.get(ModerationEndpoints.moderators("duel", duelId)), as: [EventModerator].self)
+    }
+
+    /// Manager : désigne un spectateur modérateur.
+    public func appointModerator(duelId: String, userId: String) async throws {
+        try await http.send(.post(ModerationEndpoints.moderators("duel", duelId), body: AppointModeratorBody(userId: userId)))
+    }
+
+    /// Manager : révoque un modérateur désigné.
+    public func revokeModerator(duelId: String, userId: String) async throws {
+        try await http.send(.delete(ModerationEndpoints.revokeModerator("duel", duelId, userId)))
+    }
 }

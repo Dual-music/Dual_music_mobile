@@ -58,12 +58,25 @@ public final class DuelViewModel {
     public private(set) var bannedUserIds: Set<String> = []
     /// Messages à afficher : ceux d'un spectateur banni sont masqués pour tout le monde.
     public var visibleMessages: [DuelChatMessage] { messages.filter { !bannedUserIds.contains($0.userId) } }
-    /// Vrai si le caller est le manager de ce duel — seul rôle autorisé à bannir (parité
-    /// Android : pas de modérateurs désignés côté Duel, contrairement à Live).
+    /// Vrai si le caller est le manager de ce duel.
     public var isManager: Bool {
         guard let callerId, let managerId = duel?.managerId else { return false }
         return managerId == callerId
     }
+
+    /// Modérateurs désignés de ce duel (manager + jusqu'à ``maxEventModerators`` spectateurs)
+    /// — visible par tous, pour que chacun sache qui d'autre a le pouvoir de bannir.
+    public private(set) var moderators: [EventModerator] = []
+    /// Manager : spectateurs actuellement connectés (vivier du picker de désignation).
+    public private(set) var viewers: [DisplayProfile] = []
+    /// Vrai si le caller est un modérateur désigné (jamais vrai pour le manager lui-même, qui
+    /// a déjà tous les pouvoirs via ``isManager``).
+    public var isModerator: Bool {
+        guard let callerId else { return false }
+        return moderators.contains { $0.userId == callerId }
+    }
+    /// Vrai si le caller peut bannir/masquer un message : le manager ou un modérateur désigné.
+    public var canModerate: Bool { isManager || isModerator }
 
     private let duelId: String
     private let roomName: String
@@ -129,6 +142,7 @@ public final class DuelViewModel {
             let banned = await self.repository.listStreamBans(duelId: self.duelId)
             self.bannedUserIds.formUnion(banned)
         }
+        Task { [weak self] in await self?.loadModerators() }
         await connectRealtime()
     }
 
@@ -189,6 +203,32 @@ public final class DuelViewModel {
     /// Retire le cadeau le plus ancien après son animation.
     public func consumeOldestGift() {
         if !giftFeed.isEmpty { giftFeed.removeFirst() }
+    }
+
+    // MARK: - Modérateurs désignés
+
+    /// (Re)charge les modérateurs désignés — appelé au démarrage + sur événement temps réel,
+    /// pour TOUT LE MONDE (pas que le manager : chacun doit savoir qui d'autre peut bannir).
+    public func loadModerators() async {
+        moderators = (try? await repository.listEventModerators(duelId: duelId)) ?? []
+    }
+
+    /// Manager : (re)charge les spectateurs connectés (vivier du picker « désigner »).
+    public func loadViewers() async {
+        guard isManager else { return }
+        viewers = (try? await repository.listCurrentViewers(duelId: duelId)) ?? []
+    }
+
+    /// Manager : désigne un spectateur modérateur (ban/masquer message).
+    public func appointModerator(userId: String) async {
+        try? await repository.appointModerator(duelId: duelId, userId: userId)
+        await loadModerators()
+    }
+
+    /// Manager : révoque un modérateur désigné.
+    public func revokeModerator(userId: String) async {
+        try? await repository.revokeModerator(duelId: duelId, userId: userId)
+        await loadModerators()
     }
 
     // MARK: - Temps réel
@@ -252,6 +292,13 @@ public final class DuelViewModel {
         subscriptions.append(live.onEvent(Realtime.Event.streamBanned, as: StreamBannedPayload.self) { [weak self] payload in
             guard let self, payload.streamId == nil || payload.streamId == self.duelId else { return }
             self.bannedUserIds.insert(payload.userId)
+        })
+        // Modération : un modérateur a été désigné/révoqué par le manager → recharge pour tous.
+        subscriptions.append(live.onEvent(Realtime.Event.moderatorAppointed, as: EventModeratorPayload.self) { [weak self] _ in
+            Task { await self?.loadModerators() }
+        })
+        subscriptions.append(live.onEvent(Realtime.Event.moderatorRevoked, as: EventModeratorPayload.self) { [weak self] _ in
+            Task { await self?.loadModerators() }
         })
 
         await live.connect()

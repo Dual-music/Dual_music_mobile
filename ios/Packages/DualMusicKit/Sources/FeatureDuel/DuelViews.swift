@@ -19,6 +19,7 @@ public struct DuelRoomView: View {
     @State private var draft = ""
     @State private var showReport = false
     @State private var banTarget: DuelChatMessage?
+    @State private var showModeratorsSheet = false
 
     /// - Parameters:
     ///   - viewModel: état + actions du duel.
@@ -60,6 +61,8 @@ public struct DuelRoomView: View {
         }
         .task { await viewModel.start() }
         .onDisappear { Task { await viewModel.stop() } }
+        // Manager ET modérateurs (pour voir qui d'autre a ce pouvoir) : liste + désignation.
+        .sheet(isPresented: $showModeratorsSheet) { moderatorsSheet }
         .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
             ForEach(ReportReason.allCases, id: \.self) { reason in
                 Button(reportLabel(reason)) {
@@ -93,7 +96,7 @@ public struct DuelRoomView: View {
                         .font(DMFont.caption).bold()
                         .foregroundStyle(theme.colors.accent)
                         .onTapGesture {
-                            guard viewModel.isManager, !isParticipant(message.userId) else { return }
+                            guard viewModel.canModerate, !isParticipant(message.userId) else { return }
                             banTarget = message
                         }
                     Text(message.content)
@@ -154,6 +157,22 @@ public struct DuelRoomView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text(s.reportAction))
+                // Visible du manager ET des modérateurs eux-mêmes (pour qu'ils voient qui
+                // d'autre a ce pouvoir) — pas seulement le manager.
+                if viewModel.canModerate {
+                    Button {
+                        showModeratorsSheet = true
+                        if viewModel.isManager { Task { await viewModel.loadViewers() } }
+                    } label: {
+                        Image(systemName: "person.2.fill")
+                            .font(DMFont.caption)
+                            .foregroundStyle(.white)
+                            .padding(theme.spacing.xs)
+                            .background(.black.opacity(0.4), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(s.moderators))
+                }
                 Spacer()
             }
             VoteBar(
@@ -200,6 +219,82 @@ public struct DuelRoomView: View {
             Text("\(s.oneVote) = \(formatAmount(voteAmount)) \(s.credits)")
                 .font(DMFont.caption)
                 .foregroundStyle(theme.colors.mutedForeground)
+        }
+    }
+
+    /// Feuille : modérateurs désignés (révocables par le manager) + désignation d'un
+    /// spectateur connecté (manager uniquement). Visible aussi des modérateurs eux-mêmes, en
+    /// lecture seule pour la partie désignation.
+    private var moderatorsSheet: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text(s.moderators).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+            Text(s.moderatorsHint).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+
+            if viewModel.moderators.isEmpty {
+                Text(s.noModeratorsYet).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            } else {
+                ForEach(viewModel.moderators) { moderator in
+                    moderatorRow(moderator)
+                }
+            }
+
+            if viewModel.isManager {
+                Divider()
+                Text(s.designateViewer).font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+                designateViewerSection
+            }
+
+            Spacer()
+        }
+        .padding(theme.spacing.lg)
+        .presentationDetents([.medium])
+        .dmScreenBackground()
+    }
+
+    /// Ligne d'un modérateur désigné — révocable par le manager seulement.
+    private func moderatorRow(_ moderator: EventModerator) -> some View {
+        HStack {
+            Text(moderator.displayName).font(DMFont.body).foregroundStyle(theme.colors.foreground)
+            Spacer()
+            if viewModel.isManager {
+                Button { Task { await viewModel.revokeModerator(userId: moderator.userId) } } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(theme.colors.destructive)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(s.revokeAction))
+            }
+        }
+    }
+
+    /// Picker de désignation (manager uniquement) : spectateurs connectés, hors modérateurs
+    /// déjà désignés, désactivé à la limite (``maxEventModerators``).
+    private var designateViewerSection: some View {
+        let appointedIds = Set(viewModel.moderators.map(\.userId))
+        let pickable = viewModel.viewers.filter { !appointedIds.contains($0.id) }
+        return Group {
+            if viewModel.moderators.count >= maxEventModerators {
+                Text(s.atModeratorLimit).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            } else if pickable.isEmpty {
+                Text(s.noViewersConnected).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                        ForEach(pickable) { viewer in
+                            HStack {
+                                Text(viewer.displayName).font(DMFont.body).foregroundStyle(theme.colors.foreground)
+                                Spacer()
+                                Button(s.appointAction) { Task { await viewModel.appointModerator(userId: viewer.id) } }
+                                    .font(DMFont.caption).bold()
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(theme.colors.primary)
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 180)
+            }
         }
     }
 }

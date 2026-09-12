@@ -130,6 +130,27 @@ public struct ConcertRepository: Sendable {
     public func endConcert(concertId: String) async throws {
         try await http.send(.patch(ConcertEndpoints.artistDetail(concertId), body: ConcertStatusBody(status: "ended")))
     }
+
+    /// Spectateurs actuellement connectés (artiste uniquement — vivier du picker).
+    public func listCurrentViewers(concertId: String) async throws -> [DisplayProfile] {
+        try await http.request(.get(ModerationEndpoints.viewers("concert", concertId)), as: [DisplayProfile].self)
+    }
+
+    /// Modérateurs désignés de ce concert (artiste + jusqu'à ``maxEventModerators``
+    /// spectateurs).
+    public func listEventModerators(concertId: String) async throws -> [EventModerator] {
+        try await http.request(.get(ModerationEndpoints.moderators("concert", concertId)), as: [EventModerator].self)
+    }
+
+    /// Artiste : désigne un spectateur modérateur.
+    public func appointModerator(concertId: String, userId: String) async throws {
+        try await http.send(.post(ModerationEndpoints.moderators("concert", concertId), body: AppointModeratorBody(userId: userId)))
+    }
+
+    /// Artiste : révoque un modérateur désigné.
+    public func revokeModerator(concertId: String, userId: String) async throws {
+        try await http.send(.delete(ModerationEndpoints.revokeModerator("concert", concertId, userId)))
+    }
 }
 
 /// Corps de `POST /concerts/:id/messages`.

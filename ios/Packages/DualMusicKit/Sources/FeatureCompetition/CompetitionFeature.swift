@@ -166,6 +166,27 @@ public struct CompetitionRepository: Sendable {
     public func postMessage(competitionId: String, content: String) async throws {
         try await http.send(.post(CompetitionEndpoints.messages(competitionId), body: CompetitionMessageBody(message: content)))
     }
+
+    /// Spectateurs actuellement connectés (manager uniquement — vivier du picker).
+    public func listCurrentViewers(competitionId: String) async throws -> [DisplayProfile] {
+        try await http.request(.get(ModerationEndpoints.viewers("competition", competitionId)), as: [DisplayProfile].self)
+    }
+
+    /// Modérateurs désignés de cette compétition (manager + jusqu'à ``maxEventModerators``
+    /// spectateurs).
+    public func listEventModerators(competitionId: String) async throws -> [EventModerator] {
+        try await http.request(.get(ModerationEndpoints.moderators("competition", competitionId)), as: [EventModerator].self)
+    }
+
+    /// Manager : désigne un spectateur modérateur.
+    public func appointModerator(competitionId: String, userId: String) async throws {
+        try await http.send(.post(ModerationEndpoints.moderators("competition", competitionId), body: AppointModeratorBody(userId: userId)))
+    }
+
+    /// Manager : révoque un modérateur désigné.
+    public func revokeModerator(competitionId: String, userId: String) async throws {
+        try await http.send(.delete(ModerationEndpoints.revokeModerator("competition", competitionId, userId)))
+    }
 }
 
 /// Corps de `POST /moderation/reports/competition`.
@@ -225,12 +246,26 @@ public final class CompetitionRoomViewModel {
     public private(set) var bannedUserIds: Set<String> = []
     /// Messages à afficher : ceux d'un banni sont masqués pour tout le monde.
     public var visibleMessages: [CompetitionChatMessage] { messages.filter { !bannedUserIds.contains($0.userId) } }
-    /// Vrai si le caller est le manager (organisateur) de cette compétition — seul rôle
-    /// autorisé à bannir (pas de modérateurs désignés côté Compétition, comme pour Duel).
+    /// Vrai si le caller est le manager (organisateur) de cette compétition.
     public var isManager: Bool {
         guard let callerId, let managerId = competition?.managerId else { return false }
         return managerId == callerId
     }
+
+    /// Modérateurs désignés de cette compétition (manager + jusqu'à ``maxEventModerators``
+    /// spectateurs) — visible par tous, pour que chacun sache qui d'autre a le pouvoir de
+    /// bannir.
+    public private(set) var moderators: [EventModerator] = []
+    /// Manager : spectateurs actuellement connectés (vivier du picker de désignation).
+    public private(set) var viewers: [DisplayProfile] = []
+    /// Vrai si le caller est un modérateur désigné (jamais vrai pour le manager lui-même, qui
+    /// a déjà tous les pouvoirs via ``isManager``).
+    public var isModerator: Bool {
+        guard let callerId else { return false }
+        return moderators.contains { $0.userId == callerId }
+    }
+    /// Vrai si le caller peut bannir/masquer un message : le manager ou un modérateur désigné.
+    public var canModerate: Bool { isManager || isModerator }
 
     private let competitionId: String
     private let callerId: String?
@@ -270,6 +305,7 @@ public final class CompetitionRoomViewModel {
             let banned = await self.repository.listCompetitionBans(competitionId: self.competitionId)
             self.bannedUserIds.formUnion(banned)
         }
+        Task { [weak self] in await self?.loadModerators() }
 
         let live = realtime.session(.live)
         let chat = realtime.session(.chat)
@@ -297,6 +333,13 @@ public final class CompetitionRoomViewModel {
         subscriptions.append(live.onEvent(Realtime.Event.competitionBanned, as: CompetitionBannedPayload.self) { [weak self] payload in
             guard let self, payload.competitionId == nil || payload.competitionId == self.competitionId else { return }
             self.bannedUserIds.insert(payload.userId)
+        })
+        // Modération : un modérateur a été désigné/révoqué par le manager → recharge pour tous.
+        subscriptions.append(live.onEvent(Realtime.Event.moderatorAppointed, as: EventModeratorPayload.self) { [weak self] _ in
+            Task { await self?.loadModerators() }
+        })
+        subscriptions.append(live.onEvent(Realtime.Event.moderatorRevoked, as: EventModeratorPayload.self) { [weak self] _ in
+            Task { await self?.loadModerators() }
         })
         await live.connect()
         await chat.connect()
@@ -328,6 +371,32 @@ public final class CompetitionRoomViewModel {
         } catch {
             bannedUserIds.remove(userId)
         }
+    }
+
+    // MARK: - Modérateurs désignés
+
+    /// (Re)charge les modérateurs désignés — appelé au démarrage + sur événement temps réel,
+    /// pour TOUT LE MONDE (pas que le manager : chacun doit savoir qui d'autre peut bannir).
+    public func loadModerators() async {
+        moderators = (try? await repository.listEventModerators(competitionId: competitionId)) ?? []
+    }
+
+    /// Manager : (re)charge les spectateurs connectés (vivier du picker « désigner »).
+    public func loadViewers() async {
+        guard isManager else { return }
+        viewers = (try? await repository.listCurrentViewers(competitionId: competitionId)) ?? []
+    }
+
+    /// Manager : désigne un spectateur modérateur (ban/masquer message).
+    public func appointModerator(userId: String) async {
+        try? await repository.appointModerator(competitionId: competitionId, userId: userId)
+        await loadModerators()
+    }
+
+    /// Manager : révoque un modérateur désigné.
+    public func revokeModerator(userId: String) async {
+        try? await repository.revokeModerator(competitionId: competitionId, userId: userId)
+        await loadModerators()
     }
 
     /// Recharge le classement depuis le serveur (source de vérité des tallies).
@@ -451,6 +520,7 @@ public struct CompetitionRoomView: View {
     @State private var draft = ""
     @State private var showReport = false
     @State private var banTarget: CompetitionChatMessage?
+    @State private var showModeratorsSheet = false
 
     /// - Parameters:
     ///   - viewModel: état + actions.
@@ -467,6 +537,17 @@ public struct CompetitionRoomView: View {
                     .font(DMFont.pageTitle)
                     .foregroundStyle(theme.colors.foreground)
                 Spacer()
+                if viewModel.canModerate {
+                    Button {
+                        showModeratorsSheet = true
+                        if viewModel.isManager { Task { await viewModel.loadViewers() } }
+                    } label: {
+                        Image(systemName: "person.2.fill")
+                            .foregroundStyle(theme.colors.mutedForeground)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(s.moderators))
+                }
                 Button { showReport = true } label: {
                     Image(systemName: "flag.fill")
                         .foregroundStyle(theme.colors.mutedForeground)
@@ -501,6 +582,7 @@ public struct CompetitionRoomView: View {
         .task { await viewModel.start() }
         .onDisappear { viewModel.stop() }
         .refreshable { await viewModel.refresh() }
+        .sheet(isPresented: $showModeratorsSheet) { moderatorsSheet }
         .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
             ForEach(ReportReason.allCases, id: \.self) { reason in
                 Button(reportLabel(reason)) {
@@ -534,7 +616,7 @@ public struct CompetitionRoomView: View {
                         .font(DMFont.caption).bold()
                         .foregroundStyle(theme.colors.accent)
                         .onTapGesture {
-                            guard viewModel.isManager, message.userId != viewModel.competition?.managerId else { return }
+                            guard viewModel.canModerate, message.userId != viewModel.competition?.managerId else { return }
                             banTarget = message
                         }
                     Text(message.content)
@@ -581,6 +663,82 @@ public struct CompetitionRoomView: View {
         case .harassment: return s.reportHarassment
         case .spam: return s.reportSpam
         case .violence: return s.reportViolence
+        }
+    }
+
+    /// Feuille : modérateurs désignés (révocables par le manager) + désignation d'un
+    /// spectateur connecté (manager uniquement). Visible aussi des modérateurs eux-mêmes, en
+    /// lecture seule pour la partie désignation.
+    private var moderatorsSheet: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text(s.moderators).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+            Text(s.moderatorsHint).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+
+            if viewModel.moderators.isEmpty {
+                Text(s.noModeratorsYet).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            } else {
+                ForEach(viewModel.moderators) { moderator in
+                    moderatorRow(moderator)
+                }
+            }
+
+            if viewModel.isManager {
+                Divider()
+                Text(s.designateViewer).font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+                designateViewerSection
+            }
+
+            Spacer()
+        }
+        .padding(theme.spacing.lg)
+        .presentationDetents([.medium])
+        .dmScreenBackground()
+    }
+
+    /// Ligne d'un modérateur désigné — révocable par le manager seulement.
+    private func moderatorRow(_ moderator: EventModerator) -> some View {
+        HStack {
+            Text(moderator.displayName).font(DMFont.body).foregroundStyle(theme.colors.foreground)
+            Spacer()
+            if viewModel.isManager {
+                Button { Task { await viewModel.revokeModerator(userId: moderator.userId) } } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(theme.colors.destructive)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(s.revokeAction))
+            }
+        }
+    }
+
+    /// Picker de désignation (manager uniquement) : spectateurs connectés, hors modérateurs
+    /// déjà désignés, désactivé à la limite (``maxEventModerators``).
+    private var designateViewerSection: some View {
+        let appointedIds = Set(viewModel.moderators.map(\.userId))
+        let pickable = viewModel.viewers.filter { !appointedIds.contains($0.id) }
+        return Group {
+            if viewModel.moderators.count >= maxEventModerators {
+                Text(s.atModeratorLimit).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            } else if pickable.isEmpty {
+                Text(s.noViewersConnected).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                        ForEach(pickable) { viewer in
+                            HStack {
+                                Text(viewer.displayName).font(DMFont.body).foregroundStyle(theme.colors.foreground)
+                                Spacer()
+                                Button(s.appointAction) { Task { await viewModel.appointModerator(userId: viewer.id) } }
+                                    .font(DMFont.caption).bold()
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(theme.colors.primary)
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 180)
+            }
         }
     }
 }
