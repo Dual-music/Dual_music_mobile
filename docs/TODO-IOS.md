@@ -183,7 +183,7 @@ Restant, non bloquant pour l'App Store (le report, lui, est en place partout où
 - [ ] Construire l'écran de room/direct pour Concert (actuellement inexistant) avant de pouvoir
       y brancher quoi que ce soit.
 
-### 1.2 Achats intégrés StoreKit pour la recharge de crédits 🚧 CODE iOS FAIT + CI verte le 2026-09-08, setup manuel restant
+### 1.2 Achats intégrés StoreKit pour la recharge de crédits ✅ CODE FAIT + CI verte (iOS + backend) le 2026-09-09, setup manuel restant
 
 Décision produit prise avec l'utilisateur (option 1 de `RELEASE-IOS.md` §6.1, recommandée) :
 StoreKit natif REMPLACE CinetPay/Stripe **dans l'écran de recharge iOS uniquement** — Android
@@ -234,14 +234,19 @@ plutôt qu'une cible SPM dédiée qui aurait juste ajouté de la cérémonie san
   `com.dualmusic.app`), `APPLE_IAP_ENVIRONMENT` (`sandbox`/`production`),
   `APPLE_IAP_APP_APPLE_ID` (obligatoire en production).
 
-**⚠️ NON COMMITÉ côté backend** — `Dual_music_backend` a ~13 jours de travail non commité,
-sans rapport avec ce chantier (temps réel, modération, enregistrement, compétition, concert,
-wallet — dizaines de fichiers, dernier commit 26/08). Mes ajouts StoreKit sont insérés
-proprement dedans (vérifié fichier par fichier, rien d'écrasé), mais je n'ai PAS commité —
-ni ce travail existant qui n'est pas le mien, ni le mien mélangé dedans sans autorisation
-explicite. Le code est là, prêt, mais reste à l'état de modifications non indexées dans
-l'arbre de travail du backend tant que l'utilisateur n'a pas tranché comment il veut gérer ça
-(`git add -p` pour isoler juste mes ajouts, ou une revue/commit groupée de leur côté).
+**Commité côté backend (2026-09-09)** — `Dual_music_backend` avait ~13 jours de travail non
+commité sans rapport avec ce chantier (temps réel, modération, enregistrement, compétition,
+concert, wallet). Mes ajouts StoreKit ont été isolés fichier par fichier (patches manuels
+plutôt que `git add -p` interactif, non pilotable depuis cet environnement) et commités sans
+toucher au reste : `15157ed` (endpoint + procédure stockée + config), puis 3 correctifs
+révélés par la CI générale du repo (inactive depuis le 26/07, donc jamais exercée sur ce
+code avant) : `09b41e1`/`7ee4394` (lockfile npm désynchronisé — toujours régénérer depuis un
+checkout propre de HEAD, jamais depuis le working tree qui contient aussi les ajouts non
+commités d'autres travaux), `751a59c` (entrées i18n manquantes pour les codes d'erreur
+`APPLE_*`), `e99bb67` (2 entrées i18n manquantes **préexistantes**, sans rapport avec StoreKit
+— `CONCERT_NOT_APPROVED`/`SPONSOR_NOT_ACCEPTED`, dette antérieure au 26/07 révélée seulement
+maintenant que la CI tourne à nouveau), `5c30972` (couverture de branche à 100 % exigée par
+le seuil de coverage du repo sur `verifyAppleCredits`). CI backend entièrement verte depuis.
 
 **Restant, hors code** :
 - [ ] Créer les 5 produits consommables dans App Store Connect avec CES MÊMES ids
@@ -255,18 +260,41 @@ l'arbre de travail du backend tant que l'utilisateur n'a pas tranché comment il
 - [ ] Test réel impossible sans device/TestFlight (bac à sable StoreKit) — à faire une fois
       l'accès matériel disponible, cf. le constat général de `GUIDE-TEST-IOS.md`.
 
-### 1.3 Sign in with Apple — absent
+### 1.3 Sign in with Apple ✅ CODE FAIT + CI verte le 2026-09-09 (iOS + backend), setup manuel restant
 
 `GoogleSignInProvider.swift` existe côté iOS mais rien d'équivalent pour Apple. Dès que le
 bouton Google est actif, Apple impose une option de connexion respectueuse de la vie privée
 (règle 4.8) — cf. `RELEASE-IOS.md` §6.3.
 
-- [ ] Décision : ajouter Sign in with Apple (`ASAuthorizationAppleIDButton` +
-      `ASAuthorizationController`), ou retirer Google d'iOS en laissant
-      `DM_GOOGLE_CLIENT_ID` vide dans `project.yml` (le bouton se masque déjà automatiquement,
-      donc cette option ne demande **aucun code**).
-- [ ] Si Sign in with Apple : activer la capability sur l'App ID, câbler `FeatureAuth`, et côté
-      backend étendre `POST /auth/oauth/*` pour vérifier l'identity token Apple.
+**Fait (iOS)** :
+- `SignInView.swift` : bouton natif `SignInWithAppleButton` (`AuthenticationServices`) +
+  `handleAppleSignIn`, même emplacement conditionnel que le bouton Google (`mode == .login`).
+- `AuthViewModel.signInWithApple()`, `AuthRepository.loginWithApple(identityToken:fullName:)`,
+  DTO `AppleNativeRequest` (`AuthDtos.swift`), `AuthEndpoints.oauthAppleNative`
+  (`Endpoints.swift`) — même point d'intégration unique que Google : succès → `authState =
+  .signedIn(user:)`, `RootView` bascule automatiquement, aucune nouvelle route.
+- `DualMusic.entitlements` : capability `com.apple.developer.applesignin` ajoutée.
+- `errAppleSignInFailed` (FR+EN) dans `Strings.swift`.
+
+**Fait (backend)** :
+- `POST /auth/oauth/apple/native` (`{ identityToken, fullName? }`) — même architecture que
+  `handleGoogleIdToken` (`oauth.service.js`) : vérification JWT via JWKS Apple
+  (`https://appleid.apple.com/auth/keys`, lib `jose`), résolution `oauth_accounts` (provider
+  `apple`) → email existant → provision d'un nouveau compte, exactement le même triple
+  route/validation/contrôleur que Google. Aucune migration nécessaire (table `oauth_accounts`
+  déjà polymorphe par provider).
+- ⚠️ Apple ne renvoie le nom complet (`fullName`) qu'à la **toute première** autorisation —
+  jamais ensuite. L'app iOS doit donc l'envoyer dès ce premier appel (`ASAuthorizationAppleIDCredential.fullName`),
+  sinon il est perdu définitivement pour ce compte.
+- Deux correctifs de lockfile npm en cours de route (voir §1.2 pour le premier incident
+  similaire) : `package-lock.json` doit toujours être régénéré depuis un checkout propre de
+  HEAD après tout ajout de dépendance (`jose` ici), jamais depuis un working tree qui contient
+  aussi des ajouts non commités d'autres travaux en cours.
+
+**Reste (manuel, hors code)** :
+- [ ] Activer la capability « Sign In with Apple » sur l'App ID `com.dualmusic.app` sur
+      developer.apple.com — sans ça, échec au runtime (pas à la compilation).
+- [ ] Test réel impossible sans device/TestFlight — même constat que StoreKit (§1.2).
 
 ### 1.4 Observabilité Sentry — absent (mineur, non bloquant App Store)
 
