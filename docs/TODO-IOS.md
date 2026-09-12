@@ -155,7 +155,7 @@ dédicaces, invités sur scène, modérateurs — le plus gros chantier restant 
 **Étape 1.0 terminée** — mode hôte Live complet (diffusion, Mes lives, dédicaces, invités sur
 scène, modérateurs désignés, chat on/off), tout vérifié CI verte.
 
-### 1.1 Signalement + bannissement (report/ban) 🚧 CODE FAIT le 2026-09-12, CI Concert restante
+### 1.1 Signalement + bannissement (report/ban) ✅ FAIT le 2026-09-12 (CI verte, Live+Duel+Compétition+Concert)
 
 Backend déjà prêt, aucun DTO Kotlin partagé côté Android (chaque repository construit son
 propre JSON — `moderation/reports/live` pour live/duel/concert, `moderation/reports/competition`
