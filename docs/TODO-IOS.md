@@ -155,7 +155,7 @@ dédicaces, invités sur scène, modérateurs — le plus gros chantier restant 
 **Étape 1.0 terminée** — mode hôte Live complet (diffusion, Mes lives, dédicaces, invités sur
 scène, modérateurs désignés, chat on/off), tout vérifié CI verte.
 
-### 1.1 Signalement + bannissement (report/ban) ✅ FAIT (partiellement) le 2026-09-07
+### 1.1 Signalement + bannissement (report/ban) 🚧 CODE FAIT le 2026-09-12, CI Concert restante
 
 Backend déjà prêt, aucun DTO Kotlin partagé côté Android (chaque repository construit son
 propre JSON — `moderation/reports/live` pour live/duel/concert, `moderation/reports/competition`
@@ -194,14 +194,37 @@ propre JSON — `moderation/reports/live` pour live/duel/concert, `moderation/re
   Compétition — hors du scope validé pour ce chantier (chat + ban simple), tous deux ajoutables
   plus tard sans replomberie (`EventModerator` déjà générique, `parentId` déjà dans le contrat
   Android à reproduire si besoin).
-- **Concert** : couche données seulement (`reportLive`/`createStreamBan` sur
-  `ConcertRepository`) — **il n'existe pas encore d'écran de room/direct pour les concerts
-  côté iOS du tout** (catalogue + achat de dédicace seulement), donc rien à brancher.
+- **Concert** (2026-09-12) : écran de room construit de zéro (`ConcertRoomView.swift`,
+  nouveau fichier dans `FeatureConcert`) — vidéo LiveKit host/viewer, chat, cadeaux (envoi +
+  animation, bouton rapide façon Live — pas de catalogue/inventaire branché, comme Live
+  aujourd'hui), présence, report/ban (réutilise `reportLive`/`createStreamBan`, déjà présents
+  mais jusqu'ici inutilisés faute d'écran). Room LiveKit dérivée `"concert-<id>"` (toujours
+  calculée, jamais de `room_id` backend pour ce type — différent de Live/Duel). Chat :
+  `/concerts/:id/messages`, même convention `message`/`author` que Compétition (pas
+  `content`/`user`).
+  - **Billetterie** (concept absent de Live/Duel/Compétition, propre à Concert) : un billet
+    est requis pour regarder un concert PAYANT, sauf l'artiste — `needsTicket` bloque l'accès
+    à la vidéo (la room LiveKit n'est même pas rejointe) derrière un paywall plein écran tant
+    que `POST /wallet/tickets/concert` n'a pas été appelé avec succès.
+  - `isHost` déterminé à la construction (`AppContainer.concertRoom`, comparaison directe
+    `profile.me?.user.id == concert.artistId`), pas par un appel réseau async comme Android
+    (`repository.myUserId()`) — cohérent avec le choix déjà fait pour Live/Duel côté iOS.
+  - Navigation câblée : `MainShellView`'s onglet Concerts n'avait jamais son `onOpen` branché
+    (`ConcertsListView(viewModel: container.concerts)` sans callback) — ajouté `concertsTab`
+    (même patron que `duelsTab`/`competitionsTab`).
+  - Écart assumé avec Android, délibérément repoussé (scope MVP validé) : **dédicaces en
+    direct avec accepter/rejeter côté artiste** (Concert n'a aujourd'hui que l'achat one-shot
+    `ConcertFeature.purchaseDedication`, jamais branché à une UI — contrairement à Live qui a
+    la feuille complète), **modérateurs désignés** (`EventModerator`, déjà générique,
+    réutilisable sans repartir de zéro), **likes + réactions emoji**, et **filtre couleur
+    vidéo** (`setColorFilter` côté Android — nécessiterait une capacité de traitement vidéo
+    absente de `CoreLiveMedia` iOS aujourd'hui, chantier à part entière).
 
-Restant, non bloquant pour l'App Store (le report, lui, est en place partout où il y a un
-écran à l'utiliser) :
-- [ ] Construire l'écran de room/direct pour Concert (actuellement inexistant) avant de pouvoir
-      y brancher quoi que ce soit — dernier morceau de l'Étape 1.1.
+Restant, non bloquant pour l'App Store :
+- [ ] Vérifier la CI iOS pour ce commit (Concert) avant de considérer l'Étape 1.1 réellement
+      terminée.
+- [ ] Dédicaces en direct, modérateurs désignés, likes/réactions, filtre couleur pour Concert
+      (voir écarts ci-dessus) — aucun n'est bloquant, à faire si/quand utile.
 
 ### 1.2 Achats intégrés StoreKit pour la recharge de crédits ✅ CODE FAIT + CI verte (iOS + backend) le 2026-09-09, setup manuel restant
 

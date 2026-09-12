@@ -269,6 +269,8 @@ public struct DMStrings: Sendable {
     public let dateFormatLabel: String
     public let ticketPriceLabel: String
     public let maxTicketsLabel: String
+    public let ticketRequired: String
+    public let buyTicket: String
     public let allowDedications: String
     public let allowSponsorAds: String
     public let uploadingCover: String
@@ -687,6 +689,8 @@ public extension DMStrings {
         dateFormatLabel: "Date * (AAAA-MM-JJTHH:MM)",
         ticketPriceLabel: "Prix du billet (crédits)",
         maxTicketsLabel: "Places max (optionnel)",
+        ticketRequired: "Ce concert nécessite un billet pour être regardé.",
+        buyTicket: "Acheter le billet",
         allowDedications: "Autoriser les dédicaces",
         allowSponsorAds: "Autoriser les pubs sponsors",
         uploadingCover: "Upload de la pochette…",
@@ -1090,6 +1094,8 @@ public extension DMStrings {
         dateFormatLabel: "Date * (YYYY-MM-DDTHH:MM)",
         ticketPriceLabel: "Ticket price (credits)",
         maxTicketsLabel: "Max seats (optional)",
+        ticketRequired: "This concert requires a ticket to watch.",
+        buyTicket: "Buy ticket",
         allowDedications: "Allow dedications",
         allowSponsorAds: "Allow sponsor ads",
         uploadingCover: "Uploading cover…",

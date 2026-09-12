@@ -69,7 +69,6 @@ public struct ConcertRepository: Sendable {
     }
 
     /// Bannit un spectateur (artiste uniquement) : il ne peut plus écrire ni rejoindre.
-    /// Couche données seulement — voir note ci-dessus.
     public func createStreamBan(streamId: String, bannedUserId: String, reason: String?) async throws {
         try await http.send(
             .post(
@@ -78,6 +77,74 @@ public struct ConcertRepository: Sendable {
             )
         )
     }
+
+    /// Spectateurs déjà bannis de ce concert (ids) — amorce l'affichage pour un arrivant
+    /// tardif. Best-effort : une erreur réseau donne juste une liste vide.
+    public func listStreamBans(concertId: String) async -> [String] {
+        let rows = (try? await http.request(
+            .get(ModerationReportEndpoints.streamBans, query: ["streamId": concertId, "streamType": "concert"]),
+            as: [StreamBanRow].self
+        )) ?? []
+        return rows.compactMap(\.bannedUserId)
+    }
+
+    /// Historique de chat (dernière page) pour amorcer l'overlay.
+    public func chatHistory(concertId: String) async throws -> [ConcertChatMessage] {
+        try await http.request(
+            .get(ConcertEndpoints.messages(concertId), query: ["limit": "50"]),
+            as: [ConcertChatMessage].self
+        )
+    }
+
+    /// Poste un message (le backend le diffuse ensuite via Socket.IO).
+    public func postMessage(concertId: String, content: String) async throws {
+        try await http.send(.post(ConcertEndpoints.messages(concertId), body: ConcertMessageBody(message: content)))
+    }
+
+    /// Envoie un cadeau à l'artiste dans le contexte du concert.
+    public func sendGift(concertId: String, giftId: String, toUserId: String) async throws {
+        try await http.send(
+            .post(
+                WalletEndpoints.giftsSend,
+                body: SendGiftRequest(giftId: giftId, toUserId: toUserId, concertId: concertId),
+                idempotencyKey: "gift-\(concertId)-\(giftId)-\(toUserId)-\(UUID().uuidString)"
+            )
+        )
+    }
+
+    /// Achète le billet spectateur (débit atomique + idempotent) — requis pour regarder un
+    /// concert payant, sauf l'artiste lui-même.
+    public func buyTicket(concertId: String, idempotencyKey: String = UUID().uuidString) async throws {
+        try await http.send(
+            .post(WalletEndpoints.ticketConcert, body: BuyConcertTicketBody(concertId: concertId), idempotencyKey: idempotencyKey)
+        )
+    }
+
+    /// Artiste : démarre la diffusion côté backend (`status: live`) — appelé APRÈS que la
+    /// publication caméra/micro a réellement réussi, jamais avant.
+    public func goLive(concertId: String) async throws {
+        try await http.send(.patch(ConcertEndpoints.artistDetail(concertId), body: ConcertStatusBody(status: "live")))
+    }
+
+    /// Artiste : termine le concert côté backend (`status: ended`).
+    public func endConcert(concertId: String) async throws {
+        try await http.send(.patch(ConcertEndpoints.artistDetail(concertId), body: ConcertStatusBody(status: "ended")))
+    }
+}
+
+/// Corps de `POST /concerts/:id/messages`.
+struct ConcertMessageBody: Encodable, Sendable {
+    let message: String
+}
+
+/// Corps de `POST /wallet/tickets/concert`.
+struct BuyConcertTicketBody: Encodable, Sendable {
+    let concertId: String
+}
+
+/// Corps de `PATCH /artist-concerts/:id` — mise à jour de statut (`live`/`ended`).
+struct ConcertStatusBody: Encodable, Sendable {
+    let status: String
 }
 
 /// Corps de `POST /moderation/reports/live` (live/duel/concert, distingués par `streamType`).

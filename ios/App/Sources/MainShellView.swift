@@ -75,6 +75,7 @@ struct MainShellView: View {
     @State private var homeDestination: HomeDestination?
     @State private var openDuel: Duel?
     @State private var openCompetition: Competition?
+    @State private var openConcert: Concert?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -97,6 +98,7 @@ struct MainShellView: View {
                 homeDestination = nil
                 if selected == .duels { openDuel = nil }
                 if selected == .competitions { openCompetition = nil }
+                if selected == .concerts { openConcert = nil }
             }
         }
         .background(DMScreenBackground())
@@ -117,7 +119,7 @@ struct MainShellView: View {
             case .home: homeTab
             case .lives: FeedView(viewModel: container.feed) { container.liveRoom(for: $0) }
             case .duels: duelsTab
-            case .concerts: ConcertsListView(viewModel: container.concerts)
+            case .concerts: concertsTab
             case .competitions: competitionsTab
             }
         }
@@ -169,6 +171,23 @@ struct MainShellView: View {
             }
         } else {
             CompetitionsListView(viewModel: container.competitions) { openCompetition = $0 }
+        }
+    }
+
+    /// Catalogue de concerts → room de concert.
+    @ViewBuilder
+    private var concertsTab: some View {
+        if let concert = openConcert {
+            SubScreen(title: concert.title, onBack: { openConcert = nil }) {
+                ConcertRoomView(
+                    viewModel: container.concertRoom(for: concert),
+                    concertTitle: concert.title,
+                    hostUserId: concert.artistId,
+                    onEnded: { openConcert = nil }
+                )
+            }
+        } else {
+            ConcertsListView(viewModel: container.concerts) { openConcert = $0 }
         }
     }
 }

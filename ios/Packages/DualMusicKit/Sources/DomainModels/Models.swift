@@ -221,6 +221,10 @@ public struct Concert: Codable, Sendable, Identifiable, Equatable {
         allowsDedications = c.bool(.allowsDedications)
         coverImageURL = c.opt(String.self, .coverImageURL)
     }
+
+    /// Room LiveKit : toujours dérivée, jamais de `room_id` backend pour ce type d'évènement
+    /// (contrairement à Live/Duel) — miroir exact d'Android (`"concert-$id"`, tiret).
+    public var liveKitRoom: String { "concert-\(id)" }
 }
 
 /// Compétition (candidats, votes, cadeaux, classement).

@@ -106,6 +106,7 @@ public final class AppContainer {
     @ObservationIgnored private var cachedCompetitions: CompetitionsViewModel?
     @ObservationIgnored private var duelRooms: [String: DuelViewModel] = [:]
     @ObservationIgnored private var competitionRooms: [String: CompetitionRoomViewModel] = [:]
+    @ObservationIgnored private var concertRooms: [String: ConcertRoomViewModel] = [:]
     @ObservationIgnored private var liveRooms: [String: LiveViewModel] = [:]
     @ObservationIgnored private var replayPlayers: [String: ReplayPlayerViewModel] = [:]
 
@@ -336,6 +337,25 @@ public final class AppContainer {
         return viewModel
     }
 
+    /// ViewModel de room de concert — **une connexion SFU par concert ouvert**.
+    /// - Parameter concert: concert à ouvrir.
+    func concertRoom(for concert: Concert) -> ConcertRoomViewModel {
+        if let existing = concertRooms[concert.id] { return existing }
+        let viewModel = ConcertRoomViewModel(
+            concertId: concert.id,
+            roomName: concert.liveKitRoom,
+            media: LiveRoomClient(tokenService: liveKitTokens),
+            realtime: realtime,
+            repository: concertRepository,
+            hostUserId: concert.artistId,
+            ticketPrice: concert.ticketPrice,
+            isHost: profile.me?.user.id == concert.artistId,
+            callerId: profile.me?.user.id
+        )
+        concertRooms[concert.id] = viewModel
+        return viewModel
+    }
+
     /// ViewModel d'un live du feed — chaque room a son propre client média.
     func liveRoom(for live: Live) -> LiveViewModel {
         if let existing = liveRooms[live.id] { return existing }
@@ -453,6 +473,7 @@ public final class AppContainer {
         cachedCompetitions = nil
         duelRooms.removeAll()
         competitionRooms.removeAll()
+        concertRooms.removeAll()
         liveRooms.removeAll()
         replayPlayers.removeAll()
         myLivesViewModel = nil

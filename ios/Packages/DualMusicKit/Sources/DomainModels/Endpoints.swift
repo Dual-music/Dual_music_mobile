@@ -119,6 +119,8 @@ public enum ConcertEndpoints {
     public static func artistDetail(_ id: String) -> String { "/artist-concerts/\(id)" }
     public static func ticketInfo(_ id: String) -> String { "/concerts/\(id)/ticket-info" }
     public static func reminder(_ id: String) -> String { "/concerts/\(id)/reminder" }
+    /// Chat du concert (historique GET / envoi POST).
+    public static func messages(_ id: String) -> String { "/concerts/\(id)/messages" }
     /// Hôte : accepte une dédicace EN ATTENTE — débite le fan maintenant.
     public static func dedicationAccept(_ id: String) -> String { "/concerts/dedications/\(id)/accept" }
     /// Hôte : rejette une dédicace EN ATTENTE — aucun débit.
