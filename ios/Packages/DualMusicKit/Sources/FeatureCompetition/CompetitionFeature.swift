@@ -33,6 +33,14 @@ public struct CompetitionChatMessage: Decodable, Sendable, Identifiable, Equatab
         id = messageId ?? UUID().uuidString
     }
 
+    public init(id: String? = nil, userId: String, content: String, user: DisplayProfile? = nil) {
+        self.messageId = id
+        self.userId = userId
+        self.content = content
+        self.user = user
+        self.id = id ?? UUID().uuidString
+    }
+
     /// Nom d'auteur affiché (repli « Fan »).
     @MainActor
     public var authorName: String { user?.displayName ?? AppStrings.current.fan }
