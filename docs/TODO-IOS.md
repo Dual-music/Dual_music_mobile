@@ -317,21 +317,50 @@ taux de crash soient comparables, cf. `PARITE-ANDROID-IOS.md`.
 
 ## Étape 2 — Configuration à fournir avant tout build sur device/TestFlight
 
-Rien à coder ici, mais bloquant pour sortir du simulateur. Détail complet dans
-`RELEASE-IOS.md` §0-§3.
+Rien à coder ici (sauf mention contraire) — uniquement des actions manuelles sur des portails
+externes (comptes, secrets), qu'un assistant ne peut pas faire à la place de l'utilisateur.
+Détail complet dans `RELEASE-IOS.md` §0-§3. **Ordre de dépendance réel** (chaque étape
+débloque la suivante) — reprendre ici lors d'une prochaine session :
 
-- [ ] Compte **Apple Developer Program** (99 $/an) — sans lui, aucune distribution possible.
-- [ ] Créer l'App ID `com.dualmusic.app` (Push Notifications, + Sign in with Apple si retenu
-      à l'étape 1.3) et l'app sur App Store Connect.
-- [ ] Renseigner `DEVELOPMENT_TEAM` dans `ios/project.yml` (actuellement vide, ligne 53).
-- [ ] Créer le projet Firebase iOS (`Bundle ID` = `com.dualmusic.app`), télécharger
-      `GoogleService-Info.plist` → `ios/App/Resources/GoogleService-Info.plist` (absent du
-      disque actuellement, normal : gitignoré).
-- [ ] Créer une clé APNs (`.p8`) et l'uploader dans Firebase Cloud Messaging.
-- [ ] Si Google conservé : remplir `DM_GOOGLE_CLIENT_ID` / `DM_GOOGLE_REVERSED_CLIENT_ID`
-      dans `project.yml` (vides actuellement) et vérifier côté backend que
-      `POST /auth/oauth/google/native` accepte l'audience du client iOS.
-- [ ] `xcodegen generate` après chaque changement de `project.yml`.
+1. [ ] **Compte Apple Developer Program** (99 $/an) — https://developer.apple.com/programs/enroll/
+       Préalable absolu à tout le reste. L'activation peut prendre 24-48h après paiement.
+2. [ ] **App ID `com.dualmusic.app`** — developer.apple.com → Certificates, Identifiers &
+       Profiles → Identifiers → nouveau App ID. Cocher les capabilities : **Push
+       Notifications**, **Sign In with Apple** (déjà câblé en code, §1.3), **In-App
+       Purchase** (nécessaire pour StoreKit, §1.2).
+3. [ ] **`DEVELOPMENT_TEAM`** — une fois le compte actif, récupérer le Team ID (10
+       caractères, Membership sur developer.apple.com) et le renseigner dans
+       `ios/project.yml` ligne 53 (actuellement vide). Puis `xcodegen generate`.
+4. [ ] **Fiche app sur App Store Connect** — https://appstoreconnect.apple.com → Mes Apps →
+       nouvelle app, même Bundle ID. Nécessaire pour TestFlight et pour créer les produits
+       StoreKit (étape 6).
+5. [ ] **Firebase (push notifications)** :
+       - Créer un projet Firebase iOS, Bundle ID `com.dualmusic.app`.
+       - Télécharger `GoogleService-Info.plist` → `ios/App/Resources/GoogleService-Info.plist`
+         (absent du disque actuellement, normal : gitignoré).
+       - Créer une clé APNs (`.p8`) sur developer.apple.com et l'uploader dans Firebase
+         Cloud Messaging (Project Settings → Cloud Messaging).
+6. [ ] **StoreKit (crédits, §1.2)** — le plus gros morceau manuel :
+       - App Store Connect → fiche app → Fonctionnalités → Achats intégrés : créer 5
+         produits **consommables** avec exactement ces ids : `com.dualmusic.app.credits.tier1`
+         à `tier5`, fixer les prix.
+       - Générer une clé API « In-App Purchase » (App Store Connect → Utilisateurs et accès
+         → Clés → In-App Purchase) : donne un issuer ID, un key ID, un fichier `.p8`.
+       - Renseigner côté backend (`.env`) : `APPLE_IAP_ISSUER_ID`, `APPLE_IAP_KEY_ID`,
+         `APPLE_IAP_PRIVATE_KEY` (contenu du `.p8`), `APPLE_IAP_BUNDLE_ID`,
+         `APPLE_IAP_ENVIRONMENT`, `APPLE_IAP_APP_APPLE_ID`.
+       - Si les montants de crédits par palier changent : ajuster
+         `src/config/appleIAPProducts.js` (backend) et `productIDs` dans `RechargeViewModel`
+         (iOS).
+       - `npm run db:procedures` (backend) pour déployer `credit_wallet_apple`.
+7. [ ] **Sentry (§1.4, facultatif, rapide)** — créer un projet sur sentry.io, copier le DSN
+       (Settings → Projects → Client Keys), le renseigner dans `Observability.swift` via une
+       variable de build/secret CI, jamais en clair.
+8. [ ] **Google Sign-In (optionnel, si conservé en plus d'Apple)** — créer un client OAuth
+       iOS dans Google Cloud Console, remplir `DM_GOOGLE_CLIENT_ID` /
+       `DM_GOOGLE_REVERSED_CLIENT_ID` dans `project.yml` (vides actuellement), vérifier côté
+       backend que `POST /auth/oauth/google/native` accepte l'audience du client iOS.
+9. [ ] `xcodegen generate` après chaque changement de `project.yml`.
 
 ---
 
