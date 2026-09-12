@@ -313,9 +313,6 @@ taux de crash soient comparables, cf. `PARITE-ANDROID-IOS.md`.
       Projects → Client Keys) pour activer l'envoi — via une variable de build/secret CI,
       jamais committé en clair.
 
-- [ ] Ajouter le SDK Sentry Cocoa au `Package.swift` (cible `App`, pas `DualMusicKit`).
-- [ ] Initialiser dans `DualMusicApp.swift`, DSN vide par défaut (comme Android).
-
 ---
 
 ## Étape 2 — Configuration à fournir avant tout build sur device/TestFlight
