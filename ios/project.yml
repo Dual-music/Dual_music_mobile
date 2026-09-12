@@ -38,6 +38,10 @@ packages:
   GoogleSignIn:
     url: https://github.com/google/GoogleSignIn-iOS
     from: "7.1.0"
+  # Observabilité (crashs + traces de perf) — DSN vide par défaut, voir Observability.swift.
+  Sentry:
+    url: https://github.com/getsentry/sentry-cocoa
+    from: "8.0.0"
 
 # --- Réglages communs -------------------------------------------------------
 settings:
@@ -77,6 +81,8 @@ targets:
         product: FirebaseMessaging
       - package: GoogleSignIn
         product: GoogleSignIn
+      - package: Sentry
+        product: Sentry
     info:
       path: App/Resources/Info.plist
     entitlements:
