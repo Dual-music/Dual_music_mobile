@@ -296,10 +296,22 @@ bouton Google est actif, Apple impose une option de connexion respectueuse de la
       developer.apple.com — sans ça, échec au runtime (pas à la compilation).
 - [ ] Test réel impossible sans device/TestFlight — même constat que StoreKit (§1.2).
 
-### 1.4 Observabilité Sentry — absent (mineur, non bloquant App Store)
+### 1.4 Observabilité Sentry ✅ CODE FAIT + CI verte le 2026-09-12 (mineur, non bloquant App Store)
 
-Android initialise déjà Sentry (DSN vide → inactif). À faire en même temps sur les deux
-plateformes pour que les taux de crash soient comparables, cf. `PARITE-ANDROID-IOS.md`.
+Android initialise déjà Sentry (DSN vide → inactif). Fait en miroir côté iOS pour que les
+taux de crash soient comparables, cf. `PARITE-ANDROID-IOS.md`.
+
+- `ios/App/Sources/Observability.swift` : `SentrySDK.start` (SDK `sentry-cocoa` via SPM,
+  package lié uniquement à la cible app `DualMusic`, pas à `DualMusicKit`), DSN vide par
+  défaut (`sentryDSN = ""`) → no-op sûr, exactement le même schéma qu'Android
+  (`DualMusicApp.kt`) : `tracesSampleRate = 0.2`, `sendDefaultPii = false`, `environment`
+  (development/production selon `#if DEBUG`), `releaseName` depuis
+  `CFBundleShortVersionString`.
+- Appelé en tout premier dans `AppDelegate.application(didFinishLaunchingWithOptions:)`
+  (`DualMusicApp.swift`), avant `PushService`, pour capturer aussi les crashs de démarrage.
+- [ ] Restant, hors code : renseigner le DSN réel depuis le dashboard Sentry (Settings →
+      Projects → Client Keys) pour activer l'envoi — via une variable de build/secret CI,
+      jamais committé en clair.
 
 - [ ] Ajouter le SDK Sentry Cocoa au `Package.swift` (cible `App`, pas `DualMusicKit`).
 - [ ] Initialiser dans `DualMusicApp.swift`, DSN vide par défaut (comme Android).
