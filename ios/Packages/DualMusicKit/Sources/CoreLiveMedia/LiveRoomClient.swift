@@ -228,6 +228,11 @@ public final class LiveRoomClient {
         remoteTiles = tiles
     }
 
+    /// MON identité LiveKit (= userId côté backend) — pour indexer MA propre tuile aux côtés de
+    /// ``remoteTiles`` dans un rendu multi-diffuseur (ex. Compétition, focus imposé par
+    /// identité). `nil` avant la connexion à la room.
+    public var localIdentity: String? { room.localParticipant.identity?.stringValue }
+
     /// Filet de sécurité : recalcule la piste primaire chaque seconde tant qu'on est connecté.
     private func startPolling() {
         stopPolling()

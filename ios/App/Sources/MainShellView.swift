@@ -167,7 +167,7 @@ struct MainShellView: View {
     private var competitionsTab: some View {
         if let competition = openCompetition {
             SubScreen(title: competition.title, onBack: { openCompetition = nil }) {
-                CompetitionRoomView(viewModel: container.competitionRoom(for: competition))
+                CompetitionRoomView(viewModel: container.competitionRoom(for: competition), onLeave: { openCompetition = nil })
             }
         } else {
             CompetitionsListView(viewModel: container.competitions) { openCompetition = $0 }
