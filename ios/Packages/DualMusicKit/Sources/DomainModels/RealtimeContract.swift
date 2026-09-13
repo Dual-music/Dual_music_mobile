@@ -100,6 +100,12 @@ public enum Realtime {
         /// réémis par le serveur à tous les autres membres de la room. Payload
         /// ``BroadcastEnvelope``.
         public static let broadcast = "broadcast"
+        /// `/live` · room compétition — le manager désigne (ou libère) le candidat mis en avant.
+        /// Payload ``PerformerPayload``.
+        public static let performer = "performer"
+        /// `/live` · room compétition — le manager impose (ou libère) la caméra épinglée pour
+        /// tous. Payload ``FocusPayload``.
+        public static let focus = "focus"
     }
 }
 
@@ -308,6 +314,72 @@ public struct LiveSettingsPayload: Decodable, Sendable {
         dedicationMinPriceCredits = c.amountIfPresent(.dedicationMinPriceCredits)
         allowGuests = c.bool(.allowGuests, true)
         chatEnabled = c.opt(Bool.self, .chatEnabled)
+    }
+}
+
+/// `settings` (générique) — au minimum `chatEnabled`, présent sur les 4 types d'évènement ;
+/// un seul champ id est renseigné selon le type. Distinct de ``LiveSettingsPayload`` (Live
+/// uniquement, qui porte en plus dédicaces/invités) — utilisé par les évènements qui n'ont que
+/// le chat à synchroniser (compétition).
+public struct EventSettingsPayload: Decodable, Sendable {
+    public let duelId: String?
+    public let liveId: String?
+    public let concertId: String?
+    public let competitionId: String?
+    public let chatEnabled: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case duelId = "duel_id"
+        case liveId = "live_id"
+        case concertId = "concert_id"
+        case competitionId = "competition_id"
+        case chatEnabled = "chat_enabled"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        duelId = c.opt(String.self, .duelId)
+        liveId = c.opt(String.self, .liveId)
+        concertId = c.opt(String.self, .concertId)
+        competitionId = c.opt(String.self, .competitionId)
+        chatEnabled = c.opt(Bool.self, .chatEnabled)
+    }
+}
+
+/// `performer` — le manager désigne (ou libère avec `nil`) le candidat mis en avant.
+public struct PerformerPayload: Decodable, Sendable {
+    public let competitionId: String?
+    public let performerId: String?
+    public let durationSec: Int
+
+    enum CodingKeys: String, CodingKey {
+        case competitionId = "competition_id"
+        case performerId, durationSec
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        competitionId = c.opt(String.self, .competitionId)
+        performerId = c.opt(String.self, .performerId)
+        durationSec = c.int(.durationSec)
+    }
+}
+
+/// `focus` — le manager impose (ou libère avec `nil`) la caméra mise en avant pour tous les
+/// spectateurs. `participantId` = identité LiveKit du publieur épinglé (= userId).
+public struct FocusPayload: Decodable, Sendable {
+    public let competitionId: String?
+    public let participantId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case competitionId = "competition_id"
+        case participantId
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        competitionId = c.opt(String.self, .competitionId)
+        participantId = c.opt(String.self, .participantId)
     }
 }
 

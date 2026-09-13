@@ -6,6 +6,8 @@ import CoreNetwork
 import CoreRealtime
 import CoreUI
 import DomainModels
+import FeatureGiftShop
+import FeatureWallet
 
 /// Message de chat d'une compétition (auteur hydraté par le backend).
 ///
@@ -51,6 +53,40 @@ public struct CompetitionChatMessage: Decodable, Sendable, Identifiable, Equatab
 /// Corps de `POST /competitions/:id/messages`.
 struct CompetitionMessageBody: Encodable, Sendable {
     let message: String
+}
+
+/// Vainqueur annoncé (célébration plein écran synchronisée pour tous les spectateurs).
+public struct CompetitionWinner: Sendable, Equatable {
+    public let name: String
+    public let avatar: String?
+    public let votes: Int
+    public let percent: Int
+
+    public init(name: String, avatar: String?, votes: Int, percent: Int = 0) {
+        self.name = name
+        self.avatar = avatar
+        self.votes = votes
+        self.percent = percent
+    }
+}
+
+/// Réaction emoji flottante (id stable pour SwiftUI, contenu de l'emoji).
+public struct CompetitionFloatingReaction: Identifiable, Sendable, Equatable {
+    public let id: Int
+    public let emoji: String
+}
+
+/// Candidat actuellement mis en avant par le manager (id + fin du créneau, ISO, pour un chrono).
+public struct CompetitionPerformer: Sendable, Equatable {
+    public let performerId: String?
+    public let endsAt: String?
+
+    public init(performerId: String?, endsAt: String?) {
+        self.performerId = performerId
+        self.endsAt = endsAt
+    }
+
+    public var isActive: Bool { performerId != nil }
 }
 
 /// Réponse de `GET /lives/:id/likes` (réutilisée par les compétitions).
@@ -498,11 +534,64 @@ public final class CompetitionRoomViewModel {
     }
     /// Vrai si le caller peut bannir/masquer un message : le manager ou un modérateur désigné.
     public var canModerate: Bool { isManager || isModerator }
+    /// Vrai si JE suis banni de ce direct → l'UI bloque ma saisie et affiche une barrière.
+    public var iAmBanned: Bool {
+        guard let callerId else { return false }
+        return bannedUserIds.contains(callerId)
+    }
+    /// Vrai si le caller est un ACTEUR (manager, admin, ou candidat publieur) — exempté du
+    /// billet ``ScheduledAccessGate`` (jamais exempté de l'attente de l'heure programmée). Un
+    /// candidat approuvé ne doit jamais se voir réclamer de billet pour SA propre compétition.
+    public var isActor: Bool { isManager || isAdmin || canPublish }
+
+    // MARK: - Billetterie / gate d'accès programmé
+
+    public private(set) var hasTicket = false
+    public private(set) var isAdmin = false
+    /// Chat activé/désactivé par le manager — suivi séparément de ``competition`` (qui n'a pas
+    /// d'initialiseur memberwise, seulement `init(from:)`) pour ne jamais avoir à le reconstruire.
+    public private(set) var chatEnabled = true
+
+    // MARK: - Likes / réactions emoji
+
+    public private(set) var likes = 0
+    public private(set) var emojiFeed: [CompetitionFloatingReaction] = []
+    private var emojiCounter = 0
+
+    // MARK: - Cadeaux : boutique + classement
+
+    public private(set) var topDonor: CompetitionDonorEntry?
+    public private(set) var leaderboard: [CompetitionDonorEntry] = []
+    public private(set) var giftCatalog: [VirtualGift] = []
+    public private(set) var inventory: [InventoryItem] = []
+    public private(set) var giftReceived: String?
+    public func clearGiftReceived() { giftReceived = nil }
+
+    // MARK: - Présence + vote
+
+    public private(set) var viewerCount = 0
+    /// Prix d'UN vote en crédits (défaut 1 tant que non chargé).
+    public private(set) var votePrice = 1
+
+    // MARK: - Contrôles manager (organisateur)
+
+    /// Candidats coupés d'AUTORITÉ par le manager (hard-mute) — ids utilisateur.
+    public private(set) var mutedArtists: Set<String> = []
+    /// Caméra épinglée par le manager (identité LiveKit) — focus imposé, synchronisé.
+    public private(set) var forcedFocusId: String?
+    /// Manager : masque les autres cases pour TOUS (diffusion éphémère, distincte du focus).
+    public private(set) var forcedHideOthers = false
+    /// Vainqueur annoncé (broadcast) → célébration plein écran ; `nil` = arrêtée.
+    public private(set) var winnerInfo: CompetitionWinner?
+    /// Candidat actuellement mis en avant par le manager (id + fin du créneau, pour un chrono).
+    public private(set) var performer = CompetitionPerformer(performerId: nil, endsAt: nil)
 
     private let competitionId: String
     private let callerId: String?
     private let repository: CompetitionRepository
     private let realtime: RealtimeClient
+    private let wallet: WalletRepository
+    private let giftShop: GiftShopRepository
     private var subscriptions: [Subscription] = []
     private var liveSession: NamespaceSession?
     private var chatSession: NamespaceSession?
@@ -519,12 +608,16 @@ public final class CompetitionRoomViewModel {
         media: LiveRoomClient,
         repository: CompetitionRepository,
         realtime: RealtimeClient,
+        wallet: WalletRepository,
+        giftShop: GiftShopRepository,
         callerId: String? = nil
     ) {
         self.competitionId = competitionId
         self.media = media
         self.repository = repository
         self.realtime = realtime
+        self.wallet = wallet
+        self.giftShop = giftShop
         self.callerId = callerId
     }
 
@@ -533,14 +626,24 @@ public final class CompetitionRoomViewModel {
         await refresh()
         Task { [weak self] in
             guard let self else { return }
-            self.competition = try? await self.repository.competition(id: self.competitionId)
+            let comp = try? await self.repository.competition(id: self.competitionId)
+            self.competition = comp
+            self.forcedFocusId = comp?.forcedFocusParticipantId
+            self.chatEnabled = comp?.chatEnabled ?? true
             // Recalculé maintenant que competition ET candidates (chargés par `refresh()`
             // juste avant) sont disponibles.
-            let isManagerNow = self.callerId != nil && self.callerId == self.competition?.managerId
-            let approvedCandidate = self.competition?.mode == "online" && self.callerId != nil
+            let isManagerNow = self.callerId != nil && self.callerId == comp?.managerId
+            let approvedCandidate = comp?.mode == "online" && self.callerId != nil
                 && self.candidates.contains { $0.artistId == self.callerId && $0.status == "approved" }
             self.canPublish = isManagerNow || approvedCandidate
-            let roomName = self.competition?.liveKitRoom ?? "comp-\(self.competitionId)"
+            self.isAdmin = await self.repository.amIAdmin()
+            // Billetterie : prix EFFECTIF nul si la compétition n'est pas payante au public
+            // (parité `ScheduledAccessGate` : `ticketPrice = isPublicPaid ? viewerTicketPrice : 0`).
+            let isActorNow = isManagerNow || self.isAdmin || self.canPublish
+            if comp?.isPublicPaid == true, !isActorNow {
+                self.hasTicket = await self.repository.ticketInfo(id: self.competitionId).hasTicket
+            }
+            let roomName = comp?.liveKitRoom ?? "comp-\(self.competitionId)"
             await self.media.join(roomName: roomName, isHost: isManagerNow, canPublish: self.canPublish)
         }
         Task { [weak self] in
@@ -555,6 +658,18 @@ public final class CompetitionRoomViewModel {
             self.bannedUserIds.formUnion(banned)
         }
         Task { [weak self] in await self?.loadModerators() }
+        Task { [weak self] in
+            guard let self else { return }
+            self.likes = await self.repository.likesCount(competitionId: self.competitionId)
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            let price = await self.repository.votePricePerVote()
+            self.votePrice = max(1, Int(price))
+        }
+        Task { [weak self] in await self?.loadGiftCatalog() }
+        Task { [weak self] in await self?.loadInventory() }
+        Task { [weak self] in await self?.refreshGiftLeaderboard() }
 
         let live = realtime.session(.live)
         let chat = realtime.session(.chat)
@@ -574,6 +689,11 @@ public final class CompetitionRoomViewModel {
             // Un changement d'état peut clore les votes → on resynchronise le classement.
             Task { await self.refresh() }
         })
+        // Réglage chat basculé par le manager — même room pour tous les spectateurs.
+        subscriptions.append(live.onEvent(Realtime.Event.settings, as: EventSettingsPayload.self) { [weak self] payload in
+            guard let self, payload.competitionId == nil || payload.competitionId == self.competitionId else { return }
+            if let enabled = payload.chatEnabled { self.chatEnabled = enabled }
+        })
         subscriptions.append(chat.onEvent(Realtime.Event.chatMessage, as: ChatMessagePayload.self) { [weak self] payload in
             self?.messages.append(
                 CompetitionChatMessage(id: payload.id, userId: payload.userId, content: payload.content, user: payload.user)
@@ -582,6 +702,59 @@ public final class CompetitionRoomViewModel {
         subscriptions.append(live.onEvent(Realtime.Event.competitionBanned, as: CompetitionBannedPayload.self) { [weak self] payload in
             guard let self, payload.competitionId == nil || payload.competitionId == self.competitionId else { return }
             self.bannedUserIds.insert(payload.userId)
+        })
+        // Présence (spectateurs).
+        subscriptions.append(live.onEvent(Realtime.Event.presence, as: PresencePayload.self) { [weak self] payload in
+            self?.viewerCount = payload.count
+        })
+        // Performeur désigné par le manager → chrono de créneau.
+        subscriptions.append(live.onEvent(Realtime.Event.performer, as: PerformerPayload.self) { [weak self] payload in
+            guard let self else { return }
+            if let pid = payload.performerId {
+                let endsAt = ISO8601DateFormatter().string(from: Date().addingTimeInterval(TimeInterval(payload.durationSec)))
+                self.performer = CompetitionPerformer(performerId: pid, endsAt: endsAt)
+            } else {
+                self.performer = CompetitionPerformer(performerId: nil, endsAt: nil)
+            }
+        })
+        // Focus caméra imposé par le manager → tous mettent cette identité en avant.
+        subscriptions.append(live.onEvent(Realtime.Event.focus, as: FocusPayload.self) { [weak self] payload in
+            self?.forcedFocusId = payload.participantId
+        })
+        // Relais broadcast éphémères (emojis, mute, vainqueur, likes, masquage forcé).
+        subscriptions.append(live.onEvent(Realtime.Event.broadcast, as: BroadcastEnvelope.self) { [weak self] envelope in
+            guard let self else { return }
+            switch envelope.event {
+            case "emoji_reaction":
+                if let emoji = envelope.payload?.emoji { self.pushEmoji(emoji) }
+            case "like":
+                if let count = envelope.payload?.count, count > self.likes { self.likes = count }
+            case "FORCE_MUTE":
+                if let artistId = envelope.payload?.artistId { self.applyMuteState(artistId, muted: true) }
+            case "FORCE_UNMUTE":
+                if let artistId = envelope.payload?.artistId { self.applyMuteState(artistId, muted: false) }
+            case "HIDE_OTHERS":
+                self.forcedHideOthers = true
+            case "SHOW_OTHERS":
+                self.forcedHideOthers = false
+            case "winner_announced":
+                if let p = envelope.payload {
+                    self.winnerInfo = CompetitionWinner(name: p.name ?? "Vainqueur", avatar: p.avatar, votes: p.votes ?? 0, percent: p.percent ?? 0)
+                }
+            case "winner_stopped":
+                self.winnerInfo = nil
+            default:
+                break
+            }
+        })
+        // Cadeaux : resynchronise classement + bannière « reçu » si c'est pour moi.
+        subscriptions.append(live.onEvent(Realtime.Event.gift, as: GiftPayload.self) { [weak self] payload in
+            guard let self else { return }
+            Task { await self.refreshGiftLeaderboard() }
+            Task { await self.refresh() }
+            if let toUserId = payload.toUserId, toUserId == self.callerId {
+                self.giftReceived = "🎁 Vous avez reçu un cadeau (\(Int(payload.value)) crédits) !"
+            }
         })
         // Modération : un modérateur a été désigné/révoqué par le manager → recharge pour tous.
         subscriptions.append(live.onEvent(Realtime.Event.moderatorAppointed, as: EventModeratorPayload.self) { [weak self] _ in
@@ -702,6 +875,226 @@ public final class CompetitionRoomViewModel {
     /// Signale cette compétition avec un motif (modération).
     public func report(reason: ReportReason) async {
         try? await repository.reportCompetition(competitionId: competitionId, reason: reason)
+    }
+
+    // MARK: - Billetterie
+
+    /// Achète le billet spectateur (accès programmé/payant). Débit atomique + idempotent.
+    public func buyTicket() async -> Result<Void, Error> {
+        do {
+            try await repository.buyTicket(competitionId: competitionId)
+            hasTicket = true
+            return .success(())
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    // MARK: - Likes / réactions emoji
+
+    /// « J'aime » : incrément local + compteur partagé (broadcast) + persistance + réaction cœur.
+    public func sendLike() {
+        likes += 1
+        liveSession?.broadcast(channel: "competition-likes-\(competitionId)", event: "like", payload: ["count": likes])
+        sendReaction("❤️")
+        Task { await repository.likeCompetition(competitionId: competitionId) }
+    }
+
+    /// Envoie une réaction emoji : effet local + relais aux autres membres de la room.
+    public func sendReaction(_ emoji: String) {
+        pushEmoji(emoji)
+        liveSession?.broadcast(channel: "competition-emojis-\(competitionId)", event: "emoji_reaction", payload: ["emoji": emoji])
+    }
+
+    private func pushEmoji(_ emoji: String) {
+        emojiCounter += 1
+        emojiFeed = (emojiFeed + [CompetitionFloatingReaction(id: emojiCounter, emoji: emoji)]).suffix(12).map { $0 }
+    }
+
+    /// Retire la réaction la plus ancienne après son animation.
+    public func consumeOldestEmoji() {
+        if !emojiFeed.isEmpty { emojiFeed.removeFirst() }
+    }
+
+    // MARK: - Cadeaux
+
+    /// Recharge le catalogue des cadeaux virtuels (boutique).
+    public func loadGiftCatalog() async {
+        giftCatalog = (try? await giftShop.catalog()) ?? giftCatalog
+    }
+
+    /// Recharge l'inventaire (après achat/envoi).
+    public func loadInventory() async {
+        inventory = (try? await giftShop.inventory()) ?? inventory
+    }
+
+    /// Recharge le classement des donateurs + la bulle top-donateur.
+    @discardableResult
+    private func refreshGiftLeaderboard() async -> [CompetitionDonorEntry] {
+        let list = (try? await repository.giftLeaderboard(competitionId: competitionId)) ?? []
+        leaderboard = list
+        topDonor = list.first
+        return list
+    }
+
+    /// Achète un cadeau (boutique) puis recharge l'inventaire.
+    public func purchaseGift(giftId: String) async {
+        do {
+            try await wallet.purchaseGift(giftId: giftId)
+            await loadInventory()
+        } catch {
+            errorMessage = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Offre un cadeau à un candidat (alimente son score). Débit atomique côté serveur ; on
+    /// resynchronise le classement et on recharge l'inventaire (quantité restante).
+    public func sendGift(candidateId: String, giftId: String, credits: Int) async {
+        do {
+            try await repository.sendGift(
+                competitionId: competitionId,
+                request: CompetitionGiftRequest(candidateId: candidateId, giftId: giftId, credits: credits)
+            )
+            await refresh()
+            await loadInventory()
+        } catch {
+            errorMessage = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Offre un cadeau directement au manager (organisateur) plutôt qu'à un candidat.
+    public func sendGiftToManager(giftId: String, credits: Int) async {
+        guard let managerId = competition?.managerId else { return }
+        do {
+            try await repository.sendGift(
+                competitionId: competitionId,
+                request: CompetitionGiftRequest(recipientUserId: managerId, giftId: giftId, credits: credits)
+            )
+            await loadInventory()
+        } catch {
+            errorMessage = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Retire le cadeau le plus ancien après son animation.
+    public func consumeOldestGift() {
+        if !giftFeed.isEmpty { giftFeed.removeFirst() }
+    }
+
+    // MARK: - Contrôles MANAGER (organisateur)
+
+    /// Active/désactive le chat pour tous (optimiste + persistant).
+    public func toggleChat(_ enabled: Bool) async {
+        chatEnabled = enabled
+        do {
+            try await repository.setChatEnabled(id: competitionId, enabled: enabled)
+        } catch {
+            chatEnabled = !enabled
+        }
+    }
+
+    /// Manager : coupe/réactive d'AUTORITÉ le micro d'un candidat (hard-mute), diffusé à tous.
+    public func toggleMuteArtist(_ artistId: String) {
+        let shouldMute = !mutedArtists.contains(artistId)
+        applyMuteState(artistId, muted: shouldMute)
+        liveSession?.broadcast(
+            channel: "competition-mute-\(competitionId)",
+            event: shouldMute ? "FORCE_MUTE" : "FORCE_UNMUTE",
+            payload: ["artistId": artistId]
+        )
+    }
+
+    /// Applique l'état de coupure d'un candidat : ensemble partagé + hard-mute réel de MON
+    /// micro si c'est moi. Le mute ne concerne QUE le micro, jamais la caméra.
+    private func applyMuteState(_ artistId: String, muted: Bool) {
+        if muted { mutedArtists.insert(artistId) } else { mutedArtists.remove(artistId) }
+        if artistId == callerId {
+            Task { await media.setMicrophone(enabled: !muted) }
+        }
+    }
+
+    /// Manager : masque les autres cases pour TOUS (diffusion éphémère, distincte du focus).
+    public func toggleHideOthers() {
+        forcedHideOthers.toggle()
+        liveSession?.broadcast(
+            channel: "competition-hide-others-\(competitionId)",
+            event: forcedHideOthers ? "HIDE_OTHERS" : "SHOW_OTHERS",
+            payload: [:]
+        )
+    }
+
+    /// Manager : annonce le VAINQUEUR (candidat en tête, approuvés uniquement) sans clôturer.
+    /// Célébration plein écran chez tous via broadcast.
+    public func announceWinnerAuto() {
+        let ranked = candidates.filter { $0.status == "approved" }
+        let pool = ranked.isEmpty ? candidates : ranked
+        guard let top = pool.max(by: { $0.score < $1.score }) else { return }
+        let total = pool.reduce(0) { $0 + $1.score }
+        let percent = total > 0 ? Int((top.score / total) * 100) : 100
+        let w = CompetitionWinner(name: top.artist?.displayName ?? "Vainqueur", avatar: top.artist?.avatarURL, votes: Int(top.score), percent: percent)
+        winnerInfo = w
+        liveSession?.broadcast(
+            channel: "competition-winner-\(competitionId)",
+            event: "winner_announced",
+            payload: ["name": w.name, "avatar": w.avatar ?? "", "votes": w.votes, "percent": w.percent]
+        )
+    }
+
+    /// Manager : arrête la célébration du vainqueur pour tous (ne clôture PAS le direct).
+    public func stopWinnerAnnouncement() {
+        winnerInfo = nil
+        liveSession?.broadcast(channel: "competition-winner-\(competitionId)", event: "winner_stopped", payload: [:])
+    }
+
+    /// Valide/rejette une candidature puis recharge la liste.
+    public func reviewCandidate(candidateId: String, approve: Bool) async {
+        do {
+            try await repository.reviewCandidate(candidateId: candidateId, approve: approve)
+            await refresh()
+        } catch {
+            errorMessage = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Fixe les voix de jury d'un candidat puis recharge le classement.
+    public func setJuryVotes(candidateId: String, juryVotes: Int) async {
+        do {
+            try await repository.setJuryVotes(candidateId: candidateId, juryVotes: juryVotes)
+            await refresh()
+        } catch {
+            errorMessage = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Publie la compétition (ouvre les votes).
+    public func publish() async {
+        do {
+            try await repository.publish(id: competitionId)
+            await refresh()
+        } catch {
+            errorMessage = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Désigne le candidat actuellement mis en avant (ou `nil` pour arrêter).
+    public func setPerformer(candidateId: String?, durationSeconds: Int) async {
+        try? await repository.setPerformer(id: competitionId, candidateId: candidateId, durationSeconds: durationSeconds)
+    }
+
+    /// Finalise le classement (clôture définitive).
+    public func finalize() async {
+        do {
+            try await repository.finalize(id: competitionId)
+            await refresh()
+        } catch {
+            errorMessage = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Manager : impose (ou libère avec `nil`) la caméra épinglée pour tous.
+    public func setFocus(_ participantId: String?) {
+        forcedFocusId = participantId
+        Task { try? await repository.setFocus(id: competitionId, participantId: participantId) }
     }
 }
 

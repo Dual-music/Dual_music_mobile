@@ -356,6 +356,8 @@ public final class AppContainer {
             media: LiveRoomClient(tokenService: liveKitTokens),
             repository: competitionRepository,
             realtime: realtime,
+            wallet: walletRepository,
+            giftShop: giftShopRepository,
             callerId: profile.me?.user.id
         )
         competitionRooms[competition.id] = viewModel
