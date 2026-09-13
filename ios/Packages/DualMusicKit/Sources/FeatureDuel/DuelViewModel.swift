@@ -101,6 +101,12 @@ public final class DuelViewModel {
     public private(set) var bannedUserIds: Set<String> = []
     /// Messages à afficher : ceux d'un spectateur banni sont masqués pour tout le monde.
     public var visibleMessages: [DuelChatMessage] { messages.filter { !bannedUserIds.contains($0.userId) } }
+    /// Vrai si JE suis banni de ce direct → l'UI bloque ma saisie de message et affiche une
+    /// barrière plein écran (parité `BannedAccessGate`).
+    public var iAmBanned: Bool {
+        guard let callerId else { return false }
+        return bannedUserIds.contains(callerId)
+    }
     /// Vrai si le caller est le manager de ce duel.
     public var isManager: Bool {
         guard let callerId, let managerId = duel?.managerId else { return false }

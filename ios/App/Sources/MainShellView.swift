@@ -155,7 +155,7 @@ struct MainShellView: View {
     private var duelsTab: some View {
         if let duel = openDuel {
             SubScreen(title: s.screenDuels, onBack: { openDuel = nil }) {
-                DuelRoomView(viewModel: container.duelRoom(for: duel))
+                DuelRoomView(viewModel: container.duelRoom(for: duel), onLeave: { openDuel = nil })
             }
         } else {
             DuelsListView(viewModel: container.duelsList) { openDuel = $0 }

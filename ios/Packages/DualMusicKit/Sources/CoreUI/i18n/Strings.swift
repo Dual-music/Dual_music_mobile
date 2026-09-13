@@ -341,6 +341,8 @@ public struct DMStrings: Sendable {
     public let giftShopLabel: String
     public let noGiftsBuyInShop: String
     public let shareLiveText: String
+    public let chatLabel: String
+    public let stopAction: String
     public let noCandidates: String
     public let noCandidatesHint: String
     public let timerRunning: String
@@ -800,6 +802,8 @@ public extension DMStrings {
         giftShopLabel: "Boutique",
         noGiftsBuyInShop: "Aucun cadeau — achète-en un dans la boutique.",
         shareLiveText: "Regarde ce direct sur Dual Music !",
+        chatLabel: "Chat",
+        stopAction: "Arrêter",
         noCandidates: "Aucun candidat approuvé",
         noCandidatesHint: "Le classement s'affichera dès les premières candidatures.",
         timerRunning: "⏱ Minuteur en cours",
@@ -1244,6 +1248,8 @@ public extension DMStrings {
         giftShopLabel: "Shop",
         noGiftsBuyInShop: "No gifts — buy one in the shop.",
         shareLiveText: "Watch this live on Dual Music!",
+        chatLabel: "Chat",
+        stopAction: "Stop",
         noCandidates: "No approved candidate",
         noCandidatesHint: "The ranking will appear once candidacies start.",
         timerRunning: "⏱ Timer running",
