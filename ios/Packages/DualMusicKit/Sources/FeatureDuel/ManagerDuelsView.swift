@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import CoreNetwork
 import CoreUI
 import DomainModels
 
