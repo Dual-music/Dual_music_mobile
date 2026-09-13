@@ -418,9 +418,7 @@ public struct CompetitionBannedPayload: Decodable, Sendable {
 
 /// `broadcast` — enveloppe du relais éphémère (`{channel, event, payload}`), partagée par les
 /// overlays temps réel (duel, concert, compétition). Miroir de
-/// `shared-domain/realtime/BroadcastEnvelope.kt` — seuls les champs utiles au périmètre iOS
-/// actuel (réactions emoji, likes) sont repris ; à étoffer si un futur chantier en a besoin
-/// (`slot`, `artistId`, `identity`… côté Kotlin).
+/// `shared-domain/realtime/BroadcastEnvelope.kt`.
 public struct BroadcastEnvelope: Decodable, Sendable {
     public let channel: String?
     public let event: String?
@@ -436,17 +434,44 @@ public struct BroadcastEnvelope: Decodable, Sendable {
     enum CodingKeys: String, CodingKey { case channel, event, payload }
 }
 
-/// Charge utile du relais broadcast — `emoji_reaction` → ``emoji`` ; `like` → ``count``
-/// (compteur ABSOLU partagé, pas un delta).
+/// Charge utile du relais broadcast — miroir exact de `shared-domain/realtime/BroadcastEnvelope.kt`.
+/// Champs optionnels selon l'événement : `emoji_reaction` → ``emoji`` ; `like` → ``count``
+/// (compteur ABSOLU, pas un delta) ; `focus` → ``slot`` (`nil` = focus libéré) ;
+/// `FORCE_MUTE`/`FORCE_UNMUTE` → ``artistId`` ; `winner_announced` → ``name``/``avatar``/
+/// ``votes``/``percent``. Le reste (`identity`/`isMicOn`/`isCameraOn`/`isStreaming`, diffusé
+/// pour le web) n'est consommé par aucun client mobile — repris pour fidélité au modèle
+/// partagé, sans utilisation côté iOS pour l'instant.
 public struct BroadcastPayload: Decodable, Sendable {
     public let emoji: String?
     public let count: Int?
+    public let slot: String?
+    public let name: String?
+    public let avatar: String?
+    public let votes: Int?
+    public let percent: Int?
+    public let artistId: String?
+    public let identity: String?
+    public let isMicOn: Bool?
+    public let isCameraOn: Bool?
+    public let isStreaming: Bool?
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         emoji = c.opt(String.self, .emoji)
         count = c.opt(Int.self, .count)
+        slot = c.opt(String.self, .slot)
+        name = c.opt(String.self, .name)
+        avatar = c.opt(String.self, .avatar)
+        votes = c.opt(Int.self, .votes)
+        percent = c.opt(Int.self, .percent)
+        artistId = c.opt(String.self, .artistId)
+        identity = c.opt(String.self, .identity)
+        isMicOn = c.opt(Bool.self, .isMicOn)
+        isCameraOn = c.opt(Bool.self, .isCameraOn)
+        isStreaming = c.opt(Bool.self, .isStreaming)
     }
 
-    enum CodingKeys: String, CodingKey { case emoji, count }
+    enum CodingKeys: String, CodingKey {
+        case emoji, count, slot, name, avatar, votes, percent, artistId, identity, isMicOn, isCameraOn, isStreaming
+    }
 }

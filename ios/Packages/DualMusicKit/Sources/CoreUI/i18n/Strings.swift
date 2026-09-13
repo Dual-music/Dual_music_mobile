@@ -313,6 +313,34 @@ public struct DMStrings: Sendable {
     public let artist2: String
     public let vote: String
     public let oneVote: String
+    // Gate d'accès programmé (ScheduledAccessGate) — duel/concert/compétition.
+    public let scheduledNotStartedTitle: String
+    public let scheduledNotStartedMsgDuel: String
+    public let scheduledNotStartedMsgConcert: String
+    public let scheduledNotStartedMsgCompetition: String
+    public let scheduledPaidAccessTitle: String
+    public let scheduledPaidAccessMsg: String
+    public let scheduledAccessAlready: String
+    public let scheduledPayAccess: String
+    public let scheduledBackHome: String
+    public let creditUnit: String
+    // Création de duel (manager) + panneau arbitre.
+    public let createDuelTitle: String
+    public let createDuelHint: String
+    public let createDuelAction: String
+    public let duelCreated: String
+    public let managedDuels: String
+    public let proposedDateOptional: String
+    public let searchArtist: String
+    public let joinAction: String
+    public let speakingTime: String
+    public let announceWinner: String
+    public let winnerTitle: String
+    public let endDuelBtn: String
+    public let myGifts: String
+    public let giftShopLabel: String
+    public let noGiftsBuyInShop: String
+    public let shareLiveText: String
     public let noCandidates: String
     public let noCandidatesHint: String
     public let timerRunning: String
@@ -746,6 +774,32 @@ public extension DMStrings {
         artist2: "Artiste 2",
         vote: "Voter",
         oneVote: "Un vote",
+        scheduledNotStartedTitle: "📅 Pas encore commencé",
+        scheduledNotStartedMsgDuel: "Ce duel commence le {date}. Reviens à ce moment-là.",
+        scheduledNotStartedMsgConcert: "Ce concert commence le {date}. Reviens à ce moment-là.",
+        scheduledNotStartedMsgCompetition: "Cette compétition commence le {date}. Reviens à ce moment-là.",
+        scheduledPaidAccessTitle: "🎟 Accès payant",
+        scheduledPaidAccessMsg: "Cet événement est en direct et payant — achète ton billet pour le regarder.",
+        scheduledAccessAlready: "✅ Tu as déjà accès.",
+        scheduledPayAccess: "Payer l'accès",
+        scheduledBackHome: "Retour",
+        creditUnit: "crédits",
+        createDuelTitle: "Créer un duel",
+        createDuelHint: "Choisis les deux artistes qui s'affronteront.",
+        createDuelAction: "Créer le duel",
+        duelCreated: "✅ Duel créé.",
+        managedDuels: "Duels gérés",
+        proposedDateOptional: "Date proposée (optionnel)",
+        searchArtist: "Rechercher un artiste",
+        joinAction: "Rejoindre",
+        speakingTime: "Temps de parole",
+        announceWinner: "Annoncer le vainqueur",
+        winnerTitle: "🏆 Vainqueur",
+        endDuelBtn: "Terminer le duel",
+        myGifts: "Mes cadeaux",
+        giftShopLabel: "Boutique",
+        noGiftsBuyInShop: "Aucun cadeau — achète-en un dans la boutique.",
+        shareLiveText: "Regarde ce direct sur Dual Music !",
         noCandidates: "Aucun candidat approuvé",
         noCandidatesHint: "Le classement s'affichera dès les premières candidatures.",
         timerRunning: "⏱ Minuteur en cours",
@@ -1164,6 +1218,32 @@ public extension DMStrings {
         artist2: "Artist 2",
         vote: "Vote",
         oneVote: "One vote",
+        scheduledNotStartedTitle: "📅 Not started yet",
+        scheduledNotStartedMsgDuel: "This duel starts on {date}. Come back then.",
+        scheduledNotStartedMsgConcert: "This concert starts on {date}. Come back then.",
+        scheduledNotStartedMsgCompetition: "This competition starts on {date}. Come back then.",
+        scheduledPaidAccessTitle: "🎟 Paid access",
+        scheduledPaidAccessMsg: "This event is live and paid — buy your ticket to watch it.",
+        scheduledAccessAlready: "✅ You already have access.",
+        scheduledPayAccess: "Pay for access",
+        scheduledBackHome: "Back",
+        creditUnit: "credits",
+        createDuelTitle: "Create a duel",
+        createDuelHint: "Choose the two artists who will face off.",
+        createDuelAction: "Create duel",
+        duelCreated: "✅ Duel created.",
+        managedDuels: "Managed duels",
+        proposedDateOptional: "Proposed date (optional)",
+        searchArtist: "Search an artist",
+        joinAction: "Join",
+        speakingTime: "Speaking time",
+        announceWinner: "Announce the winner",
+        winnerTitle: "🏆 Winner",
+        endDuelBtn: "End the duel",
+        myGifts: "My gifts",
+        giftShopLabel: "Shop",
+        noGiftsBuyInShop: "No gifts — buy one in the shop.",
+        shareLiveText: "Watch this live on Dual Music!",
         noCandidates: "No approved candidate",
         noCandidatesHint: "The ranking will appear once candidacies start.",
         timerRunning: "⏱ Timer running",

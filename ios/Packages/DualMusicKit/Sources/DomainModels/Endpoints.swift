@@ -89,6 +89,8 @@ public enum LiveEndpoints {
     public static func cancelJoin(_ requestId: String) -> String { "/lives/join-requests/\(requestId)" }
     /// Hôte : répond à une demande (`accepted`/`rejected`/`ended`).
     public static func respondJoin(_ requestId: String) -> String { "/lives/join-requests/\(requestId)/respond" }
+    /// Compteur de j'aime PERSISTÉ — réutilisé par live/duel/concert (même route backend).
+    public static func likes(_ id: String) -> String { "/lives/\(id)/likes" }
 }
 
 /// Chemins des duels.
@@ -168,6 +170,8 @@ public enum LeaderboardEndpoints {
     public static let donors = "/leaderboards/donors"
     public static let seasons = "/leaderboards/seasons"
     public static let winners = "/leaderboards/winners"
+    /// Classement des donateurs d'un événement précis : `?contextType=duel|live|concert&contextId=`.
+    public static let gifts = "/leaderboards/gifts"
 }
 
 /// Chemins du parrainage.
@@ -232,6 +236,8 @@ public enum RoleEndpoints {
 
     public static let artistRequestsEnabled = "artist_requests_enabled"
     public static let managerRequestsEnabled = "manager_requests_enabled"
+    /// Réglage public : les managers ont-ils le droit de créer des duels (sinon, assignation admin).
+    public static let managerDuelCreation = "manager_duel_creation"
 }
 
 /// Chemins de l'espace admin.

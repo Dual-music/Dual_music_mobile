@@ -283,6 +283,9 @@ public struct LeaderboardSeason: Codable, Sendable, Identifiable {
 /// Résumé d'artiste pour l'annuaire (`GET /artists`).
 public struct ArtistSummary: Codable, Sendable, Identifiable, Equatable {
     public let id: String
+    /// Id de l'UTILISATEUR (≠ id du profil artiste) : clé pour défier un adversaire et
+    /// s'exclure soi-même — voir ``opponentUserId``.
+    public let userId: String?
     public let fullName: String?
     public let stageName: String?
     public let avatarURL: String?
@@ -290,6 +293,7 @@ public struct ArtistSummary: Codable, Sendable, Identifiable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case userId = "user_id"
         case fullName = "full_name"
         case stageName = "stage_name"
         case avatarURL = "avatar_url"
@@ -299,6 +303,7 @@ public struct ArtistSummary: Codable, Sendable, Identifiable, Equatable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = c.val(String.self, .id, "")
+        userId = c.opt(String.self, .userId)
         fullName = c.opt(String.self, .fullName)
         stageName = c.opt(String.self, .stageName)
         avatarURL = c.opt(String.self, .avatarURL)
@@ -311,4 +316,8 @@ public struct ArtistSummary: Codable, Sendable, Identifiable, Equatable {
         if let f = fullName, !f.isEmpty { return f }
         return "Artiste"
     }
+
+    /// Id utilisateur de l'artiste (repli sur ``id`` si absent) — à utiliser pour défier un
+    /// adversaire (`artist1_id`/`artist2_id` attendent un id UTILISATEUR, pas un id de profil).
+    public var opponentUserId: String { userId ?? id }
 }

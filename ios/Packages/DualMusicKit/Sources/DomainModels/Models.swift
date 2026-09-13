@@ -128,9 +128,14 @@ public struct Duel: Codable, Sendable, Identifiable, Equatable {
     public let currentTimerEndsAt: String?
     public let currentTimerTargetId: String?
     public let roomId: String?
+    /// L'organisateur autorise-t-il la diffusion de pubs sponsor sur ce duel.
+    public let allowsSponsorAds: Bool
+    /// Le manager (hôte) a-t-il activé le chat pour ce duel (défaut vrai côté backend).
+    public let chatEnabled: Bool
     /// Profils hydratés côté serveur (peuvent être absents selon l'endpoint).
     public let artist1: DisplayProfile?
     public let artist2: DisplayProfile?
+    public let manager: DisplayProfile?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -144,7 +149,9 @@ public struct Duel: Codable, Sendable, Identifiable, Equatable {
         case currentTimerEndsAt = "current_timer_ends_at"
         case currentTimerTargetId = "current_timer_target_id"
         case roomId = "room_id"
-        case artist1, artist2
+        case allowsSponsorAds = "allows_sponsor_ads"
+        case chatEnabled = "chat_enabled"
+        case artist1, artist2, manager
     }
 
     public init(from decoder: Decoder) throws {
@@ -160,8 +167,11 @@ public struct Duel: Codable, Sendable, Identifiable, Equatable {
         currentTimerEndsAt = c.opt(String.self, .currentTimerEndsAt)
         currentTimerTargetId = c.opt(String.self, .currentTimerTargetId)
         roomId = c.opt(String.self, .roomId)
+        allowsSponsorAds = c.bool(.allowsSponsorAds, true)
+        chatEnabled = c.bool(.chatEnabled, true)
         artist1 = c.opt(DisplayProfile.self, .artist1)
         artist2 = c.opt(DisplayProfile.self, .artist2)
+        manager = c.opt(DisplayProfile.self, .manager)
     }
 
     /// Room LiveKit effective (repli sur `duel:id` si `room_id` est absent) — même règle
