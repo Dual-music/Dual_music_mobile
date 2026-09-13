@@ -121,12 +121,15 @@ public struct CompetitionDonorEntry: Decodable, Sendable, Identifiable {
         id = userId ?? UUID().uuidString
     }
 
-    @MainActor
+    /// Nom affiché : profil hydraté, sinon nom de scène, sinon nom complet, sinon repli
+    /// générique. Pas de ``AppStrings`` ici : `DomainModels` ne dépend pas de `CoreUI`
+    /// (dépendance inverse — c'est `CoreUI` qui dépend de `DomainModels`), contrairement à
+    /// `DuelDonorEntry` (dans `FeatureDuel`, qui importe déjà `CoreUI`).
     public var displayName: String {
         if let user { return user.displayName }
         if let s = stageName, !s.isEmpty { return s }
         if let f = fullName, !f.isEmpty { return f }
-        return AppStrings.current.donors
+        return "Donateur"
     }
 
     public var value: Int { Int(total > 0 ? total : score) }
