@@ -263,6 +263,12 @@ public final class LiveViewModel {
         await media.switchCamera()
     }
 
+    /// Hôte : applique un filtre couleur à la diffusion (persiste tant que la caméra reste
+    /// active, voir ``LiveRoomClient/setColorFilter(id:matrix:)``).
+    public func setColorFilter(id: String, matrix: [Float]?) {
+        media.setColorFilter(id: id, matrix: matrix)
+    }
+
     /// Hôte : termine ce live côté backend (arrête aussi la diffusion locale).
     public func endLive() async throws {
         try await repository.endLive(liveId: liveId)

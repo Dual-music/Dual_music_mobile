@@ -30,6 +30,7 @@ public struct LiveRoomView: View {
     @State private var minPriceText = ""
     @State private var showGuestsSheet = false
     @State private var showModeratorsSheet = false
+    @State private var showFilterSheet = false
 
     /// - Parameters:
     ///   - viewModel: état + actions du live.
@@ -130,6 +131,7 @@ public struct LiveRoomView: View {
         .sheet(isPresented: $showGuestsSheet) { guestsSheet }
         // Hôte ET modérateurs (pour voir qui d'autre a ce pouvoir) : liste + désignation.
         .sheet(isPresented: $showModeratorsSheet) { moderatorsSheet }
+        .sheet(isPresented: $showFilterSheet) { filterSheet }
         // Feuille de motifs (viewer uniquement — voir bouton drapeau de `viewerBadge`).
         .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
             ForEach(ReportReason.allCases, id: \.self) { reason in
@@ -358,6 +360,10 @@ public struct LiveRoomView: View {
                 Task { await viewModel.switchCamera() }
             }
 
+            controlButton("camera.filters") {
+                showFilterSheet = true
+            }
+
             Button {
                 showDedicationRequests = true
                 Task { await viewModel.loadDedications() }
@@ -433,6 +439,58 @@ public struct LiveRoomView: View {
                 .background(.white.opacity(0.15), in: Circle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// Feuille hôte : grille des filtres couleur (voir ``VideoFilterPresets/all``).
+    private var filterSheet: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: theme.spacing.md) {
+                Text(s.colorFilters).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 84))], spacing: theme.spacing.md) {
+                    ForEach(VideoFilterPresets.all) { preset in
+                        Button {
+                            viewModel.setColorFilter(id: preset.id, matrix: preset.matrix)
+                        } label: {
+                            VStack(spacing: theme.spacing.xs) {
+                                Text(preset.emoji).font(.system(size: 28))
+                                Text(filterLabel(preset.id))
+                                    .font(DMFont.caption)
+                                    .foregroundStyle(theme.colors.foreground)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(theme.spacing.sm)
+                            .background(
+                                viewModel.media.activeFilterId == preset.id ? theme.colors.accent.opacity(0.25) : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(theme.spacing.lg)
+        }
+        .presentationDetents([.medium])
+        .dmScreenBackground()
+    }
+
+    /// Libellé localisé d'un filtre couleur.
+    private func filterLabel(_ id: String) -> String {
+        switch id {
+        case "beauty": return s.filterBeauty
+        case "smooth": return s.filterSmooth
+        case "glow": return s.filterGlow
+        case "warm": return s.filterWarm
+        case "cool": return s.filterCool
+        case "vivid": return s.filterVivid
+        case "vintage": return s.filterVintage
+        case "noir": return s.filterNoir
+        case "studio": return s.filterStudio
+        case "neon": return s.filterNeon
+        case "dream": return s.filterDream
+        default: return s.filterNone
+        }
     }
 
     /// Bannière de confirmation/décision de dédicace (fan) — auto-masquée après quelques
