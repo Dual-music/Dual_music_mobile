@@ -76,6 +76,16 @@ public struct CompetitionFloatingReaction: Identifiable, Sendable, Equatable {
     public let emoji: String
 }
 
+/// Cadeau reçu en direct (carte glissante — seule animation, parité concert/live).
+public struct CompetitionGift: Identifiable, Sendable, Equatable {
+    public let id: Int
+    public let fromUserId: String?
+    public let fromUserName: String?
+    public let name: String?
+    public let image: String?
+    public let value: Double
+}
+
 /// Candidat actuellement mis en avant par le manager (id + fin du créneau, ISO, pour un chrono).
 public struct CompetitionPerformer: Sendable, Equatable {
     public let performerId: String?
@@ -566,6 +576,9 @@ public final class CompetitionRoomViewModel {
     public private(set) var inventory: [InventoryItem] = []
     public private(set) var giftReceived: String?
     public func clearGiftReceived() { giftReceived = nil }
+    /// Fil des cadeaux reçus (carte glissante, seule animation — parité concert/live).
+    public private(set) var giftFeed: [CompetitionGift] = []
+    private var giftCounter = 0
 
     // MARK: - Présence + vote
 
@@ -747,10 +760,25 @@ public final class CompetitionRoomViewModel {
                 break
             }
         })
-        // Cadeaux : resynchronise classement + bannière « reçu » si c'est pour moi.
+        // Cadeaux : carte glissante (fil) + resynchronise classement + bannière « reçu ».
         subscriptions.append(live.onEvent(Realtime.Event.gift, as: GiftPayload.self) { [weak self] payload in
             guard let self else { return }
-            Task { await self.refreshGiftLeaderboard() }
+            Task { [weak self] in
+                guard let self else { return }
+                let list = await self.refreshGiftLeaderboard()
+                let senderName = list.first { $0.userId == payload.fromUserId }?.displayName
+                self.giftCounter += 1
+                self.giftFeed.append(
+                    CompetitionGift(
+                        id: self.giftCounter,
+                        fromUserId: payload.fromUserId,
+                        fromUserName: senderName,
+                        name: payload.giftName,
+                        image: payload.giftImage,
+                        value: payload.value
+                    )
+                )
+            }
             Task { await self.refresh() }
             if let toUserId = payload.toUserId, toUserId == self.callerId {
                 self.giftReceived = "🎁 Vous avez reçu un cadeau (\(Int(payload.value)) crédits) !"
