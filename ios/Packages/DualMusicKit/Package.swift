@@ -99,7 +99,7 @@ let package = Package(
         .target(name: "FeatureLive", dependencies: ["CoreNetwork", "CoreUI", "CoreLiveMedia", "CoreRealtime", "DomainModels"]),
         .target(name: "FeatureFeed", dependencies: ["CoreNetwork", "CoreUI", "CoreLiveMedia", "DomainModels", "FeatureLive"]),
         .target(name: "FeatureWallet", dependencies: ["CoreNetwork", "CoreUI", "DomainModels"]),
-        .target(name: "FeatureDuel", dependencies: ["CoreNetwork", "CoreUI", "CoreLiveMedia", "CoreRealtime", "DomainModels", "FeatureWallet"]),
+        .target(name: "FeatureDuel", dependencies: ["CoreNetwork", "CoreUI", "CoreLiveMedia", "CoreRealtime", "DomainModels", "FeatureWallet", "FeatureGiftShop"]),
         .target(name: "FeatureConcert", dependencies: ["CoreNetwork", "CoreUI", "CoreLiveMedia", "CoreRealtime", "DomainModels"]),
         .target(name: "FeatureCompetition", dependencies: ["CoreNetwork", "CoreUI", "CoreLiveMedia", "CoreRealtime", "DomainModels"]),
         .target(name: "FeatureProfile", dependencies: ["CoreNetwork", "CoreUI", "CoreUpload", "DomainModels"]),

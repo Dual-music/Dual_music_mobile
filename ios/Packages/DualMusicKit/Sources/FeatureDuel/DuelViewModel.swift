@@ -5,6 +5,7 @@ import CoreNetwork
 import CoreRealtime
 import CoreUI
 import DomainModels
+import FeatureGiftShop
 import FeatureWallet
 
 /// Cadeau reçu en direct dans le duel (pour l'animation).
@@ -14,6 +15,27 @@ public struct DuelGift: Identifiable, Sendable, Equatable {
     public let name: String?
     public let image: String?
     public let value: Double
+}
+
+/// Vainqueur annoncé (célébration plein écran synchronisée pour tous les spectateurs).
+public struct DuelWinner: Sendable, Equatable {
+    public let name: String
+    public let avatar: String?
+    public let votes: Int
+    public let percent: Int
+
+    public init(name: String, avatar: String?, votes: Int, percent: Int = 0) {
+        self.name = name
+        self.avatar = avatar
+        self.votes = votes
+        self.percent = percent
+    }
+}
+
+/// Réaction emoji flottante (id stable pour SwiftUI, contenu de l'emoji).
+public struct DuelFloatingReaction: Identifiable, Sendable, Equatable {
+    public let id: Int
+    public let emoji: String
 }
 
 /// État du minuteur du duel (persisté serveur → visible aussi pour les arrivants tardifs).
@@ -98,6 +120,48 @@ public final class DuelViewModel {
     }
     /// Vrai si le caller peut bannir/masquer un message : le manager ou un modérateur désigné.
     public var canModerate: Bool { isManager || isModerator }
+    /// Vrai si le caller est un ACTEUR du duel (manager, artiste 1/2, ou admin) — exempté du
+    /// billet côté ``ScheduledAccessGate`` (jamais exempté de l'attente de l'heure programmée).
+    public var isActor: Bool {
+        isManager || isAdmin || (callerId != nil && (callerId == duel?.artist1Id || callerId == duel?.artist2Id))
+    }
+
+    // MARK: - Billetterie / gate d'accès programmé
+
+    public private(set) var hasTicket = false
+    public private(set) var isAdmin = false
+
+    // MARK: - Likes / réactions emoji
+
+    public private(set) var likes = 0
+    public private(set) var emojiFeed: [DuelFloatingReaction] = []
+    private var emojiCounter = 0
+
+    // MARK: - Cadeaux : boutique + classement
+
+    public private(set) var topDonor: DuelDonorEntry?
+    public private(set) var leaderboard: [DuelDonorEntry] = []
+    public private(set) var giftCatalog: [VirtualGift] = []
+    public private(set) var inventory: [InventoryItem] = []
+    /// Bannière transitoire « vous avez reçu un cadeau » (destinataire uniquement).
+    public private(set) var giftReceived: String?
+    public func clearGiftReceived() { giftReceived = nil }
+
+    // MARK: - Présence + prix du vote
+
+    public private(set) var viewerCount = 0
+    /// Prix d'UN vote en crédits — configuré par l'admin (défaut 1 tant que non chargé).
+    public private(set) var votePrice: Double = 1
+
+    // MARK: - Contrôles manager (arbitre)
+
+    /// Artistes coupés d'AUTORITÉ par le manager (hard-mute) — ids utilisateur.
+    public private(set) var mutedArtists: Set<String> = []
+    /// Case épinglée par le manager (focus imposé, synchronisé) — `nil` = focus local libre.
+    public private(set) var forcedFocus: String?
+    /// Vainqueur annoncé (broadcast) → célébration plein écran persistante ; `nil` = arrêtée.
+    public private(set) var winnerInfo: DuelWinner?
+    private var shownWinnerId: String?
 
     private let duelId: String
     private let baseRoom: String
@@ -105,6 +169,7 @@ public final class DuelViewModel {
     private let realtime: RealtimeClient
     private let repository: DuelRepository
     private let wallet: WalletRepository
+    private let giftShop: GiftShopRepository
 
     private var giftCounter = 0
     private var subscriptions: [Subscription] = []
@@ -123,7 +188,8 @@ public final class DuelViewModel {
     ///     (`"artist1"`/`"artist2"`/`"manager"`/`nil`).
     ///   - realtime: client Socket.IO partagé.
     ///   - repository: lectures REST du duel.
-    ///   - wallet: opérations de débit (vote).
+    ///   - wallet: opérations de débit (vote, cadeau, billet).
+    ///   - giftShop: catalogue + inventaire de cadeaux (partagé avec la boutique).
     ///   - callerId: id du caller — détermine ``isManager``/``isModerator`` une fois le duel
     ///     chargé.
     public init(
@@ -136,6 +202,7 @@ public final class DuelViewModel {
         realtime: RealtimeClient,
         repository: DuelRepository,
         wallet: WalletRepository,
+        giftShop: GiftShopRepository,
         callerId: String? = nil
     ) {
         self.duelId = duelId
@@ -147,6 +214,7 @@ public final class DuelViewModel {
         self.realtime = realtime
         self.repository = repository
         self.wallet = wallet
+        self.giftShop = giftShop
         self.callerId = callerId
     }
 
@@ -166,6 +234,13 @@ public final class DuelViewModel {
                 self.duel = detail
                 // Réhydrate le minuteur persisté (arrivants tardifs).
                 self.timer = DuelTimer(endsAt: detail.currentTimerEndsAt, targetId: detail.currentTimerTargetId)
+                // Gate d'accès programmé : l'admin est un acteur (exempté de billet), un
+                // participant l'est déjà via isManager/artist1/artist2 côté ``isActor``.
+                self.isAdmin = await self.repository.amIAdmin()
+                let isParticipant = self.isManager || self.callerId == detail.artist1Id || self.callerId == detail.artist2Id
+                if !isParticipant, !self.isAdmin, detail.ticketPrice > 0 {
+                    self.hasTicket = await self.repository.ticketInfo(id: self.duelId).hasTicket
+                }
             }
             if let totals = try? await self.repository.voteTotals(id: self.duelId) {
                 self.voteTotals = Dictionary(totals.map { ($0.artistId, $0.total) }, uniquingKeysWith: { _, last in last })
@@ -180,6 +255,18 @@ public final class DuelViewModel {
             self.bannedUserIds.formUnion(banned)
         }
         Task { [weak self] in await self?.loadModerators() }
+        Task { [weak self] in
+            guard let self else { return }
+            self.likes = await self.repository.likesCount(duelId: self.duelId)
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            self.votePrice = await self.repository.votePricePerVote()
+        }
+        Task { [weak self] in await self?.loadGiftCatalog() }
+        Task { [weak self] in await self?.loadInventory() }
+        Task { [weak self] in await self?.loadGiftLeaderboard() }
+        Task { [weak self] in await self?.loadTopDonor() }
         await connectRealtime()
     }
 
@@ -246,11 +333,94 @@ public final class DuelViewModel {
         }
     }
 
-    /// Envoie un message de chat.
-    public func sendMessage(_ text: String) async {
+    // MARK: - Billetterie
+
+    /// Achète le billet spectateur de ce duel (accès programmé/payant). Débit atomique +
+    /// idempotent côté serveur. Marque l'accès acquis en cas de succès.
+    public func buyTicket() async -> Result<Void, Error> {
+        do {
+            try await repository.buyTicket(duelId: duelId)
+            hasTicket = true
+            return .success(())
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    // MARK: - Likes / réactions emoji
+
+    /// « J'aime » : incrément local + compteur partagé (broadcast) + persistance + réaction
+    /// cœur flottante (parité Android : un like déclenche aussi une réaction ❤️).
+    public func sendLike() {
+        likes += 1
+        liveSession?.broadcast(channel: "duel-likes-\(duelId)", event: "like", payload: ["count": likes])
+        sendReaction("❤️")
+        Task { await repository.likeDuel(duelId: duelId) }
+    }
+
+    /// Envoie une réaction emoji : effet local + relais aux autres membres de la room.
+    public func sendReaction(_ emoji: String) {
+        pushEmoji(emoji)
+        liveSession?.broadcast(channel: "duel-emojis-\(duelId)", event: "emoji_reaction", payload: ["emoji": emoji])
+    }
+
+    private func pushEmoji(_ emoji: String) {
+        emojiCounter += 1
+        emojiFeed = (emojiFeed + [DuelFloatingReaction(id: emojiCounter, emoji: emoji)]).suffix(12).map { $0 }
+    }
+
+    /// Retire la réaction la plus ancienne après son animation.
+    public func consumeOldestEmoji() {
+        if !emojiFeed.isEmpty { emojiFeed.removeFirst() }
+    }
+
+    // MARK: - Cadeaux
+
+    /// Recharge le catalogue des cadeaux virtuels (boutique).
+    public func loadGiftCatalog() async {
+        giftCatalog = (try? await giftShop.catalog()) ?? giftCatalog
+    }
+
+    /// Recharge l'inventaire (après achat/envoi).
+    public func loadInventory() async {
+        inventory = (try? await giftShop.inventory()) ?? inventory
+    }
+
+    /// Recharge le classement des donateurs.
+    public func loadGiftLeaderboard() async {
+        leaderboard = (try? await repository.giftLeaderboard(duelId: duelId)) ?? leaderboard
+    }
+
+    /// Recharge le meilleur donateur courant (bulle top-donateur).
+    private func loadTopDonor() async {
+        topDonor = (try? await repository.giftLeaderboard(duelId: duelId))?.first
+    }
+
+    /// Achète un cadeau (boutique) puis recharge l'inventaire.
+    public func purchaseGift(giftId: String) async {
+        do {
+            try await wallet.purchaseGift(giftId: giftId)
+            await loadInventory()
+        } catch {
+            errorMessage = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Envoie un cadeau possédé à un artiste/manager du duel (débit atomique serveur).
+    public func sendGift(giftId: String, toUserId: String) async {
+        do {
+            try await wallet.sendGift(SendGiftRequest(giftId: giftId, toUserId: toUserId, duelId: duelId))
+            await loadInventory()
+        } catch {
+            errorMessage = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Envoie un message — ou une RÉPONSE si `parentId` (résolution de la citation côté UI).
+    public func sendMessage(_ text: String, parentId: String? = nil) async {
         let content = text.trimmed
         guard !content.isEmpty else { return }
-        try? await repository.postMessage(duelId: duelId, content: content)
+        try? await repository.postMessage(duelId: duelId, content: content, parentId: parentId)
     }
 
     /// Efface l'erreur affichée.
@@ -278,6 +448,99 @@ public final class DuelViewModel {
     /// Retire le cadeau le plus ancien après son animation.
     public func consumeOldestGift() {
         if !giftFeed.isEmpty { giftFeed.removeFirst() }
+    }
+
+    // MARK: - Contrôles MANAGER (arbitre) — persistés + rediffusés par le backend
+
+    /// Manager : active/désactive le chat de ce duel pour tous (jamais délégué aux modérateurs).
+    public func toggleChat(_ enabled: Bool) async {
+        do {
+            try await repository.toggleChat(id: duelId, enabled: enabled)
+        } catch {
+            errorMessage = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    /// Donne la parole à un artiste pendant `seconds` (minuteur).
+    public func startTimer(targetId: String, seconds: Int) async {
+        try? await repository.startTimer(id: duelId, targetId: targetId, seconds: seconds)
+    }
+
+    /// Arrête le minuteur de parole.
+    public func stopTimer() async {
+        try? await repository.stopTimer(id: duelId)
+    }
+
+    /// Manager : coupe/réactive d'AUTORITÉ le micro d'un artiste. Diffuse `FORCE_MUTE`/
+    /// `FORCE_UNMUTE` → l'artiste visé se coupe partout et tous les clients marquent
+    /// l'artiste comme coupé (indicateur + panneau manager synchronisés).
+    public func toggleMuteArtist(_ artistId: String) {
+        let shouldMute = !mutedArtists.contains(artistId)
+        applyMuteState(artistId, muted: shouldMute)
+        liveSession?.broadcast(
+            channel: "duel-mute-\(duelId)",
+            event: shouldMute ? "FORCE_MUTE" : "FORCE_UNMUTE",
+            payload: ["artistId": artistId]
+        )
+    }
+
+    /// Applique l'état de coupure d'un artiste : ensemble partagé + hard-mute réel de MON
+    /// micro si c'est moi. Le mute ne concerne QUE le micro : aucune opération caméra ici.
+    private func applyMuteState(_ artistId: String, muted: Bool) {
+        if muted { mutedArtists.insert(artistId) } else { mutedArtists.remove(artistId) }
+        if artistId == callerId, let m = myMedia {
+            Task { await m.setMicrophone(enabled: !muted) }
+        }
+    }
+
+    /// Manager : épingle (ou libère avec `nil`) une case en plein écran pour TOUS.
+    public func setFocus(_ slot: String?) {
+        forcedFocus = slot
+        liveSession?.broadcast(channel: "duel-focus-\(duelId)", event: "focus", payload: slot.map { ["slot": $0] } ?? [:])
+    }
+
+    /// Construit la carte vainqueur (nom/avatar/voix/%) à partir de l'id de l'artiste gagnant.
+    private func winnerFromId(_ winnerId: String?) -> DuelWinner? {
+        guard let duel, let winnerId else { return nil }
+        let v1 = voteTotals[duel.artist1Id] ?? 0
+        let v2 = voteTotals[duel.artist2Id] ?? 0
+        let profile = winnerId == duel.artist1Id ? duel.artist1 : (winnerId == duel.artist2Id ? duel.artist2 : nil)
+        let winnerVotes = winnerId == duel.artist1Id ? v1 : v2
+        let total = v1 + v2
+        let percent = total > 0 ? Int((winnerVotes / total) * 100) : 100
+        return DuelWinner(name: profile?.displayName ?? "Vainqueur", avatar: profile?.avatarURL, votes: Int(winnerVotes), percent: percent)
+    }
+
+    /// Annonce AUTOMATIQUEMENT le vainqueur = artiste avec le PLUS de votes : sauve `winnerId`
+    /// SANS terminer le duel, et diffuse la célébration en plein écran à tous.
+    public func announceWinnerAuto() {
+        guard let duel else { return }
+        let v1 = voteTotals[duel.artist1Id] ?? 0
+        let v2 = voteTotals[duel.artist2Id] ?? 0
+        let winnerId = v1 >= v2 ? duel.artist1Id : duel.artist2Id
+        guard let w = winnerFromId(winnerId) else { return }
+        shownWinnerId = winnerId
+        winnerInfo = w
+        Task { try? await repository.announceWinner(id: duelId, artistId: winnerId) }
+        liveSession?.broadcast(
+            channel: "duel-winner-\(duelId)",
+            event: "winner_announced",
+            payload: ["name": w.name, "avatar": w.avatar ?? "", "votes": w.votes, "percent": w.percent]
+        )
+    }
+
+    /// Manager : arrête la célébration du vainqueur pour TOUS (ne termine PAS le direct).
+    public func stopWinnerAnnouncement() {
+        winnerInfo = nil
+        liveSession?.broadcast(channel: "duel-winner-\(duelId)", event: "winner_stopped", payload: [:])
+    }
+
+    /// Termine le duel puis notifie l'appelant (sortie d'écran).
+    public func endDuel(onEnded: @escaping () -> Void) {
+        Task {
+            try? await repository.endDuel(id: duelId)
+            onEnded()
+        }
     }
 
     // MARK: - Modérateurs désignés
@@ -332,17 +595,24 @@ public final class DuelViewModel {
         subscriptions.append(live.onEvent(Realtime.Event.timer, as: TimerPayload.self) { [weak self] payload in
             self?.timer = DuelTimer(endsAt: payload.endsAt, targetId: payload.targetId)
         })
-        // Statut / vainqueur.
+        // Statut / vainqueur. La désignation d'un `winnerId` déclenche la célébration PLEIN
+        // ÉCRAN chez TOUS (propagation FIABLE via la room du duel) — pas seulement via le
+        // broadcast éphémère, qui peut être manqué.
         subscriptions.append(live.onEvent(Realtime.Event.status, as: StatusPayload.self) { [weak self] payload in
-            guard let self, let winnerId = payload.winnerId, let current = self.duel else { return }
-            // `Duel` est immuable : on recharge le détail pour refléter le vainqueur.
+            guard let self, let current = self.duel else { return }
             Task { [weak self] in
                 guard let self, let refreshed = try? await self.repository.duel(id: current.id) else { return }
                 self.duel = refreshed
-                _ = winnerId
+                let wid = payload.winnerId
+                if wid == nil {
+                    self.shownWinnerId = nil
+                } else if wid != self.shownWinnerId {
+                    self.shownWinnerId = wid
+                    if let w = self.winnerFromId(wid) { self.winnerInfo = w }
+                }
             }
         })
-        // Cadeaux (alimente l'animation).
+        // Cadeaux (alimente l'animation + le classement + la bannière « reçu » si c'est pour moi).
         subscriptions.append(live.onEvent(Realtime.Event.gift, as: GiftPayload.self) { [weak self] payload in
             guard let self else { return }
             self.giftCounter += 1
@@ -355,6 +625,39 @@ public final class DuelViewModel {
                     value: payload.value
                 )
             )
+            Task { await self.loadTopDonor() }
+            if let toUserId = payload.toUserId, toUserId == self.callerId {
+                self.giftReceived = "🎁 Vous avez reçu un cadeau (\(Int(payload.value)) crédits) !"
+            }
+        })
+        // Présence (spectateurs).
+        subscriptions.append(live.onEvent(Realtime.Event.presence, as: PresencePayload.self) { [weak self] payload in
+            self?.viewerCount = payload.count
+        })
+        // Relais broadcast (jamais reçu par l'émetteur lui-même) : réactions emoji, compteur de
+        // likes partagé, focus imposé par le manager, vainqueur annoncé, hard-mute d'un artiste.
+        subscriptions.append(live.onEvent(Realtime.Event.broadcast, as: BroadcastEnvelope.self) { [weak self] envelope in
+            guard let self else { return }
+            switch envelope.event {
+            case "emoji_reaction":
+                if let emoji = envelope.payload?.emoji { self.pushEmoji(emoji) }
+            case "like":
+                if let count = envelope.payload?.count, count > self.likes { self.likes = count }
+            case "focus":
+                self.forcedFocus = envelope.payload?.slot
+            case "winner_announced":
+                if let p = envelope.payload {
+                    self.winnerInfo = DuelWinner(name: p.name ?? "Vainqueur", avatar: p.avatar, votes: p.votes ?? 0, percent: p.percent ?? 0)
+                }
+            case "winner_stopped":
+                self.winnerInfo = nil
+            case "FORCE_MUTE":
+                if let artistId = envelope.payload?.artistId { self.applyMuteState(artistId, muted: true) }
+            case "FORCE_UNMUTE":
+                if let artistId = envelope.payload?.artistId { self.applyMuteState(artistId, muted: false) }
+            default:
+                break
+            }
         })
         // Chat.
         subscriptions.append(chat.onEvent(Realtime.Event.chatMessage, as: ChatMessagePayload.self) { [weak self] payload in
