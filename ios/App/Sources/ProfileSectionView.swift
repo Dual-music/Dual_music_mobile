@@ -2,6 +2,7 @@ import SwiftUI
 import CoreUI
 import DomainModels
 import FeatureArtists
+import FeatureCompetition
 import FeatureCreator
 import FeatureDuel
 import FeatureGiftShop
@@ -42,6 +43,7 @@ enum ProfileRoute: Hashable {
     case admin
     case myLives
     case managerDuels
+    case managerCompetitions
 }
 
 /// Section profil (ouverte via l'avatar de la barre du haut) avec sa propre sous-navigation.
@@ -64,6 +66,8 @@ struct ProfileSectionView: View {
     @State private var broadcastingLive: Live?
     /// Duel géré ouvert depuis « Mes Duels » (manager) — plein écran, hors sous-navigation.
     @State private var openManagedDuel: Duel?
+    /// Compétition gérée ouverte depuis « Mes Compétitions » (manager) — plein écran.
+    @State private var openManagedCompetition: Competition?
 
     var body: some View {
         content
@@ -82,6 +86,9 @@ struct ProfileSectionView: View {
             }
             .fullScreenCover(item: $openManagedDuel) { duel in
                 DuelRoomView(viewModel: container.duelRoom(for: duel), onLeave: { openManagedDuel = nil })
+            }
+            .fullScreenCover(item: $openManagedCompetition) { competition in
+                CompetitionRoomView(viewModel: container.competitionRoom(for: competition), onLeave: { openManagedCompetition = nil })
             }
     }
 
@@ -203,6 +210,11 @@ struct ProfileSectionView: View {
             SubScreen(title: s.managedDuels, onBack: { route = .menu }) {
                 ManagerDuelsView(viewModel: container.managerDuels) { duel in openManagedDuel = duel }
             }
+
+        case .managerCompetitions:
+            SubScreen(title: s.managedCompetitions, onBack: { route = .menu }) {
+                ManagerCompetitionsView(viewModel: container.managerCompetitions) { competition in openManagedCompetition = competition }
+            }
         }
     }
 
@@ -266,6 +278,10 @@ struct ProfileMenuView: View {
                     // Réservé manager : crée/gère des duels (jamais de live).
                     if isManager {
                         row("figure.boxing", s.managedDuels) { onNavigate(.managerDuels) }
+                    }
+                    // Réservé manager : crée/gère des compétitions.
+                    if isManager {
+                        row("trophy.fill", s.managedCompetitions) { onNavigate(.managerCompetitions) }
                     }
                     row("star.fill", s.menuCreatorSpace) { onNavigate(.creator) }
                     row("wallet.pass.fill", s.menuWithdraw) { onNavigate(.withdrawal) }
