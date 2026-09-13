@@ -256,6 +256,47 @@ piste locale changeant d'identité à chaque fois. UI (picker en grille) ajouté
 uniquement pour l'instant ; les 3 autres écrans peuvent réutiliser la même capacité sans coût
 d'infrastructure supplémentaire, juste le picker à ajouter.
 
+**Mode diffusion caméra locale pour Duel et Compétition** (2026-09-13) — fait, CI verte du
+premier coup (`kit-tests` 6m9s, `app-build` 17m40s) malgré l'ampleur (chantier le plus risqué
+de la série : infra partagée étendue + deux ViewModels reconstruits + nouveau modèle
+multi-diffuseur). Déclenché en creusant l'extension du picker de filtres au-delà de Concert :
+Duel et Compétition n'avaient **aucun mode diffusion**, juste un écran spectateur — recherché
+directement dans le code Android avant d'écrire quoi que ce soit.
+
+- **Duel** (`DuelViewModel.kt`) : architecture **3 rooms séparées, une par slot**
+  (`<room>-artist1`/`-artist2`/`-manager`), chacune avec au plus un publieur — topologie
+  identique au couple `media`/`guestMedia` déjà utilisé par `LiveViewModel` pour les invités
+  sur scène. `DuelViewModel` iOS reconstruit avec `mediaA1`/`mediaA2`/`mediaMgr` (3
+  `LiveRoomClient`) + `mySlot`/`canPublish`/`myMedia`. Contrairement à Android qui résout le
+  rôle en async dans `start()`, iOS le résout **synchrone à la construction** dans
+  `AppContainer.duelRoom(for:)` (qui a déjà le `Duel` complet + l'id appelant) — cohérent avec
+  `isHost` déjà précalculé pour Live/Concert. `DuelViews.swift` : grille 2 colonnes
+  (`mediaA1`/`mediaA2`, tuile manager non affichée pour cette passe — écart documenté), contrôles
+  hôte (démarrer/micro/caméra/switch/filtre) affichés seulement si `canPublish`.
+  **Bug corrigé au passage** : `Duel.liveKitRoom` calculait `"duel:\(id)"` (deux-points) au lieu
+  de `"duel-\(id)"` (tiret — ce que backend/Android dérivent réellement). Jamais détecté avant
+  car aucune room Duel n'avait jamais été rejointe en publication (Duel était toujours
+  spectateur seul avant ce chantier).
+- **Compétition** (`CompetitionRoomViewModel` Kotlin) : architecture **une seule room
+  partagée, multi-publieurs** (`comp-<id>` ou `Competition.livekitRoom` si fourni), distingués
+  par **identité LiveKit** (pas par slot) — manager + candidats `status == "approved"` si
+  `Competition.mode == "online"` (en mode `"onsite"`, seul le manager publie jamais). A
+  nécessité d'étendre `LiveRoomClient` **partagé** (utilisé aussi par Live/Duel/Concert) avec
+  `remoteTiles: [String: VideoTrack]`, peuplé par une nouvelle `refreshRemoteTiles()` appelée à
+  chaque site d'appel existant de `refreshPrimaryTrack()` (`join`, `.tracksChanged`/
+  `.reconnected`, le timer de polling) — `primaryVideoTrack` volontairement **non touché** pour
+  ne pas régresser Live/Duel/Concert. API SDK vérifiée en lisant le vrai code source LiveKit
+  Swift (`Participant+Types.swift`) plutôt que devinée : `participant.identity` est un
+  `Participant.Identity?` typé, valeur brute via `.stringValue`. `CompetitionFeature.swift`
+  reconstruit : `canPublish` calculé après chargement de la compétition + des candidats,
+  `stop()` passé en `async` (nécessitait `await media.leave()`), UI avec grille adaptative
+  (`localVideoTrack` + `remoteTiles` triés) + mêmes contrôles hôte/picker filtre que
+  Concert/Duel.
+- **Bug de dépendance évité proactivement** : `FeatureCompetition` dans `Package.swift`
+  n'avait pas `CoreLiveMedia` — exactement la même classe de bug (`missing required module
+  'LKObjCHelpers'`) que `FeatureConcert` avait heurté plus tôt dans la session. Cette fois
+  détecté et corrigé **avant** de pousser, pas après un échec CI.
+
 ### 1.2 Achats intégrés StoreKit pour la recharge de crédits ✅ CODE FAIT + CI verte (iOS + backend) le 2026-09-09, setup manuel restant
 
 Décision produit prise avec l'utilisateur (option 1 de `RELEASE-IOS.md` §6.1, recommandée) :
