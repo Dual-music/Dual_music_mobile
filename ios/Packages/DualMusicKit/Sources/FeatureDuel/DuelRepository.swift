@@ -70,11 +70,26 @@ public struct DuelTicketInfo: Decodable, Sendable {
 
     enum CodingKeys: String, CodingKey { case hasTicket, count }
 
+    public init(hasTicket: Bool = false, count: Int = 0) {
+        self.hasTicket = hasTicket
+        self.count = count
+    }
+
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         hasTicket = c.bool(.hasTicket, false)
         count = c.int(.count)
     }
+}
+
+/// Réponse de `GET /lives/:id/likes` (réutilisée par les duels/concerts).
+private struct DuelLikesResponse: Decodable, Sendable {
+    let likes: Int
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        likes = c.int(.likes)
+    }
+    enum CodingKeys: String, CodingKey { case likes }
 }
 
 /// Entrée du classement des donateurs (`GET /leaderboards/gifts`).
