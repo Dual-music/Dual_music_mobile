@@ -32,6 +32,9 @@ public final class ProfileViewModel {
     /// Un manager crée des duels/compétitions, pas des lives.
     public var isArtist: Bool { roles.contains(.artist) }
 
+    /// Vrai si l'utilisateur est manager — héberge « Mes Duels » (création + gestion).
+    public var isManager: Bool { roles.contains(.manager) }
+
     /// Vrai si l'utilisateur n'est **que** fan (aucun rôle créateur).
     public var isPureFan: Bool { !canCreate }
 

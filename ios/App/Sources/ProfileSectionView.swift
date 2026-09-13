@@ -3,6 +3,7 @@ import CoreUI
 import DomainModels
 import FeatureArtists
 import FeatureCreator
+import FeatureDuel
 import FeatureGiftShop
 import FeatureLive
 import FeatureNotifications
@@ -40,6 +41,7 @@ enum ProfileRoute: Hashable {
     case following
     case admin
     case myLives
+    case managerDuels
 }
 
 /// Section profil (ouverte via l'avatar de la barre du haut) avec sa propre sous-navigation.
@@ -60,6 +62,8 @@ struct ProfileSectionView: View {
     @State private var openedReplay: ReplayVideo?
     /// Live en cours de diffusion (hôte) — plein écran, hors de la sous-navigation profil.
     @State private var broadcastingLive: Live?
+    /// Duel géré ouvert depuis « Mes Duels » (manager) — plein écran, hors sous-navigation.
+    @State private var openManagedDuel: Duel?
 
     var body: some View {
         content
@@ -75,6 +79,9 @@ struct ProfileSectionView: View {
                     hostUserId: live.artistId,
                     onEnded: { broadcastingLive = nil }
                 )
+            }
+            .fullScreenCover(item: $openManagedDuel) { duel in
+                DuelRoomView(viewModel: container.duelRoom(for: duel), onLeave: { openManagedDuel = nil })
             }
     }
 
@@ -92,6 +99,7 @@ struct ProfileSectionView: View {
                     managerEnabled: managerEnabled,
                     isAdmin: container.profile.isAdmin,
                     isArtist: container.profile.isArtist,
+                    isManager: container.profile.isManager,
                     onNavigate: { route = $0 },
                     onSignOut: {
                         Task {
@@ -190,6 +198,11 @@ struct ProfileSectionView: View {
                     DMLoadingBox()
                 }
             }
+
+        case .managerDuels:
+            SubScreen(title: s.managedDuels, onBack: { route = .menu }) {
+                ManagerDuelsView(viewModel: container.managerDuels) { duel in openManagedDuel = duel }
+            }
         }
     }
 
@@ -222,6 +235,7 @@ struct ProfileMenuView: View {
     let managerEnabled: Bool
     let isAdmin: Bool
     let isArtist: Bool
+    let isManager: Bool
     let onNavigate: (ProfileRoute) -> Void
     let onSignOut: () -> Void
 
@@ -248,6 +262,10 @@ struct ProfileMenuView: View {
                     // Réservé artiste : seul rôle qui héberge des lives.
                     if isArtist {
                         row("video.fill", s.myLives) { onNavigate(.myLives) }
+                    }
+                    // Réservé manager : crée/gère des duels (jamais de live).
+                    if isManager {
+                        row("figure.boxing", s.managedDuels) { onNavigate(.managerDuels) }
                     }
                     row("star.fill", s.menuCreatorSpace) { onNavigate(.creator) }
                     row("wallet.pass.fill", s.menuWithdraw) { onNavigate(.withdrawal) }

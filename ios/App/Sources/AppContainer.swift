@@ -102,6 +102,7 @@ public final class AppContainer {
     @ObservationIgnored private var cachedCreator: CreatorViewModel?
     @ObservationIgnored private var cachedAdmin: AdminViewModel?
     @ObservationIgnored private var cachedDuelsList: DuelsListViewModel?
+    @ObservationIgnored private var cachedManagerDuels: ManagerDuelsViewModel?
     @ObservationIgnored private var cachedConcerts: ConcertsViewModel?
     @ObservationIgnored private var cachedCompetitions: CompetitionsViewModel?
     @ObservationIgnored private var duelRooms: [String: DuelViewModel] = [:]
@@ -288,6 +289,14 @@ public final class AppContainer {
         if let cachedDuelsList { return cachedDuelsList }
         let viewModel = DuelsListViewModel(repository: duelRepository)
         cachedDuelsList = viewModel
+        return viewModel
+    }
+
+    /// Espace manager « Mes Duels » (création + gestion) — visible seulement pour un manager.
+    var managerDuels: ManagerDuelsViewModel {
+        if let cachedManagerDuels { return cachedManagerDuels }
+        let viewModel = ManagerDuelsViewModel(repository: duelRepository)
+        cachedManagerDuels = viewModel
         return viewModel
     }
 
@@ -486,6 +495,7 @@ public final class AppContainer {
         cachedCreator = nil
         cachedAdmin = nil
         cachedDuelsList = nil
+        cachedManagerDuels = nil
         cachedConcerts = nil
         cachedCompetitions = nil
         duelRooms.removeAll()
