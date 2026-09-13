@@ -211,20 +211,53 @@ public struct Concert: Codable, Sendable, Identifiable, Equatable {
     public let id: String
     public let artistId: String
     public let title: String
+    public let description: String?
     public let status: EventStatus
     public let scheduledDate: String?
+    public let scheduledTime: String?
     public let ticketPrice: Double
     public let allowsDedications: Bool
+    /// L'artiste (hôte) autorise-t-il la diffusion de pubs sponsor sur ce concert.
+    public let allowsSponsorAds: Bool
+    public let sponsorSubmissionDeadline: String?
+    public let dedicationSubmissionDeadline: String?
     public let coverImageURL: String?
+    public let imageURL: String?
+    public let location: String?
+    public let artistName: String?
+    public let artist: DisplayProfile?
+    public let isArtistConcert: Bool
+    public let recordingURL: String?
+    public let ticketsSold: Int
+    public let revenue: Double
+    public let maxTickets: Int?
+    public let approvalStatus: String?
+    /// L'artiste (hôte) a-t-il activé le chat pour ce concert (défaut vrai côté backend).
+    public let chatEnabled: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
         case artistId = "artist_id"
-        case title, status
+        case title, description, status
         case scheduledDate = "scheduled_date"
+        case scheduledTime = "scheduled_time"
         case ticketPrice = "ticket_price"
         case allowsDedications = "allows_dedications"
+        case allowsSponsorAds = "allows_sponsor_ads"
+        case sponsorSubmissionDeadline = "sponsor_submission_deadline"
+        case dedicationSubmissionDeadline = "dedication_submission_deadline"
         case coverImageURL = "cover_image_url"
+        case imageURL = "image_url"
+        case location
+        case artistName = "artist_name"
+        case artist
+        case isArtistConcert = "is_artist_concert"
+        case recordingURL = "recording_url"
+        case ticketsSold = "tickets_sold"
+        case revenue
+        case maxTickets = "max_tickets"
+        case approvalStatus = "approval_status"
+        case chatEnabled = "chat_enabled"
     }
 
     public init(from decoder: Decoder) throws {
@@ -232,16 +265,36 @@ public struct Concert: Codable, Sendable, Identifiable, Equatable {
         id = c.val(String.self, .id, "")
         artistId = c.val(String.self, .artistId, "")
         title = c.val(String.self, .title, "Concert")
+        description = c.opt(String.self, .description)
         status = c.val(EventStatus.self, .status, .upcoming)
         scheduledDate = c.opt(String.self, .scheduledDate)
+        scheduledTime = c.opt(String.self, .scheduledTime)
         ticketPrice = c.amount(.ticketPrice)
         allowsDedications = c.bool(.allowsDedications)
+        allowsSponsorAds = c.bool(.allowsSponsorAds)
+        sponsorSubmissionDeadline = c.opt(String.self, .sponsorSubmissionDeadline)
+        dedicationSubmissionDeadline = c.opt(String.self, .dedicationSubmissionDeadline)
         coverImageURL = c.opt(String.self, .coverImageURL)
+        imageURL = c.opt(String.self, .imageURL)
+        location = c.opt(String.self, .location)
+        artistName = c.opt(String.self, .artistName)
+        artist = c.opt(DisplayProfile.self, .artist)
+        isArtistConcert = c.bool(.isArtistConcert)
+        recordingURL = c.opt(String.self, .recordingURL)
+        ticketsSold = c.val(Int.self, .ticketsSold, 0)
+        revenue = c.amount(.revenue)
+        maxTickets = c.opt(Int.self, .maxTickets)
+        approvalStatus = c.opt(String.self, .approvalStatus)
+        chatEnabled = c.bool(.chatEnabled, true)
     }
 
     /// Room LiveKit : toujours dérivée, jamais de `room_id` backend pour ce type d'évènement
     /// (contrairement à Live/Duel) — miroir exact d'Android (`"concert-$id"`, tiret).
     public var liveKitRoom: String { "concert-\(id)" }
+
+    /// Image de couverture effective (`cover_image_url` artiste OU `image_url` admin) —
+    /// miroir exact du getter `cover` d'Android.
+    public var cover: String? { coverImageURL ?? imageURL }
 }
 
 /// Compétition (candidats, votes, cadeaux, classement).
