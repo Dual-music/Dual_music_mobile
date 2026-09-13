@@ -386,8 +386,12 @@ public final class AppContainer {
             hostUserId: concert.artistId,
             ticketPrice: concert.ticketPrice,
             allowsDedications: concert.allowsDedications,
+            scheduledDate: concert.scheduledDate,
+            status: concert.status,
             isHost: profile.me?.user.id == concert.artistId,
-            callerId: profile.me?.user.id
+            callerId: profile.me?.user.id,
+            wallet: walletRepository,
+            giftShop: giftShopRepository
         )
         concertRooms[concert.id] = viewModel
         return viewModel

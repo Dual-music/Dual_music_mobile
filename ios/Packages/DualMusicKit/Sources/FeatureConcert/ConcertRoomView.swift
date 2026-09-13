@@ -5,6 +5,8 @@ import CoreNetwork
 import CoreRealtime
 import CoreUI
 import DomainModels
+import FeatureGiftShop
+import FeatureWallet
 
 /// Message de chat d'un concert (auteur hydraté par le backend).
 ///
@@ -90,12 +92,40 @@ public final class ConcertRoomViewModel {
     public private(set) var bannedUserIds: Set<String> = []
     /// Messages à afficher : ceux d'un spectateur banni sont masqués pour tout le monde.
     public var visibleMessages: [ConcertChatMessage] { messages.filter { !bannedUserIds.contains($0.userId) } }
+    /// Vrai si LE CALLER lui-même est banni — bloque toute l'interaction (pas que le chat).
+    public var iAmBanned: Bool {
+        guard let callerId else { return false }
+        return bannedUserIds.contains(callerId)
+    }
 
     /// Vrai pour l'artiste (diffuse) — contrôle l'accès au bannissement et aux contrôles hôte.
     public let isHost: Bool
     /// Vrai tant qu'un billet payant est requis et non possédé — bloque l'accès à la vidéo
     /// (jamais vrai pour l'artiste, ni pour un concert gratuit).
     public private(set) var needsTicket = false
+    /// Vrai si le caller possède déjà son billet — état distinct de ``needsTicket`` (utilisé par
+    /// ``ScheduledAccessGateView``), même valeur par défaut `false` avant résolution.
+    public private(set) var hasTicket = false
+    /// Prix du billet — `0` = accès libre.
+    public let ticketPrice: Double
+    /// Vrai si le caller est admin — recalculé côté serveur au démarrage.
+    public private(set) var isAdmin = false
+    /// Acteur (exempté de billet, jamais de l'attente programmée) : hôte OU admin — parité
+    /// exacte `isActor = isHost || isAdmin` d'Android.
+    public var isActor: Bool { isHost || isAdmin }
+    /// Statut courant du concert (pour le gate d'accès programmé) — rafraîchi au démarrage.
+    public private(set) var status: EventStatus
+    /// Date programmée (pour le gate d'accès programmé) — rafraîchie au démarrage.
+    public private(set) var scheduledDate: String?
+    /// Chat activé/désactivé par l'artiste (bascule `PATCH /artist-concerts/:id`).
+    public private(set) var chatEnabled = true
+
+    // MARK: - Cadeaux : boutique + classement
+
+    public private(set) var giftCatalog: [VirtualGift] = []
+    public private(set) var inventory: [InventoryItem] = []
+    public private(set) var leaderboard: [ConcertDonorEntry] = []
+    public private(set) var topDonor: ConcertDonorEntry?
 
     /// Modérateurs désignés de ce concert (artiste + jusqu'à ``maxEventModerators``
     /// spectateurs) — visible par tous, pour que chacun sache qui d'autre a le pouvoir de
@@ -129,10 +159,11 @@ public final class ConcertRoomViewModel {
     private let concertId: String
     private let roomName: String
     private let hostUserId: String
-    private let ticketPrice: Double
     private let callerId: String?
     private let realtime: RealtimeClient
     private let repository: ConcertRepository
+    private let wallet: WalletRepository
+    private let giftShop: GiftShopRepository
 
     private var giftCounter = 0
     private var emojiCounter = 0
@@ -150,8 +181,12 @@ public final class ConcertRoomViewModel {
     ///   - hostUserId: id de l'artiste (exclu du bannissement, destinataire des cadeaux).
     ///   - ticketPrice: prix du billet — `0` = accès libre, jamais de billet requis.
     ///   - allowsDedications: dédicaces activées pour ce concert (fixé à la création).
+    ///   - scheduledDate: date programmée (gate d'accès), rafraîchie au démarrage.
+    ///   - status: statut courant (gate d'accès), rafraîchi au démarrage.
     ///   - isHost: vrai pour l'artiste qui diffuse.
     ///   - callerId: id du caller (spectateur) — sert au filtrage des événements temps réel.
+    ///   - wallet: achat de cadeaux (boutique).
+    ///   - giftShop: catalogue + inventaire des cadeaux.
     public init(
         concertId: String,
         roomName: String,
@@ -161,8 +196,12 @@ public final class ConcertRoomViewModel {
         hostUserId: String,
         ticketPrice: Double,
         allowsDedications: Bool,
+        scheduledDate: String? = nil,
+        status: EventStatus = .upcoming,
         isHost: Bool = false,
-        callerId: String? = nil
+        callerId: String? = nil,
+        wallet: WalletRepository,
+        giftShop: GiftShopRepository
     ) {
         self.concertId = concertId
         self.roomName = roomName
@@ -172,8 +211,12 @@ public final class ConcertRoomViewModel {
         self.hostUserId = hostUserId
         self.ticketPrice = ticketPrice
         self.allowsDedications = allowsDedications
+        self.scheduledDate = scheduledDate
+        self.status = status
         self.isHost = isHost
         self.callerId = callerId
+        self.wallet = wallet
+        self.giftShop = giftShop
     }
 
     /// Démarre : billetterie, vidéo (si accès autorisé), historique de chat, rooms temps réel.
@@ -183,6 +226,7 @@ public final class ConcertRoomViewModel {
 
         if !isHost && ticketPrice > 0 {
             let info = try? await repository.ticketInfo(id: concertId)
+            hasTicket = info?.hasTicket == true
             needsTicket = info?.hasTicket != true
         }
         if !needsTicket {
@@ -204,6 +248,23 @@ public final class ConcertRoomViewModel {
             guard let self else { return }
             self.likes = await self.repository.likesCount(concertId: self.concertId)
         }
+        Task { [weak self] in
+            guard let self else { return }
+            self.isAdmin = await self.repository.amIAdmin()
+        }
+        // Détail complet : réglage chat + statut/date pour le gate d'accès programmé — le
+        // temps réel prend ensuite le relais pour le chat (voir ``connectRealtime``).
+        Task { [weak self] in
+            guard let self else { return }
+            if let c = try? await self.repository.concert(id: self.concertId) {
+                self.chatEnabled = c.chatEnabled
+                self.scheduledDate = c.scheduledDate
+                self.status = c.status
+            }
+        }
+        Task { [weak self] in await self?.loadGiftCatalog() }
+        Task { [weak self] in await self?.loadInventory() }
+        Task { [weak self] in await self?.refreshGiftLeaderboard() }
         if allowsDedications {
             Task { [weak self] in
                 guard let self else { return }
@@ -228,27 +289,85 @@ public final class ConcertRoomViewModel {
 
     /// Spectateur : achète le billet puis rejoint immédiatement la vidéo (sans recharger
     /// l'écran).
-    public func buyTicket() async {
+    @discardableResult
+    public func buyTicket() async -> Result<Void, Error> {
         do {
             try await repository.buyTicket(concertId: concertId)
             needsTicket = false
+            hasTicket = true
             await media.join(roomName: roomName, isHost: false)
+            return .success(())
         } catch {
             errorMessage = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+            return .failure(error)
         }
     }
 
     /// Envoie un message de chat (le serveur le diffuse ensuite à la room).
     public func sendMessage(_ text: String) async {
+        guard chatEnabled, !iAmBanned else { return }
         let content = text.trimmed
         guard !content.isEmpty else { return }
         try? await repository.postMessage(concertId: concertId, content: content)
     }
 
-    /// Envoie un cadeau à l'artiste.
+    /// Envoie un cadeau possédé à l'artiste, puis recharge l'inventaire (quantité restante) et
+    /// le classement des donateurs.
     public func sendGift(giftId: String) async {
         guard !giftId.isEmpty else { return }
-        try? await repository.sendGift(concertId: concertId, giftId: giftId, toUserId: hostUserId)
+        do {
+            try await repository.sendGift(concertId: concertId, giftId: giftId, toUserId: hostUserId)
+            await loadInventory()
+        } catch {
+            errorMessage = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    // MARK: - Cadeaux : boutique + classement
+
+    /// Recharge le catalogue des cadeaux virtuels (boutique).
+    public func loadGiftCatalog() async {
+        giftCatalog = (try? await giftShop.catalog()) ?? giftCatalog
+    }
+
+    /// Recharge l'inventaire (après achat/envoi).
+    public func loadInventory() async {
+        inventory = (try? await giftShop.inventory()) ?? inventory
+    }
+
+    /// Recharge le classement des donateurs + la bulle top-donateur.
+    public func loadGiftLeaderboard() async {
+        await refreshGiftLeaderboard()
+    }
+
+    @discardableResult
+    private func refreshGiftLeaderboard() async -> [ConcertDonorEntry] {
+        let list = (try? await repository.giftLeaderboard(concertId: concertId)) ?? []
+        leaderboard = list
+        topDonor = list.first
+        return list
+    }
+
+    /// Achète un cadeau (boutique) puis recharge l'inventaire.
+    public func purchaseGift(giftId: String) async {
+        do {
+            try await wallet.purchaseGift(giftId: giftId)
+            await loadInventory()
+        } catch {
+            errorMessage = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
+    }
+
+    // MARK: - Chat activé/désactivé (artiste)
+
+    /// Artiste : active/désactive le chat pour tous les spectateurs (optimiste, résilient).
+    public func toggleChat(_ enabled: Bool) async {
+        chatEnabled = enabled
+        do {
+            try await repository.setChatEnabled(concertId: concertId, enabled: enabled)
+        } catch {
+            chatEnabled = !enabled
+        }
     }
 
     /// Signale ce concert avec un motif (modération).
@@ -448,6 +567,7 @@ public final class ConcertRoomViewModel {
                     value: payload.value
                 )
             )
+            Task { await self.refreshGiftLeaderboard() }
         })
         subscriptions.append(live.onEvent(Realtime.Event.presence, as: PresencePayload.self) { [weak self] payload in
             self?.viewerCount = payload.count
@@ -455,6 +575,11 @@ public final class ConcertRoomViewModel {
         subscriptions.append(live.onEvent(Realtime.Event.streamBanned, as: StreamBannedPayload.self) { [weak self] payload in
             guard let self, payload.streamId == nil || payload.streamId == self.concertId else { return }
             self.bannedUserIds.insert(payload.userId)
+        })
+        // Réglage chat basculé par l'artiste — même room pour tous les spectateurs.
+        subscriptions.append(live.onEvent(Realtime.Event.settings, as: EventSettingsPayload.self) { [weak self] payload in
+            guard let self, payload.concertId == nil || payload.concertId == self.concertId else { return }
+            if let enabled = payload.chatEnabled { self.chatEnabled = enabled }
         })
         // Modération : un modérateur a été désigné/révoqué par l'artiste → recharge pour tous.
         subscriptions.append(live.onEvent(Realtime.Event.moderatorAppointed, as: EventModeratorPayload.self) { [weak self] _ in
@@ -505,7 +630,6 @@ public struct ConcertRoomView: View {
     private let viewModel: ConcertRoomViewModel
     private let concertTitle: String
     private let hostUserId: String
-    private let quickGiftId: String
     private let onEnded: () -> Void
 
     @State private var draft = ""
@@ -518,24 +642,23 @@ public struct ConcertRoomView: View {
     @State private var dedicationPriceText = ""
     @State private var showReactionBar = false
     @State private var showFilterSheet = false
+    @State private var showGiftSheet = false
+    @State private var showLeaderboardSheet = false
 
     /// - Parameters:
     ///   - viewModel: état + actions du concert.
     ///   - concertTitle: affiché derrière le paywall billetterie.
     ///   - hostUserId: id de l'artiste — jamais bannissable, même par lui-même.
-    ///   - quickGiftId: cadeau rapide (vide → bouton inactif tant qu'aucun cadeau choisi).
     ///   - onEnded: artiste uniquement — appelé une fois le concert terminé.
     public init(
         viewModel: ConcertRoomViewModel,
         concertTitle: String,
         hostUserId: String,
-        quickGiftId: String = "",
         onEnded: @escaping () -> Void = {}
     ) {
         self.viewModel = viewModel
         self.concertTitle = concertTitle
         self.hostUserId = hostUserId
-        self.quickGiftId = quickGiftId
         self.onEnded = onEnded
     }
 
@@ -581,7 +704,25 @@ public struct ConcertRoomView: View {
             }
             .padding(theme.spacing.md)
 
+            if viewModel.iAmBanned {
+                bannedGate
+            }
+
             if viewModel.needsTicket { ticketPaywall }
+
+            // Gate d'accès programmé (parité web `ScheduledAccessGate`) : bloque l'entrée AVANT
+            // l'heure programmée (aucune exception artiste/admin), et exige un billet si le
+            // concert est déjà en direct, payant, sans billet. Rendu en dernier → toujours au-dessus.
+            ScheduledAccessGateView(
+                type: "concert",
+                scheduledAtIso: viewModel.scheduledDate,
+                status: viewModel.status.rawValue,
+                isActor: viewModel.isActor,
+                hasTicket: viewModel.hasTicket,
+                ticketPrice: viewModel.ticketPrice,
+                onPurchase: { await viewModel.buyTicket() },
+                onDismiss: onEnded
+            )
         }
         .task { await viewModel.start() }
         .onDisappear { Task { await viewModel.stop() } }
@@ -594,6 +735,8 @@ public struct ConcertRoomView: View {
         }
         .sheet(isPresented: $showModeratorsSheet) { moderatorsSheet }
         .sheet(isPresented: $showFilterSheet) { filterSheet }
+        .sheet(isPresented: $showGiftSheet) { giftSheet }
+        .sheet(isPresented: $showLeaderboardSheet) { leaderboardSheet }
         // Fan : demande de dédicace (message + prix, prix plancher forcé par l'artiste).
         .sheet(isPresented: $showDedicationSheet) { dedicationRequestSheet }
         // Artiste : demandes en attente (accepter/rejeter) + historique (marquer comme livrée).
@@ -737,13 +880,14 @@ public struct ConcertRoomView: View {
     /// Barre d'action spectateur : saisie de message + bouton cadeau.
     private var actionBar: some View {
         HStack(spacing: theme.spacing.sm) {
-            TextField(s.saySomething, text: $draft)
+            TextField(viewModel.chatEnabled ? s.saySomething : s.chatDisabledLabel, text: $draft)
                 .textFieldStyle(.plain)
                 .foregroundStyle(.white)
                 .padding(.horizontal, theme.spacing.md)
                 .padding(.vertical, theme.spacing.sm)
                 .background(.white.opacity(0.15), in: Capsule())
                 .submitLabel(.send)
+                .disabled(!viewModel.chatEnabled || viewModel.iAmBanned)
                 .onSubmit(send)
             Button(action: send) {
                 Image(systemName: "paperplane.fill")
@@ -752,7 +896,7 @@ public struct ConcertRoomView: View {
                     .background(theme.colors.accent, in: Circle())
             }
             .buttonStyle(.plain)
-            .disabled(draft.trimmed.isEmpty)
+            .disabled(draft.trimmed.isEmpty || !viewModel.chatEnabled || viewModel.iAmBanned)
             Button {
                 viewModel.sendLike()
             } label: {
@@ -793,7 +937,7 @@ public struct ConcertRoomView: View {
                 .buttonStyle(.plain)
             }
             Button {
-                Task { await viewModel.sendGift(giftId: quickGiftId) }
+                showGiftSheet = true
             } label: {
                 Image(systemName: "gift.fill")
                     .foregroundStyle(.white)
@@ -801,8 +945,54 @@ public struct ConcertRoomView: View {
                     .background(.black.opacity(0.4), in: Circle())
             }
             .buttonStyle(.plain)
-            .disabled(quickGiftId.isEmpty)
+            Button {
+                showLeaderboardSheet = true
+            } label: {
+                Image(systemName: "trophy.fill")
+                    .foregroundStyle(.white)
+                    .padding(theme.spacing.sm)
+                    .background(.black.opacity(0.4), in: Circle())
+            }
+            .buttonStyle(.plain)
         }
+    }
+
+    // MARK: - Cadeaux : boutique + classement
+
+    private var giftSheet: some View {
+        ConcertGiftSendSheet(
+            inventory: viewModel.inventory,
+            catalog: viewModel.giftCatalog,
+            onSend: { giftId in
+                Task { await viewModel.sendGift(giftId: giftId); showGiftSheet = false }
+            },
+            onPurchase: { giftId in Task { await viewModel.purchaseGift(giftId: giftId) } }
+        )
+        .task { await viewModel.loadGiftCatalog(); await viewModel.loadInventory() }
+    }
+
+    private var leaderboardSheet: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text("🏆 \(s.donors)").font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+            if viewModel.leaderboard.isEmpty {
+                Text(s.emptyRanking).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: theme.spacing.sm) {
+                        ForEach(Array(viewModel.leaderboard.enumerated()), id: \.element.id) { index, entry in
+                            HStack {
+                                Text("\(medal(index + 1)) \(entry.displayName)").foregroundStyle(theme.colors.foreground)
+                                Spacer()
+                                Text("\(entry.value) \(s.credits)").bold().foregroundStyle(theme.colors.accent)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(theme.spacing.lg)
+        .presentationDetents([.medium])
+        .dmScreenBackground()
     }
 
     /// Contrôles artiste : mic/caméra/bascule + dédicaces (badge = demandes en attente) + fin
@@ -820,6 +1010,9 @@ public struct ConcertRoomView: View {
             }
             controlButton("camera.filters") {
                 showFilterSheet = true
+            }
+            controlButton(viewModel.chatEnabled ? "bubble.left.fill" : "bubble.left.slash.fill") {
+                Task { await viewModel.toggleChat(!viewModel.chatEnabled) }
             }
             if viewModel.allowsDedications {
                 Button {
@@ -1114,6 +1307,17 @@ public struct ConcertRoomView: View {
         .dmScreenBackground()
     }
 
+    /// Médaille pour le podium, numéro sinon (même règle que les classements Android).
+    /// - Parameter rank: rang 1-based.
+    private func medal(_ rank: Int) -> String {
+        switch rank {
+        case 1: return "🥇"
+        case 2: return "🥈"
+        case 3: return "🥉"
+        default: return "\(rank)."
+        }
+    }
+
     /// Libellé localisé d'un filtre couleur.
     private func filterLabel(_ id: String) -> String {
         switch id {
@@ -1130,5 +1334,95 @@ public struct ConcertRoomView: View {
         case "dream": return s.filterDream
         default: return s.filterNone
         }
+    }
+
+    // MARK: - Barrière de bannissement
+
+    private var bannedGate: some View {
+        ZStack {
+            theme.colors.background.ignoresSafeArea()
+            VStack(spacing: theme.spacing.lg) {
+                Image(systemName: "nosign").font(.system(size: 56)).foregroundStyle(theme.colors.destructive)
+                Text(s.banConfirmMessage)
+                    .font(DMFont.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(theme.colors.mutedForeground)
+                DMButton(s.scheduledBackHome, action: onEnded)
+                    .frame(maxWidth: 220)
+            }
+            .padding(theme.spacing.xl)
+        }
+    }
+}
+
+/// Feuille d'envoi de cadeau à l'artiste : onglets « Mes cadeaux » / « Boutique ».
+private struct ConcertGiftSendSheet: View {
+    @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
+
+    let inventory: [InventoryItem]
+    let catalog: [VirtualGift]
+    let onSend: (String) -> Void
+    let onPurchase: (String) -> Void
+
+    @State private var showShop = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text("🎁 \(s.sendGift)").font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+
+            HStack(spacing: theme.spacing.sm) {
+                pill(s.myGifts, selected: !showShop) { showShop = false }
+                pill(s.giftShopLabel, selected: showShop) { showShop = true }
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: theme.spacing.sm) {
+                    if !showShop {
+                        if inventory.isEmpty {
+                            Text(s.noGiftsBuyInShop).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                        }
+                        ForEach(inventory) { item in
+                            Button {
+                                onSend(item.giftId)
+                            } label: {
+                                HStack {
+                                    Text("\(item.imageURL ?? "🎁")  \(item.name ?? "")").foregroundStyle(theme.colors.foreground)
+                                    Spacer()
+                                    Text("×\(item.quantity)").bold().foregroundStyle(theme.colors.accent)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    } else {
+                        ForEach(catalog) { gift in
+                            Button { onPurchase(gift.id) } label: {
+                                HStack {
+                                    Text("\(gift.emoji ?? "🎁")  \(gift.name)").foregroundStyle(theme.colors.foreground)
+                                    Spacer()
+                                    Text("\(Int(gift.price)) \(s.credits)").bold().foregroundStyle(theme.colors.accent)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(theme.spacing.lg)
+        .presentationDetents([.large])
+        .dmScreenBackground()
+    }
+
+    private func pill(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
+                .font(DMFont.caption).bold()
+                .foregroundStyle(selected ? theme.colors.primaryForeground : theme.colors.foreground)
+                .padding(.horizontal, theme.spacing.md)
+                .padding(.vertical, theme.spacing.sm)
+                .background(selected ? theme.colors.accent : Color.black.opacity(0.15), in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }

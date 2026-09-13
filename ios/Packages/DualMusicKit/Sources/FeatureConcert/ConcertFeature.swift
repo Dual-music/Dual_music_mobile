@@ -3,6 +3,8 @@ import Observation
 import CoreNetwork
 import CoreUI
 import DomainModels
+import FeatureGiftShop
+import FeatureWallet
 
 /// Accès REST aux concerts d'artistes.
 ///
@@ -193,6 +195,71 @@ public struct ConcertRepository: Sendable {
     public func likeConcert(concertId: String) async {
         try? await http.send(.post("/lives/\(concertId)/likes"))
     }
+
+    /// Classement des donateurs du concert (`GET /leaderboards/gifts?contextType=concert`).
+    public func giftLeaderboard(concertId: String) async throws -> [ConcertDonorEntry] {
+        try await http.request(
+            .get(LeaderboardEndpoints.gifts, query: ["contextType": "concert", "contextId": concertId]),
+            as: [ConcertDonorEntry].self
+        )
+    }
+
+    /// Artiste : active/désactive le chat de ce concert (`PATCH /artist-concerts/:id`).
+    public func setChatEnabled(concertId: String, enabled: Bool) async throws {
+        try await http.send(.patch(ConcertEndpoints.artistDetail(concertId), body: ConcertChatEnabledBody(chatEnabled: enabled)))
+    }
+
+    /// Vrai si le caller est admin — toujours considéré comme acteur (exempté de billet) par
+    /// ``ScheduledAccessGateView``, mais pas exempté de l'attente de l'heure programmée.
+    public func amIAdmin() async -> Bool {
+        (try? await http.request(.get(UserEndpoints.me), as: MeResponse.self))?.roles.contains(.admin) ?? false
+    }
+}
+
+/// Entrée du classement des donateurs (`GET /leaderboards/gifts`).
+public struct ConcertDonorEntry: Decodable, Sendable, Identifiable {
+    public let id: String
+    public let userId: String?
+    public let fullName: String?
+    public let stageName: String?
+    public let total: Double
+    public let score: Double
+    public let user: DisplayProfile?
+
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
+        case fullName = "full_name"
+        case stageName = "stage_name"
+        case total, score, user
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userId = c.opt(String.self, .userId)
+        fullName = c.opt(String.self, .fullName)
+        stageName = c.opt(String.self, .stageName)
+        total = c.amount(.total)
+        score = c.amount(.score)
+        user = c.opt(DisplayProfile.self, .user)
+        id = userId ?? UUID().uuidString
+    }
+
+    /// Nom affiché : profil hydraté, sinon nom de scène, sinon nom complet, sinon repli générique.
+    @MainActor
+    public var displayName: String {
+        if let user { return user.displayName }
+        if let s = stageName, !s.isEmpty { return s }
+        if let f = fullName, !f.isEmpty { return f }
+        return AppStrings.current.donors
+    }
+
+    /// Valeur affichée (crédits) : `total` si présent, sinon `score`.
+    public var value: Int { Int(total > 0 ? total : score) }
+}
+
+/// Corps de `PATCH /artist-concerts/:id` — bascule du chat uniquement.
+struct ConcertChatEnabledBody: Encodable, Sendable {
+    let chatEnabled: Bool
 }
 
 /// Réponse de `GET /lives/:id/likes`.

@@ -347,6 +347,7 @@ public struct DMStrings: Sendable {
     public let createCompetitionAction: String
     public let managedCompetitions: String
     public let competitionCreated: String
+    public let chatDisabledLabel: String
     public let noCandidates: String
     public let noCandidatesHint: String
     public let timerRunning: String
@@ -812,6 +813,7 @@ public extension DMStrings {
         createCompetitionAction: "Créer la compétition",
         managedCompetitions: "Compétitions gérées",
         competitionCreated: "✅ Compétition créée (brouillon — publie-la pour ouvrir les votes).",
+        chatDisabledLabel: "Chat désactivé",
         noCandidates: "Aucun candidat approuvé",
         noCandidatesHint: "Le classement s'affichera dès les premières candidatures.",
         timerRunning: "⏱ Minuteur en cours",
@@ -1262,6 +1264,7 @@ public extension DMStrings {
         createCompetitionAction: "Create competition",
         managedCompetitions: "Managed competitions",
         competitionCreated: "✅ Competition created (draft — publish it to open voting).",
+        chatDisabledLabel: "Chat disabled",
         noCandidates: "No approved candidate",
         noCandidatesHint: "The ranking will appear once candidacies start.",
         timerRunning: "⏱ Timer running",
