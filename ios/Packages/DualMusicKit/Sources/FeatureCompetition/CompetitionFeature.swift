@@ -53,6 +53,83 @@ struct CompetitionMessageBody: Encodable, Sendable {
     let message: String
 }
 
+/// Réponse de `GET /lives/:id/likes` (réutilisée par les compétitions).
+private struct CompetitionLikesResponse: Decodable, Sendable {
+    let likes: Int
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        likes = c.int(.likes)
+    }
+    enum CodingKeys: String, CodingKey { case likes }
+}
+
+/// Réglage public `vote_config` : `GET /settings/public/vote_config`.
+private struct CompetitionVoteConfigSetting: Decodable, Sendable {
+    let value: CompetitionVoteConfigSettingValue?
+}
+private struct CompetitionVoteConfigSettingValue: Decodable, Sendable {
+    let pricePerVote: Double
+    enum CodingKeys: String, CodingKey { case pricePerVote = "price_per_vote" }
+}
+
+/// Réglage public `manual_candidates_config` : ajout manuel de candidat activé ?
+private struct ManualCandidatesConfigSetting: Decodable, Sendable {
+    let value: ManualCandidatesConfigSettingValue?
+}
+private struct ManualCandidatesConfigSettingValue: Decodable, Sendable {
+    let enabled: Bool?
+}
+
+/// Corps de `POST /competitions/:id/candidates/manual`.
+struct AddCandidateManuallyBody: Encodable, Sendable {
+    let artistId: String
+    let pitch: String?
+}
+
+/// Corps de `POST /competitions/candidates/:id/review`.
+struct CompetitionReviewBody: Encodable, Sendable {
+    let approve: Bool
+}
+
+/// Corps de `PATCH /competitions/:id` — chat activé/désactivé (dédié, plutôt que le corps
+/// COMPLET de ``CreateCompetitionBody`` exigé par ``CompetitionRepository/updateCompetition``).
+struct CompetitionChatBody: Encodable, Sendable {
+    let chatEnabled: Bool
+}
+
+/// Corps de `POST /competitions/candidates/:id/jury-votes`.
+struct CompetitionJuryVotesBody: Encodable, Sendable {
+    let juryVotes: Int
+}
+
+/// Corps de `POST /competitions/:id/performer` — `candidateId` explicitement `null` pour arrêter
+/// (encodage manuel : le synthétisé Swift OMET un optionnel `nil` au lieu de l'encoder `null`).
+struct CompetitionPerformerBody: Encodable, Sendable {
+    let candidateId: String?
+    let durationSec: Int
+
+    enum CodingKeys: String, CodingKey { case candidateId, durationSec }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(candidateId, forKey: .candidateId)
+        try c.encode(durationSec, forKey: .durationSec)
+    }
+}
+
+/// Corps de `POST /competitions/:id/focus` — `participantId` explicitement `null` pour libérer
+/// (même raison d'encodage manuel que ``CompetitionPerformerBody``).
+struct CompetitionFocusBody: Encodable, Sendable {
+    let participantId: String?
+
+    enum CodingKeys: String, CodingKey { case participantId }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(participantId, forKey: .participantId)
+    }
+}
+
 /// Accès REST aux compétitions.
 ///
 /// ⚠️ Contrairement au duel (dont le vote passe par `/wallet/vote`), le vote de compétition
@@ -188,6 +265,146 @@ public struct CompetitionRepository: Sendable {
     /// Manager : révoque un modérateur désigné.
     public func revokeModerator(competitionId: String, userId: String) async throws {
         try await http.send(.delete(ModerationEndpoints.revokeModerator("competition", competitionId, userId)))
+    }
+
+    // MARK: - Billetterie / gate d'accès programmé
+
+    /// Le caller possède-t-il un billet pour cette compétition ? `GET /competitions/:id/my-ticket`.
+    public func ticketInfo(id: String) async -> CompetitionTicketInfo {
+        (try? await http.request(.get(CompetitionEndpoints.myTicket(id)), as: CompetitionTicketInfo.self)) ?? CompetitionTicketInfo()
+    }
+
+    /// Vrai si le caller est admin (acteur exempté de billet, jamais de l'attente).
+    public func amIAdmin() async -> Bool {
+        (try? await http.request(.get(UserEndpoints.me), as: MeResponse.self))?.roles.contains(.admin) ?? false
+    }
+
+    /// Vrai si le caller a le rôle artiste (éligibilité au bouton Candidater).
+    public func amIArtist() async -> Bool {
+        (try? await http.request(.get(UserEndpoints.me), as: MeResponse.self))?.roles.contains(.artist) ?? false
+    }
+
+    /// Id du caller — sert de `managerId` à la création + à filtrer ses compétitions.
+    public func myUserId() async -> String? {
+        (try? await http.request(.get(UserEndpoints.me), as: MeResponse.self))?.user.id
+    }
+
+    /// Prix d'UN vote en crédits — configuré par l'admin (défaut 1).
+    public func votePricePerVote() async -> Double {
+        (try? await http.request(.get("/settings/public/vote_config"), as: CompetitionVoteConfigSetting.self))?.value?.pricePerVote ?? 1.0
+    }
+
+    // MARK: - J'aime persistés
+
+    /// Compteur de j'aime PERSISTÉ (les compétitions partagent l'endpoint des lives).
+    public func likesCount(competitionId: String) async -> Int {
+        (try? await http.request(.get(LiveEndpoints.likes(competitionId)), as: CompetitionLikesResponse.self))?.likes ?? 0
+    }
+
+    /// Incrémente + persiste le j'aime côté serveur.
+    public func likeCompetition(competitionId: String) async {
+        try? await http.send(.post(LiveEndpoints.likes(competitionId)))
+    }
+
+    // MARK: - Cadeaux : classement des donateurs
+
+    /// Classement des donateurs (`GET /leaderboards/gifts?contextType=competition`).
+    public func giftLeaderboard(competitionId: String) async throws -> [CompetitionDonorEntry] {
+        try await http.request(
+            .get(LeaderboardEndpoints.gifts, query: ["contextType": "competition", "contextId": competitionId]),
+            as: [CompetitionDonorEntry].self
+        )
+    }
+
+    // MARK: - Candidature de l'artiste
+
+    /// Candidatures du caller (artiste), enrichies de leur compétition.
+    public func myCandidacies() async throws -> [MyCandidacy] {
+        try await http.request(.get(CompetitionEndpoints.candidaciesMine), as: [MyCandidacy].self)
+    }
+
+    /// Auto-candidature de l'artiste (distincte de l'ajout manuel par le manager).
+    public func apply(competitionId: String, pitch: String?, videoDemoUrl: String?) async throws {
+        try await http.send(
+            .post(
+                CompetitionEndpoints.apply(competitionId),
+                body: CompetitionApplyRequest(pitch: pitch?.nilIfBlank, videoDemoUrl: videoDemoUrl?.nilIfBlank)
+            )
+        )
+    }
+
+    // MARK: - Espace MANAGER (organisateur de compétitions)
+
+    /// Compétitions gérées par ce manager.
+    public func myCompetitions() async throws -> [Competition] {
+        try await http.request(.get(CompetitionEndpoints.mine), as: [Competition].self)
+    }
+
+    /// Crée une compétition (le manager s'assigne organisateur). Le backend force `status =
+    /// "draft"` à la création, quel que soit le `status` transmis.
+    public func createCompetition(_ body: CreateCompetitionBody) async throws {
+        try await http.send(.post(CompetitionEndpoints.list, body: body))
+    }
+
+    /// Met à jour une compétition existante (édition).
+    public func updateCompetition(id: String, body: CreateCompetitionBody) async throws {
+        try await http.send(.patch(CompetitionEndpoints.detail(id), body: body))
+    }
+
+    /// Publie la compétition (ouvre les votes).
+    public func publish(id: String) async throws {
+        try await http.send(.post(CompetitionEndpoints.publish(id)))
+    }
+
+    /// Finalise le classement (clôture définitive).
+    public func finalize(id: String) async throws {
+        try await http.send(.post(CompetitionEndpoints.finalize(id)))
+    }
+
+    /// Active/désactive le chat de cette compétition pour tous (manager/admin uniquement).
+    public func setChatEnabled(id: String, enabled: Bool) async throws {
+        try await http.send(.patch(CompetitionEndpoints.detail(id), body: CompetitionChatBody(chatEnabled: enabled)))
+    }
+
+    // MARK: - Contrôles manager en direct
+
+    /// Valide/rejette une candidature en attente.
+    public func reviewCandidate(candidateId: String, approve: Bool) async throws {
+        try await http.send(.post(CompetitionEndpoints.candidateReview(candidateId), body: CompetitionReviewBody(approve: approve)))
+    }
+
+    /// L'ajout manuel de candidat est-il activé (réglage admin) ? Désactivé par défaut.
+    public func manualCandidatesEnabled() async -> Bool {
+        (try? await http.request(.get("/settings/public/manual_candidates_config"), as: ManualCandidatesConfigSetting.self))?.value?.enabled == true
+    }
+
+    /// Annuaire public des artistes — pour le picker d'ajout manuel.
+    public func artistDirectory() async -> [ArtistDirectoryEntry] {
+        (try? await http.request(.get(ArtistEndpoints.list), as: [ArtistDirectoryEntry].self)) ?? []
+    }
+
+    /// Ajoute directement un candidat (walk-in, présentiel) sans candidature en ligne —
+    /// verrouillé côté serveur par ``manualCandidatesEnabled()``.
+    public func addCandidateManually(competitionId: String, artistId: String, pitch: String?) async throws {
+        try await http.send(
+            .post(CompetitionEndpoints.candidateManual(competitionId), body: AddCandidateManuallyBody(artistId: artistId, pitch: pitch?.nilIfBlank))
+        )
+    }
+
+    /// Fixe (valeur absolue, pas un incrément) les voix cumulées d'un jury hors ligne pour un
+    /// candidat — additionnées aux votes payants + cadeaux dans le classement.
+    public func setJuryVotes(candidateId: String, juryVotes: Int) async throws {
+        try await http.send(.post(CompetitionEndpoints.candidateJuryVotes(candidateId), body: CompetitionJuryVotesBody(juryVotes: juryVotes)))
+    }
+
+    /// Désigne le candidat actuellement mis en avant (ou `nil` pour arrêter).
+    public func setPerformer(id: String, candidateId: String?, durationSeconds: Int) async throws {
+        try await http.send(.post(CompetitionEndpoints.performer(id), body: CompetitionPerformerBody(candidateId: candidateId, durationSec: durationSeconds)))
+    }
+
+    /// Impose (ou libère avec `nil`) la caméra épinglée pour tous.
+    public func setFocus(id: String, participantId: String?) async throws {
+        try await http.send(.post(CompetitionEndpoints.focus(id), body: CompetitionFocusBody(participantId: participantId)))
     }
 }
 

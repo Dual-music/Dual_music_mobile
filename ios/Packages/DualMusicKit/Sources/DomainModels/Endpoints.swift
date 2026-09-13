@@ -136,13 +136,31 @@ public enum CompetitionEndpoints {
     public static let list = "/competitions"
     public static let candidaciesMine = "/competitions/candidacies/mine"
     public static let ticketsMine = "/competitions/tickets/mine"
+    /// Compétitions gérées par le caller (manager).
+    public static let mine = "/competitions/mine"
     public static func detail(_ id: String) -> String { "/competitions/\(id)" }
     public static func candidates(_ id: String) -> String { "/competitions/\(id)/candidates" }
     public static func messages(_ id: String) -> String { "/competitions/\(id)/messages" }
     public static func vote(_ id: String) -> String { "/competitions/\(id)/vote" }
+    /// Auto-candidature de l'artiste (distinct de l'ajout manuel par le manager).
+    public static func apply(_ id: String) -> String { "/competitions/\(id)/apply" }
     public static func gifts(_ id: String) -> String { "/competitions/\(id)/gifts" }
     public static func tickets(_ id: String) -> String { "/competitions/\(id)/tickets" }
     public static func myTicket(_ id: String) -> String { "/competitions/\(id)/my-ticket" }
+    /// Manager : ouvre les votes (`draft` → `open`).
+    public static func publish(_ id: String) -> String { "/competitions/\(id)/publish" }
+    /// Manager : clôture définitivement le classement.
+    public static func finalize(_ id: String) -> String { "/competitions/\(id)/finalize" }
+    /// Manager : désigne (ou libère) le candidat actuellement mis en avant.
+    public static func performer(_ id: String) -> String { "/competitions/\(id)/performer" }
+    /// Manager : épingle (ou libère) la caméra affichée à tous.
+    public static func focus(_ id: String) -> String { "/competitions/\(id)/focus" }
+    /// Manager : valide/rejette une candidature en attente.
+    public static func candidateReview(_ candidateId: String) -> String { "/competitions/candidates/\(candidateId)/review" }
+    /// Manager : ajoute directement un candidat (walk-in, présentiel), sans candidature en ligne.
+    public static func candidateManual(_ id: String) -> String { "/competitions/\(id)/candidates/manual" }
+    /// Manager : fixe les voix de jury (valeur absolue) d'un candidat.
+    public static func candidateJuryVotes(_ candidateId: String) -> String { "/competitions/candidates/\(candidateId)/jury-votes" }
 }
 
 /// Chemins des cadeaux.

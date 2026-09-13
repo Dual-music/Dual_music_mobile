@@ -74,6 +74,257 @@ public struct CompetitionGiftRequest: Encodable, Sendable {
     }
 }
 
+/// Le caller possède-t-il un billet pour cette compétition ? `GET /competitions/:id/my-ticket`.
+public struct CompetitionTicketInfo: Decodable, Sendable {
+    public let hasTicket: Bool
+    public let count: Int
+
+    enum CodingKeys: String, CodingKey { case hasTicket, count }
+
+    public init(hasTicket: Bool = false, count: Int = 0) {
+        self.hasTicket = hasTicket
+        self.count = count
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        hasTicket = c.bool(.hasTicket, false)
+        count = c.int(.count)
+    }
+}
+
+/// Entrée du classement des donateurs (`GET /leaderboards/gifts`).
+public struct CompetitionDonorEntry: Decodable, Sendable, Identifiable {
+    public let id: String
+    public let userId: String?
+    public let fullName: String?
+    public let stageName: String?
+    public let total: Double
+    public let score: Double
+    public let user: DisplayProfile?
+
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
+        case fullName = "full_name"
+        case stageName = "stage_name"
+        case total, score, user
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userId = c.opt(String.self, .userId)
+        fullName = c.opt(String.self, .fullName)
+        stageName = c.opt(String.self, .stageName)
+        total = c.amount(.total)
+        score = c.amount(.score)
+        user = c.opt(DisplayProfile.self, .user)
+        id = userId ?? UUID().uuidString
+    }
+
+    @MainActor
+    public var displayName: String {
+        if let user { return user.displayName }
+        if let s = stageName, !s.isEmpty { return s }
+        if let f = fullName, !f.isEmpty { return f }
+        return AppStrings.current.donors
+    }
+
+    public var value: Int { Int(total > 0 ? total : score) }
+}
+
+/// Version allégée d'une compétition, embarquée dans ``MyCandidacy``.
+public struct CompetitionLite: Decodable, Sendable {
+    public let id: String
+    public let title: String?
+    public let startAt: String?
+    public let status: String?
+    public let coverURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, status
+        case startAt = "start_at"
+        case coverURL = "cover_url"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.val(String.self, .id, "")
+        title = c.opt(String.self, .title)
+        startAt = c.opt(String.self, .startAt)
+        status = c.opt(String.self, .status)
+        coverURL = c.opt(String.self, .coverURL)
+    }
+}
+
+/// Candidature du caller (artiste) enrichie de sa compétition — `GET /competitions/candidacies/mine`.
+public struct MyCandidacy: Decodable, Sendable, Identifiable {
+    public let id: String
+    public let competitionId: String
+    /// `pending` | `approved` | `rejected`.
+    public let status: String
+    public let totalVotes: Double
+    public let totalGiftsCredits: Double
+    public let competition: CompetitionLite?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case competitionId = "competition_id"
+        case status
+        case totalVotes = "total_votes"
+        case totalGiftsCredits = "total_gifts_credits"
+        case competition
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.val(String.self, .id, "")
+        competitionId = c.val(String.self, .competitionId, "")
+        status = c.val(String.self, .status, "pending")
+        totalVotes = c.amount(.totalVotes)
+        totalGiftsCredits = c.amount(.totalGiftsCredits)
+        competition = c.opt(CompetitionLite.self, .competition)
+    }
+
+    public var score: Double { totalVotes + totalGiftsCredits }
+}
+
+/// Corps de `POST /competitions/:id/apply` — auto-candidature de l'artiste (distincte de
+/// l'ajout manuel par le manager).
+public struct CompetitionApplyRequest: Encodable, Sendable {
+    public let pitch: String?
+    public let videoDemoUrl: String?
+
+    public init(pitch: String? = nil, videoDemoUrl: String? = nil) {
+        self.pitch = pitch
+        self.videoDemoUrl = videoDemoUrl
+    }
+}
+
+/// Entrée de l'annuaire artistes pour l'ajout manuel d'un candidat (walk-in, présentiel).
+/// Distinct de ``ArtistSummary`` : `userId` toujours présent (pas d'équivalent
+/// ``ArtistSummary/opponentUserId``), forme dédiée au picker manager.
+public struct ArtistDirectoryEntry: Decodable, Sendable, Identifiable {
+    public let id: String
+    public let userId: String
+    public let stageName: String?
+    public let fullName: String?
+    public let avatarURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userId = "user_id"
+        case stageName = "stage_name"
+        case fullName = "full_name"
+        case avatarURL = "avatar_url"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.val(String.self, .id, "")
+        userId = c.val(String.self, .userId, "")
+        stageName = c.opt(String.self, .stageName)
+        fullName = c.opt(String.self, .fullName)
+        avatarURL = c.opt(String.self, .avatarURL)
+    }
+
+    public var displayName: String {
+        if let s = stageName, !s.isEmpty { return s }
+        if let f = fullName, !f.isEmpty { return f }
+        return String(userId.prefix(8))
+    }
+}
+
+/// Corps de `POST /competitions` (création) / `PATCH /competitions/:id` (édition) — parité
+/// stricte avec le formulaire web/Android (`CompetitionForm`). Les champs `nil` sont omis à
+/// l'encodage : le backend applique ses propres défauts.
+public struct CreateCompetitionBody: Encodable, Sendable {
+    public let managerId: String
+    public let title: String
+    public let description: String?
+    public let coverUrl: String?
+    public let mode: String
+    public let maxCandidates: Int
+    public let rewardDescription: String?
+    public let rewardAmount: Double
+    public let entryFeeRequired: Bool
+    public let entryFeeAmount: Double
+    /// Le manager accepte-t-il les sponsors (défaut oui).
+    public let acceptsSponsors: Bool
+    public let sponsorSubmissionDeadline: String?
+    public let eligibilityScope: String
+    public let eligibleCountries: [String]
+    // Présentiel (onsite) — laisser vide en ligne.
+    public let country: String?
+    public let city: String?
+    public let commune: String?
+    public let district: String?
+    public let venueName: String?
+    public let venueAddress: String?
+    public let venueContact: String?
+    // Dates (ISO). `applicationOpensAt` optionnel.
+    public let applicationOpensAt: String?
+    public let applicationDeadline: String?
+    public let startAt: String?
+    public let endAt: String?
+    public let status: String
+
+    public init(
+        managerId: String,
+        title: String,
+        description: String? = nil,
+        coverUrl: String? = nil,
+        mode: String = "online",
+        maxCandidates: Int = 10,
+        rewardDescription: String? = nil,
+        rewardAmount: Double = 0,
+        entryFeeRequired: Bool = false,
+        entryFeeAmount: Double = 0,
+        acceptsSponsors: Bool = true,
+        sponsorSubmissionDeadline: String? = nil,
+        eligibilityScope: String = "country",
+        eligibleCountries: [String] = [],
+        country: String? = nil,
+        city: String? = nil,
+        commune: String? = nil,
+        district: String? = nil,
+        venueName: String? = nil,
+        venueAddress: String? = nil,
+        venueContact: String? = nil,
+        applicationOpensAt: String? = nil,
+        applicationDeadline: String? = nil,
+        startAt: String? = nil,
+        endAt: String? = nil,
+        status: String = "open"
+    ) {
+        self.managerId = managerId
+        self.title = title
+        self.description = description
+        self.coverUrl = coverUrl
+        self.mode = mode
+        self.maxCandidates = maxCandidates
+        self.rewardDescription = rewardDescription
+        self.rewardAmount = rewardAmount
+        self.entryFeeRequired = entryFeeRequired
+        self.entryFeeAmount = entryFeeAmount
+        self.acceptsSponsors = acceptsSponsors
+        self.sponsorSubmissionDeadline = sponsorSubmissionDeadline
+        self.eligibilityScope = eligibilityScope
+        self.eligibleCountries = eligibleCountries
+        self.country = country
+        self.city = city
+        self.commune = commune
+        self.district = district
+        self.venueName = venueName
+        self.venueAddress = venueAddress
+        self.venueContact = venueContact
+        self.applicationOpensAt = applicationOpensAt
+        self.applicationDeadline = applicationDeadline
+        self.startAt = startAt
+        self.endAt = endAt
+        self.status = status
+    }
+}
+
 // MARK: - Concerts
 
 /// Infos de billetterie d'un concert (`GET /concerts/:id/ticket-info`).

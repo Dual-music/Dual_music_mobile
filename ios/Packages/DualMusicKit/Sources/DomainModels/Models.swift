@@ -248,13 +248,10 @@ public struct Concert: Codable, Sendable, Identifiable, Equatable {
 public struct Competition: Codable, Sendable, Identifiable, Equatable {
     public let id: String
     public let title: String
-    /// Statut libre côté backend (`open`, `running`, `ended`…).
+    public let description: String?
+    /// Statut libre côté backend (`draft`, `open`, `running`, `ended`…).
     public let status: String
     public let managerId: String?
-    public let startAt: String?
-    public let endAt: String?
-    public let rewardAmount: Double
-    public let coverURL: String?
     /// `"online"` (les candidats approuvés diffusent leur caméra, façon meet) ou `"onsite"`
     /// (présentiel : seul l'appareil du manager filme la scène). Pilote qui peut publier.
     public let mode: String?
@@ -262,31 +259,90 @@ public struct Competition: Codable, Sendable, Identifiable, Equatable {
     public let livekitRoom: String?
     /// Caméra épinglée par le manager (identité LiveKit = userId) — focus imposé au chargement.
     public let forcedFocusParticipantId: String?
+    public let maxCandidates: Int?
+    public let startAt: String?
+    public let endAt: String?
+    public let rewardAmount: Double
+    public let rewardDescription: String?
+    /// Prix du billet spectateur en crédits (0 = gratuit).
+    public let viewerTicketPrice: Double
+    /// Vrai si l'accès public est payant (miroir `isPublicPaid` — distinct de `entryFeeRequired`,
+    /// qui concerne les CANDIDATS, pas les spectateurs).
+    public let isPublicPaid: Bool
+    public let entryFeeRequired: Bool
+    public let entryFeeAmount: Double
+    public let applicationOpensAt: String?
+    public let applicationDeadline: String?
+    public let coverURL: String?
+    public let country: String?
+    public let city: String?
+    public let commune: String?
+    public let district: String?
+    public let venueName: String?
+    public let venueAddress: String?
+    public let venueContact: String?
+    public let acceptsSponsors: Bool
+    public let sponsorSubmissionDeadline: String?
+    /// Le manager (hôte) a-t-il activé le chat pour cette compétition (défaut vrai côté backend).
+    public let chatEnabled: Bool
 
     enum CodingKeys: String, CodingKey {
-        case id, title, status, mode
+        case id, title, description, status, mode, country, city, commune, district
         case managerId = "manager_id"
+        case livekitRoom = "livekit_room"
+        case forcedFocusParticipantId = "forced_focus_participant_id"
+        case maxCandidates = "max_candidates"
         case startAt = "start_at"
         case endAt = "end_at"
         case rewardAmount = "reward_amount"
+        case rewardDescription = "reward_description"
+        case viewerTicketPrice = "viewer_ticket_price"
+        case isPublicPaid = "is_public_paid"
+        case entryFeeRequired = "entry_fee_required"
+        case entryFeeAmount = "entry_fee_amount"
+        case applicationOpensAt = "application_opens_at"
+        case applicationDeadline = "application_deadline"
         case coverURL = "cover_url"
-        case livekitRoom = "livekit_room"
-        case forcedFocusParticipantId = "forced_focus_participant_id"
+        case venueName = "venue_name"
+        case venueAddress = "venue_address"
+        case venueContact = "venue_contact"
+        case acceptsSponsors = "accepts_sponsors"
+        case sponsorSubmissionDeadline = "sponsor_submission_deadline"
+        case chatEnabled = "chat_enabled"
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = c.val(String.self, .id, "")
         title = c.val(String.self, .title, "Compétition")
+        description = c.opt(String.self, .description)
         status = c.val(String.self, .status, "")
         managerId = c.opt(String.self, .managerId)
-        startAt = c.opt(String.self, .startAt)
-        endAt = c.opt(String.self, .endAt)
-        rewardAmount = c.amount(.rewardAmount)
-        coverURL = c.opt(String.self, .coverURL)
         mode = c.opt(String.self, .mode)
         livekitRoom = c.opt(String.self, .livekitRoom)
         forcedFocusParticipantId = c.opt(String.self, .forcedFocusParticipantId)
+        maxCandidates = c.opt(Int.self, .maxCandidates)
+        startAt = c.opt(String.self, .startAt)
+        endAt = c.opt(String.self, .endAt)
+        rewardAmount = c.amount(.rewardAmount)
+        rewardDescription = c.opt(String.self, .rewardDescription)
+        viewerTicketPrice = c.amount(.viewerTicketPrice)
+        isPublicPaid = c.bool(.isPublicPaid, false)
+        entryFeeRequired = c.bool(.entryFeeRequired, false)
+        entryFeeAmount = c.amount(.entryFeeAmount)
+        applicationOpensAt = c.opt(String.self, .applicationOpensAt)
+        applicationDeadline = c.opt(String.self, .applicationDeadline)
+        coverURL = c.opt(String.self, .coverURL)
+        country = c.opt(String.self, .country)
+        city = c.opt(String.self, .city)
+        commune = c.opt(String.self, .commune)
+        district = c.opt(String.self, .district)
+        venueName = c.opt(String.self, .venueName)
+        venueAddress = c.opt(String.self, .venueAddress)
+        venueContact = c.opt(String.self, .venueContact)
+        acceptsSponsors = c.bool(.acceptsSponsors, true)
+        sponsorSubmissionDeadline = c.opt(String.self, .sponsorSubmissionDeadline)
+        chatEnabled = c.bool(.chatEnabled, true)
     }
 
     /// Room LiveKit effective (repli sur `"comp-<id>"` si `livekit_room` est absent, tiret —
