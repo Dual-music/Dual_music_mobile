@@ -924,7 +924,7 @@ private fun concertMedal(index: Int): String = when (index) {
 private fun EventModeratorsDialog(
     isHost: Boolean,
     moderators: List<com.dualmusic.domain.moderation.EventModerator>,
-    viewers: List<DisplayProfile>,
+    viewers: List<com.dualmusic.domain.model.DisplayProfile>,
     onLoadViewers: () -> Unit,
     onAppoint: (String) -> Unit,
     onRevoke: (String) -> Unit,
