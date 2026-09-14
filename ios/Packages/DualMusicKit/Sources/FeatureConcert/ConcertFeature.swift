@@ -31,6 +31,33 @@ public struct ConcertRepository: Sendable {
         try await http.request(.get(ConcertEndpoints.artistDetail(id)), as: Concert.self)
     }
 
+    /// Concerts admin (`GET /concerts`) — fusionnés avec le catalogue artiste (comme le web).
+    /// Best-effort : un utilisateur non-admin reçoit un 403, traité comme une liste vide.
+    public func adminConcerts(limit: Int = 100) async -> [Concert] {
+        (try? await http.request(.get("/concerts", query: ["limit": String(limit)]), as: [Concert].self)) ?? []
+    }
+
+    /// Replays publics de concerts (`GET /replays?sourceType=concert&isPublic=true`).
+    public func concertReplays() async -> [ReplayVideo] {
+        (try? await http.request(
+            .get(ReplayEndpoints.list, query: ["sourceType": "concert", "isPublic": "true", "limit": "100"]),
+            as: [ReplayVideo].self
+        )) ?? []
+    }
+
+    /// Concerts en attente d'approbation (admin) : `GET /artist-concerts?approvalStatus=pending`.
+    public func pendingConcerts() async -> [Concert] {
+        (try? await http.request(
+            .get(ConcertEndpoints.artistList, query: ["approvalStatus": "pending", "limit": "100"]),
+            as: [Concert].self
+        )) ?? []
+    }
+
+    /// Approuve/rejette un concert artiste (admin) : `POST /artist-concerts/:id/review`.
+    public func reviewConcert(id: String, approve: Bool) async throws {
+        try await http.send(.post(ConcertEndpoints.artistDetail(id) + "/review", body: ConcertReviewBody(approve: approve)))
+    }
+
     /// Billetterie : prix, places restantes, et si le caller a déjà son billet.
     public func ticketInfo(id: String) async throws -> ConcertTicketInfo {
         try await http.request(.get(ConcertEndpoints.ticketInfo(id)), as: ConcertTicketInfo.self)
@@ -336,6 +363,11 @@ struct ConcertStatusBody: Encodable, Sendable {
     let status: String
 }
 
+/// Corps de `POST /artist-concerts/:id/review` — décision admin.
+struct ConcertReviewBody: Encodable, Sendable {
+    let approve: Bool
+}
+
 /// Corps de `POST /moderation/reports/live` (live/duel/concert, distingués par `streamType`).
 struct ReportStreamBody: Encodable, Sendable {
     let liveId: String
@@ -351,13 +383,20 @@ struct StreamBanBody: Encodable, Sendable {
     let reason: String?
 }
 
-/// ViewModel du catalogue de concerts.
+/// ViewModel du catalogue de concerts (3 onglets, parité `ConcertsViewModel` Android) : fusionne
+/// `GET /artist-concerts` (public) et `GET /concerts` (admin, best-effort) avant de répartir par
+/// statut, charge les replays publics, et — si le caller est admin — la file d'approbation.
 @Observable
 @MainActor
 public final class ConcertsViewModel {
 
-    public private(set) var concerts: [Concert] = []
+    public private(set) var live: [Concert] = []
+    public private(set) var upcoming: [Concert] = []
+    public private(set) var replays: [ReplayVideo] = []
     public private(set) var isLoading = false
+    /// Concerts artiste en attente d'approbation admin — vide si le caller n'est pas admin.
+    public private(set) var pending: [Concert] = []
+    public private(set) var isAdmin = false
 
     private let repository: ConcertRepository
 
@@ -366,16 +405,37 @@ public final class ConcertsViewModel {
         self.repository = repository
     }
 
-    /// Charge le catalogue.
+    /// Charge le catalogue (fusion admin + artiste, répartie par statut) + replays + file admin.
     public func load() async {
         guard !isLoading else { return }
         isLoading = true
-        concerts = (try? await repository.concerts()) ?? []
+        let admin = await repository.adminConcerts()
+        let artist = (try? await repository.concerts(limit: 100)) ?? []
+        var seen = Set<String>()
+        let all = (admin + artist).filter { seen.insert($0.id).inserted }
+        live = all.filter { $0.status == .live }
+        upcoming = all.filter { $0.status == .upcoming }
+        replays = await repository.concertReplays()
         isLoading = false
+
+        isAdmin = await repository.amIAdmin()
+        if isAdmin { await loadPending() }
+    }
+
+    private func loadPending() async {
+        pending = await repository.pendingConcerts()
+    }
+
+    /// Admin : approuve/rejette un concert artiste en attente, puis recharge tout.
+    public func review(id: String, approve: Bool) async {
+        try? await repository.reviewConcert(id: id, approve: approve)
+        await loadPending()
+        await load()
     }
 }
 
-/// Catalogue des concerts d'artistes — miroir de `ConcertsListScreen` Android.
+/// Catalogue des concerts d'artistes (3 onglets + recherche + file d'approbation admin) —
+/// miroir de `ConcertsListScreen` Android.
 @MainActor
 public struct ConcertsListView: View {
     @Environment(\.dmTheme) private var theme
@@ -383,47 +443,168 @@ public struct ConcertsListView: View {
 
     private let viewModel: ConcertsViewModel
     private let onOpen: (Concert) -> Void
+    private let onOpenReplay: (ReplayVideo) -> Void
+
+    @State private var tab = 0
+    @State private var search = ""
 
     /// - Parameters:
     ///   - viewModel: source du catalogue.
     ///   - onOpen: callback à l'ouverture d'un concert (détail/billetterie).
-    public init(viewModel: ConcertsViewModel, onOpen: @escaping (Concert) -> Void = { _ in }) {
+    ///   - onOpenReplay: callback à l'ouverture d'un replay de concert.
+    public init(
+        viewModel: ConcertsViewModel,
+        onOpen: @escaping (Concert) -> Void = { _ in },
+        onOpenReplay: @escaping (ReplayVideo) -> Void = { _ in }
+    ) {
         self.viewModel = viewModel
         self.onOpen = onOpen
+        self.onOpenReplay = onOpenReplay
+    }
+
+    private var query: String { search.trimmed.lowercased() }
+
+    private func matches(_ concert: Concert) -> Bool {
+        query.isEmpty
+            || concert.title.lowercased().contains(query)
+            || (concert.artist?.displayName.lowercased().contains(query) ?? false)
+            || (concert.artistName?.lowercased().contains(query) ?? false)
+    }
+
+    private func matches(_ replay: ReplayVideo) -> Bool {
+        query.isEmpty || (replay.title?.lowercased().contains(query) ?? false)
     }
 
     public var body: some View {
-        VStack(spacing: theme.spacing.md) {
-            Text(s.screenConcerts)
-                .font(DMFont.pageTitle)
-                .foregroundStyle(theme.colors.foreground)
-                .frame(maxWidth: .infinity)
+        ScrollView {
+            VStack(spacing: theme.spacing.md) {
+                Text(s.screenConcerts)
+                    .font(DMFont.pageTitle)
+                    .foregroundStyle(theme.colors.foreground)
+                    .frame(maxWidth: .infinity)
 
-            if viewModel.isLoading {
-                DMLoadingBox()
-            } else if viewModel.concerts.isEmpty {
-                DMEmptyState(
-                    title: s.noConcertsScheduled,
-                    subtitle: s.noConcertsScheduledHint,
-                    systemImage: "calendar"
-                )
-                Spacer()
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: theme.spacing.sm) {
-                        ForEach(viewModel.concerts) { concert in
-                            Button { onOpen(concert) } label: { ConcertRow(concert: concert) }
-                                .buttonStyle(.plain)
+                DMTextField(s.searchPlaceholder, text: $search)
+
+                if viewModel.isAdmin && !viewModel.pending.isEmpty {
+                    VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                        Text("⏳ \(s.pendingApproval)").font(DMFont.body).bold().foregroundStyle(theme.colors.accent)
+                        ForEach(viewModel.pending) { concert in
+                            PendingConcertRow(
+                                concert: concert,
+                                onApprove: { Task { await viewModel.review(id: concert.id, approve: true) } },
+                                onReject: { Task { await viewModel.review(id: concert.id, approve: false) } }
+                            )
                         }
                     }
                 }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: theme.spacing.xs) {
+                        tabPill("\(s.statusLiveNow) (\(viewModel.live.count))", tab == 0) { tab = 0 }
+                        tabPill("\(s.statusUpcoming) (\(viewModel.upcoming.count))", tab == 1) { tab = 1 }
+                        tabPill("\(s.menuReplays) (\(viewModel.replays.count))", tab == 2) { tab = 2 }
+                    }
+                }
+
+                if viewModel.isLoading {
+                    DMLoadingBox()
+                } else {
+                    tabContent
+                }
             }
+            .padding(theme.spacing.lg)
         }
-        .padding(theme.spacing.lg)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .dmScreenBackground()
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch tab {
+        case 0:
+            let filtered = viewModel.live.filter(matches)
+            if filtered.isEmpty {
+                DMEmptyState(title: s.noConcertsScheduled, subtitle: s.noConcertsScheduledHint, systemImage: "calendar")
+            } else {
+                LazyVStack(spacing: theme.spacing.sm) {
+                    ForEach(filtered) { concert in
+                        Button { onOpen(concert) } label: { ConcertRow(concert: concert) }.buttonStyle(.plain)
+                    }
+                }
+            }
+        case 1:
+            let filtered = viewModel.upcoming.filter(matches)
+            if filtered.isEmpty {
+                DMEmptyState(title: s.noConcertsScheduled, subtitle: s.noConcertsScheduledHint, systemImage: "calendar")
+            } else {
+                LazyVStack(spacing: theme.spacing.sm) {
+                    ForEach(filtered) { concert in
+                        Button { onOpen(concert) } label: { ConcertRow(concert: concert) }.buttonStyle(.plain)
+                    }
+                }
+            }
+        default:
+            let filtered = viewModel.replays.filter(matches)
+            if filtered.isEmpty {
+                DMEmptyState(title: s.noReplays, subtitle: s.noReplaysHint, systemImage: "play.rectangle")
+            } else {
+                LazyVStack(spacing: theme.spacing.sm) {
+                    ForEach(filtered) { replay in
+                        Button { onOpenReplay(replay) } label: { ConcertReplayRow(replay: replay) }.buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func tabPill(_ text: String, _ selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
+                .font(DMFont.caption).bold()
+                .foregroundStyle(selected ? theme.colors.primaryForeground : theme.colors.foreground)
+                .padding(.horizontal, theme.spacing.md)
+                .padding(.vertical, theme.spacing.sm)
+                .background(selected ? theme.colors.accent : Color.black.opacity(0.1), in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Ligne d'un concert artiste en attente d'approbation admin.
+private struct PendingConcertRow: View {
+    @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
+    let concert: Concert
+    let onApprove: () -> Void
+    let onReject: () -> Void
+
+    var body: some View {
+        DMCard {
+            HStack {
+                Text(concert.title).font(DMFont.body).foregroundStyle(theme.colors.foreground)
+                Spacer()
+                Button(s.accept, action: onApprove).font(DMFont.caption).bold().foregroundStyle(theme.colors.primary)
+                Button(s.rejectAction, action: onReject).font(DMFont.caption).bold().foregroundStyle(theme.colors.destructive)
+            }
+        }
+    }
+}
+
+/// Ligne d'un replay de concert.
+private struct ConcertReplayRow: View {
+    @Environment(\.dmTheme) private var theme
+    let replay: ReplayVideo
+
+    var body: some View {
+        DMCard {
+            HStack {
+                Image(systemName: "play.rectangle.fill").foregroundStyle(theme.colors.accent)
+                Text(replay.title ?? "").font(DMFont.body).foregroundStyle(theme.colors.foreground)
+                Spacer()
+            }
+        }
     }
 }
 

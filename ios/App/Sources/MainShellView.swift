@@ -10,6 +10,7 @@ import FeatureFeed
 import FeatureLeaderboard
 import FeatureLive
 import FeatureNotifications
+import FeatureReplay
 
 /// Onglets de la navigation basse (ordre identique à Android).
 enum MainTab: Int, CaseIterable, Identifiable {
@@ -76,6 +77,7 @@ struct MainShellView: View {
     @State private var openDuel: Duel?
     @State private var openCompetition: Competition?
     @State private var openConcert: Concert?
+    @State private var openConcertReplay: ReplayVideo?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -174,7 +176,7 @@ struct MainShellView: View {
         }
     }
 
-    /// Catalogue de concerts → room de concert.
+    /// Catalogue de concerts → room de concert ou lecteur de replay.
     @ViewBuilder
     private var concertsTab: some View {
         if let concert = openConcert {
@@ -186,8 +188,16 @@ struct MainShellView: View {
                     onEnded: { openConcert = nil }
                 )
             }
+        } else if let replay = openConcertReplay {
+            SubScreen(title: replay.title ?? s.replay, onBack: { openConcertReplay = nil }) {
+                ReplayPlayerView(viewModel: container.replayPlayer(for: replay))
+            }
         } else {
-            ConcertsListView(viewModel: container.concerts) { openConcert = $0 }
+            ConcertsListView(
+                viewModel: container.concerts,
+                onOpen: { openConcert = $0 },
+                onOpenReplay: { openConcertReplay = $0 }
+            )
         }
     }
 }
