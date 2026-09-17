@@ -134,6 +134,22 @@ public struct PinVerifyResult: Codable, Sendable {
     }
 }
 
+/// Corps de `POST /withdrawals/pin/verify`.
+public struct PinVerifyRequest: Encodable, Sendable {
+    public let pin: String
+    public init(pin: String) { self.pin = pin }
+}
+
+/// Corps de `POST /withdrawals/pin/reset/confirm` — réinitialisation du PIN via OTP email.
+public struct ConfirmPinResetRequest: Encodable, Sendable {
+    public let otp: String
+    public let newPin: String
+    public init(otp: String, newPin: String) {
+        self.otp = otp
+        self.newPin = newPin
+    }
+}
+
 /// Corps de `POST /withdrawals/pin` — création/remplacement du PIN (6 chiffres).
 public struct SetPinRequest: Encodable, Sendable {
     public let newPin: String

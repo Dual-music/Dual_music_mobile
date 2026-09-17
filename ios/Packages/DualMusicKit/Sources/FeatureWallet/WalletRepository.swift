@@ -34,6 +34,19 @@ public struct WalletRepository: Sendable {
         try await http.request(.get(WalletEndpoints.spending), as: [SpendItem].self)
     }
 
+    /// Répartition des revenus par type de source pour un événement.
+    public func revenueBreakdown(sourceId: String) async throws -> [RevenueBreakdown] {
+        try await http.request(.get(WalletEndpoints.revenuesBreakdown, query: ["sourceId": sourceId]), as: [RevenueBreakdown].self)
+    }
+
+    /// Transactions détaillées paginées pour un événement.
+    public func transactions(sourceId: String, limit: Int = 10, offset: Int = 0) async throws -> [EventTransaction] {
+        try await http.request(
+            .get(WalletEndpoints.transactions, query: ["sourceId": sourceId, "limit": String(limit), "offset": String(offset)]),
+            as: [EventTransaction].self
+        )
+    }
+
     /// Achats de crédits (recharges) du caller — `GET /payments/history`.
     public func purchases() async throws -> [CreditPurchase] {
         try await http.request(.get(PaymentEndpoints.history), as: [CreditPurchase].self)

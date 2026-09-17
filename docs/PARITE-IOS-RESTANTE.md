@@ -19,11 +19,11 @@ Règle : chaque étape = lire le code Android réel → implémenter iOS → com
 ## 2. Withdrawal (critique)
 
 - [ ] **2.1 Gestion des méthodes de paiement** — `android/feature/withdrawal/.../PayoutMethodsSection.kt`. Ajout/suppression/défaut. Fait (à confirmer CI) : `WithdrawalRepository.addMethod/removeMethod/setDefaultMethod` + `AddPayoutMethodForm` (Mobile Money/Virement/PayPal, champs conditionnels) + liste avec étoile/corbeille.
-- [ ] **2.2 Verrouillage PIN par session (PinGate)** — `android/feature/withdrawal/.../PinGate.kt`. Re-vérification du PIN au déverrouillage. Endpoint `pinVerify` mort côté iOS.
-- [ ] **2.3 Changement de PIN** (`changePin`) — absent d'iOS.
-- [ ] **2.4 Réinitialisation PIN par OTP email** (`requestPinReset`/`confirmPinReset`) — absente d'iOS.
-- [ ] **2.5 Espace Manager (Revenues/Withdraw)** — `android/feature/withdrawal/.../ManagerSpaceScreen.kt`, `RevenueViewModel.kt`. Onglets revenus/retraits + sélecteur de période + détail par événement + pagination.
-- [ ] **2.6 Export CSV/PDF des revenus** — `android/feature/withdrawal/.../RevenueExport.kt`.
+- [ ] **2.2 Verrouillage PIN par session (PinGate)** — `android/feature/withdrawal/.../PinGate.kt`. Re-vérification du PIN au déverrouillage. Fait (à confirmer CI) : `PinSession` (cache process) + `verifyPin`/`lock` + `pinLockCard`.
+- [ ] **2.3 Changement de PIN** (`changePin`) — Fait (à confirmer CI) : réutilise `setPin(newPin:currentPin:)` existant + `unlockedControls`.
+- [ ] **2.4 Réinitialisation PIN par OTP email** (`requestPinReset`/`confirmPinReset`) — Fait (à confirmer CI).
+- [ ] **2.5 Espace Manager (Revenues/Withdraw)** — `android/feature/withdrawal/.../ManagerSpaceScreen.kt`, `RevenueViewModel.kt`. Fait (à confirmer CI) : `RevenueViewModel`/`RevenueView` (période/total/détail dépliable/pagination transactions) + `ManagerSpaceView` (2 onglets — historique fusionné dans l'onglet Retrait plutôt qu'un 3ᵉ onglet séparé, `WithdrawalView` l'affiche déjà).
+- [ ] **2.6 Export CSV/PDF des revenus** — `android/feature/withdrawal/.../RevenueExport.kt`. Simplifié (à confirmer CI) : partage texte natif (`ShareLink`) plutôt qu'un fichier CSV/PDF généré — écart assumé.
 
 ## 3. Wallet (critique)
 

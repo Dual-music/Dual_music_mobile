@@ -93,6 +93,7 @@ public final class AppContainer {
     @ObservationIgnored private var cachedBecomeRole: BecomeRoleViewModel?
     @ObservationIgnored private var cachedNotifications: NotificationsViewModel?
     @ObservationIgnored private var cachedWithdrawal: WithdrawalViewModel?
+    @ObservationIgnored private var cachedRevenue: RevenueViewModel?
     @ObservationIgnored private var cachedReplays: ReplaysViewModel?
     @ObservationIgnored private var cachedGiftShop: GiftShopViewModel?
     @ObservationIgnored private var cachedLeaderboard: LeaderboardViewModel?
@@ -217,6 +218,13 @@ public final class AppContainer {
         if let cachedWithdrawal { return cachedWithdrawal }
         let viewModel = WithdrawalViewModel(repository: withdrawalRepository)
         cachedWithdrawal = viewModel
+        return viewModel
+    }
+
+    var revenue: RevenueViewModel {
+        if let cachedRevenue { return cachedRevenue }
+        let viewModel = RevenueViewModel(wallet: walletRepository)
+        cachedRevenue = viewModel
         return viewModel
     }
 
@@ -511,6 +519,7 @@ public final class AppContainer {
         cachedBecomeRole = nil
         cachedNotifications = nil
         cachedWithdrawal = nil
+        cachedRevenue = nil
         cachedReplays = nil
         cachedGiftShop = nil
         cachedLeaderboard = nil

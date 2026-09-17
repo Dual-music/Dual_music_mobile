@@ -236,6 +236,8 @@ public enum NotificationEndpoints {
 public enum WithdrawalEndpoints {
     public static let pin = "/withdrawals/pin"
     public static let pinVerify = "/withdrawals/pin/verify"
+    public static let pinResetRequest = "/withdrawals/pin/reset/request"
+    public static let pinResetConfirm = "/withdrawals/pin/reset/confirm"
     public static let net = "/withdrawals/net"
     public static let methods = "/withdrawals/methods"
     public static let mine = "/withdrawals/me"

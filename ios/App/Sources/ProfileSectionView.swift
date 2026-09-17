@@ -135,8 +135,8 @@ struct ProfileSectionView: View {
             }
 
         case .withdrawal:
-            SubScreen(title: s.menuWithdraw, onBack: { route = .menu }) {
-                WithdrawalView(viewModel: container.withdrawal)
+            SubScreen(title: s.managerSpace, onBack: { route = .menu }) {
+                ManagerSpaceView(revenueViewModel: container.revenue, withdrawalViewModel: container.withdrawal)
             }
 
         case .replays:
@@ -284,7 +284,7 @@ struct ProfileMenuView: View {
                         row("trophy.fill", s.managedCompetitions) { onNavigate(.managerCompetitions) }
                     }
                     row("star.fill", s.menuCreatorSpace) { onNavigate(.creator) }
-                    row("wallet.pass.fill", s.menuWithdraw) { onNavigate(.withdrawal) }
+                    row("wallet.pass.fill", s.managerSpace) { onNavigate(.withdrawal) }
                     row("play.rectangle.fill", s.menuReplays) { onNavigate(.replays) }
                     row("giftcard.fill", s.menuGiftShop) { onNavigate(.giftShop) }
                 }

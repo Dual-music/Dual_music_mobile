@@ -383,6 +383,49 @@ public struct DMStrings: Sendable {
     public let payoutDefault: String
     public let payoutSave: String
     public let payoutEmpty: String
+    // Espace Manager : revenus par événement.
+    public let managerSpace: String
+    public let revTabRevenues: String
+    public let revTabWithdraw: String
+    public let revTabHistory: String
+    public let revByEventTitle: String
+    public let revByEventSubtitle: String
+    public let revTotalPeriod: String
+    public let revExportCsv: String
+    public let revNoRevenue: String
+    public let revNoRevenueHint: String
+    public let revVersements: String
+    public let revShowMore: String
+    public let revTotalPaid: String
+    public let revReceivedYou: String
+    public let revPeriodToday: String
+    public let revPeriod7d: String
+    public let revPeriod30d: String
+    public let revPeriodAll: String
+    public let srcDuelTicket: String
+    public let srcDuelReplay: String
+    public let srcConcertTicket: String
+    public let srcConcertReplay: String
+    public let srcGiftConcert: String
+    public let srcGiftDuel: String
+    public let srcGiftLive: String
+    public let srcVote: String
+    // Verrouillage PIN par session (zone retrait).
+    public let pinEnterTitle: String
+    public let pinEnterDesc: String
+    public let pinUnlock: String
+    public let pinForgot: String
+    public let pinResetSent: String
+    public let pinResetOtp: String
+    public let pinResetNewPin: String
+    public let pinResetConfirmBtn: String
+    public let pinResetRequestBtn: String
+    public let pinUnlocked: String
+    public let pinChange: String
+    public let pinLock: String
+    public let pinCurrent: String
+    public let pinNew: String
+    public let pinChangeBtn: String
     public let noCandidatesHint: String
     public let timerRunning: String
     public let artistSingular: String
@@ -880,6 +923,47 @@ public extension DMStrings {
         payoutDefault: "Par défaut",
         payoutSave: "Enregistrer",
         payoutEmpty: "Aucune méthode enregistrée.",
+        managerSpace: "Espace Manager",
+        revTabRevenues: "Mes revenus",
+        revTabWithdraw: "Retrait",
+        revTabHistory: "Historique",
+        revByEventTitle: "Mes revenus par événement",
+        revByEventSubtitle: "Tous tes versements regroupés par événement. Touche un événement pour voir le détail.",
+        revTotalPeriod: "Total reçu sur la période",
+        revExportCsv: "Export CSV",
+        revNoRevenue: "Aucun revenu sur la période",
+        revNoRevenueHint: "Tes versements apparaîtront ici dès que tu recevras des paiements.",
+        revVersements: "versements",
+        revShowMore: "Voir plus",
+        revTotalPaid: "Total payé",
+        revReceivedYou: "Reçu (toi)",
+        revPeriodToday: "Aujourd'hui",
+        revPeriod7d: "7 derniers jours",
+        revPeriod30d: "30 derniers jours",
+        revPeriodAll: "Tout",
+        srcDuelTicket: "Ticket de duel",
+        srcDuelReplay: "Replay de duel",
+        srcConcertTicket: "Ticket de concert",
+        srcConcertReplay: "Replay de concert",
+        srcGiftConcert: "Cadeau (concert)",
+        srcGiftDuel: "Cadeau (duel)",
+        srcGiftLive: "Cadeau (live)",
+        srcVote: "Vote",
+        pinEnterTitle: "Déverrouiller la zone retrait",
+        pinEnterDesc: "Saisis ton PIN à 6 chiffres pour accéder à cette zone.",
+        pinUnlock: "Déverrouiller",
+        pinForgot: "PIN oublié ?",
+        pinResetSent: "Un code t'a été envoyé par email.",
+        pinResetOtp: "Code reçu par email",
+        pinResetNewPin: "Nouveau PIN (6 chiffres)",
+        pinResetConfirmBtn: "Réinitialiser le PIN",
+        pinResetRequestBtn: "Renvoyer un code",
+        pinUnlocked: "Zone déverrouillée",
+        pinChange: "Changer le PIN",
+        pinLock: "Verrouiller",
+        pinCurrent: "PIN actuel",
+        pinNew: "Nouveau PIN",
+        pinChangeBtn: "Changer",
         noCandidatesHint: "Le classement s'affichera dès les premières candidatures.",
         timerRunning: "⏱ Minuteur en cours",
         artistSingular: "Artiste",
@@ -1362,6 +1446,47 @@ public extension DMStrings {
         payoutDefault: "Default",
         payoutSave: "Save",
         payoutEmpty: "No method saved yet.",
+        managerSpace: "Manager Space",
+        revTabRevenues: "My revenues",
+        revTabWithdraw: "Withdraw",
+        revTabHistory: "History",
+        revByEventTitle: "My revenues by event",
+        revByEventSubtitle: "All your payouts grouped by event. Tap an event to see the detail.",
+        revTotalPeriod: "Total received in period",
+        revExportCsv: "Export CSV",
+        revNoRevenue: "No revenue in this period",
+        revNoRevenueHint: "Your payouts will appear here as soon as you receive payments.",
+        revVersements: "payouts",
+        revShowMore: "Show more",
+        revTotalPaid: "Total paid",
+        revReceivedYou: "Received (you)",
+        revPeriodToday: "Today",
+        revPeriod7d: "Last 7 days",
+        revPeriod30d: "Last 30 days",
+        revPeriodAll: "All",
+        srcDuelTicket: "Duel ticket",
+        srcDuelReplay: "Duel replay",
+        srcConcertTicket: "Concert ticket",
+        srcConcertReplay: "Concert replay",
+        srcGiftConcert: "Gift (concert)",
+        srcGiftDuel: "Gift (duel)",
+        srcGiftLive: "Gift (live)",
+        srcVote: "Vote",
+        pinEnterTitle: "Unlock the withdrawal area",
+        pinEnterDesc: "Enter your 6-digit PIN to access this area.",
+        pinUnlock: "Unlock",
+        pinForgot: "Forgot PIN?",
+        pinResetSent: "A code was sent to your email.",
+        pinResetOtp: "Code received by email",
+        pinResetNewPin: "New PIN (6 digits)",
+        pinResetConfirmBtn: "Reset PIN",
+        pinResetRequestBtn: "Resend a code",
+        pinUnlocked: "Area unlocked",
+        pinChange: "Change PIN",
+        pinLock: "Lock",
+        pinCurrent: "Current PIN",
+        pinNew: "New PIN",
+        pinChangeBtn: "Change",
         noCandidatesHint: "The ranking will appear once candidacies start.",
         timerRunning: "⏱ Timer running",
         artistSingular: "Artist",

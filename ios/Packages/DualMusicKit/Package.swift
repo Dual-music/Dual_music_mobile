@@ -104,7 +104,7 @@ let package = Package(
         .target(name: "FeatureCompetition", dependencies: ["CoreNetwork", "CoreUI", "CoreLiveMedia", "CoreRealtime", "DomainModels", "FeatureWallet", "FeatureGiftShop", "FeatureSponsor"]),
         .target(name: "FeatureProfile", dependencies: ["CoreNetwork", "CoreUI", "CoreUpload", "DomainModels"]),
         .target(name: "FeatureNotifications", dependencies: ["CoreNetwork", "CoreUI", "CoreRealtime", "DomainModels"]),
-        .target(name: "FeatureWithdrawal", dependencies: ["CoreNetwork", "CoreUI", "DomainModels"]),
+        .target(name: "FeatureWithdrawal", dependencies: ["CoreNetwork", "CoreUI", "DomainModels", "FeatureWallet"]),
         .target(name: "FeatureReplay", dependencies: ["CoreNetwork", "CoreUI", "DomainModels"]),
         .target(name: "FeatureGiftShop", dependencies: ["CoreNetwork", "CoreUI", "DomainModels"]),
         .target(name: "FeatureLeaderboard", dependencies: ["CoreNetwork", "CoreUI", "DomainModels"]),

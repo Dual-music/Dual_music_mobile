@@ -106,6 +106,45 @@ public struct RevenueBreakdown: Codable, Sendable, Identifiable {
     }
 }
 
+/// Transaction détaillée de `GET /wallet/transactions?sourceId=&limit=&offset=` — une ligne de
+/// répartition. `myCredits` = part du caller.
+public struct EventTransaction: Codable, Sendable, Identifiable {
+    public let id: String
+    public let sourceType: String
+    public let createdAt: String?
+    public let totalCredits: Double
+    public let platformCredits: Double
+    public let managerCredits: Double
+    public let artistsCredits: Double
+    public let myCredits: Double
+    public let payerId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case sourceType = "source_type"
+        case createdAt = "created_at"
+        case totalCredits = "total_credits"
+        case platformCredits = "platform_credits"
+        case managerCredits = "manager_credits"
+        case artistsCredits = "artists_credits"
+        case myCredits = "my_credits"
+        case payerId = "payer_id"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.val(String.self, .id, UUID().uuidString)
+        sourceType = c.val(String.self, .sourceType, "")
+        createdAt = c.opt(String.self, .createdAt)
+        totalCredits = c.amount(.totalCredits)
+        platformCredits = c.amount(.platformCredits)
+        managerCredits = c.amount(.managerCredits)
+        artistsCredits = c.amount(.artistsCredits)
+        myCredits = c.amount(.myCredits)
+        payerId = c.opt(String.self, .payerId)
+    }
+}
+
 // MARK: - Corps de requête (débits)
 
 /// Corps de `POST /wallet/vote` — vote payant pour un artiste dans un duel.

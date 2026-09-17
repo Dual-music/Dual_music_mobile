@@ -27,9 +27,25 @@ public struct WithdrawalRepository: Sendable {
         try await http.request(.get(WithdrawalEndpoints.pin), as: PinStatus.self).hasPin
     }
 
-    /// Crée/remplace le PIN (`currentPin` requis si un PIN existe déjà).
+    /// Crée/remplace le PIN (`currentPin` requis si un PIN existe déjà — c'est ce qui
+    /// distingue une création d'un changement, le même endpoint sert les deux).
     public func setPin(newPin: String, currentPin: String? = nil) async throws {
         try await http.send(.post(WithdrawalEndpoints.pin, body: SetPinRequest(newPin: newPin, currentPin: currentPin)))
+    }
+
+    /// Déverrouille la session en re-vérifiant le PIN côté serveur (verrouillage après échecs).
+    public func verifyPin(_ pin: String) async throws {
+        try await http.send(.post(WithdrawalEndpoints.pinVerify, body: PinVerifyRequest(pin: pin)))
+    }
+
+    /// Demande un code de réinitialisation du PIN par email (OTP).
+    public func requestPinReset() async throws {
+        try await http.send(.post(WithdrawalEndpoints.pinResetRequest))
+    }
+
+    /// Réinitialise le PIN avec l'OTP reçu par email.
+    public func confirmPinReset(otp: String, newPin: String) async throws {
+        try await http.send(.post(WithdrawalEndpoints.pinResetConfirm, body: ConfirmPinResetRequest(otp: otp, newPin: newPin)))
     }
 
     /// Méthodes de retrait enregistrées (celle par défaut en premier).
@@ -82,6 +98,13 @@ public struct WithdrawalRepository: Sendable {
     }
 }
 
+/// Cache de session du déverrouillage PIN (équivalent du `sessionStorage` web/`PinSession`
+/// Android). Persiste au niveau du process : rester déverrouillé en re-naviguant, se
+/// re-verrouiller au redémarrage de l'app.
+public enum PinSession {
+    public static var unlocked = false
+}
+
 /// ViewModel du retrait.
 ///
 /// Aucun calcul d'argent local : le net affiché vient de `/withdrawals/net`, et la demande
@@ -92,6 +115,10 @@ public final class WithdrawalViewModel {
 
     /// `nil` tant qu'on ne sait pas si un PIN existe, puis `true`/`false`.
     public private(set) var hasPin: Bool?
+    /// Zone déverrouillée pour cette session (cache process, voir ``PinSession``).
+    public private(set) var unlocked = PinSession.unlocked
+    /// Un code de réinitialisation vient d'être envoyé par email.
+    public private(set) var resetSent = false
     public private(set) var methods: [PayoutMethodData] = []
     public private(set) var selectedMethodId: String?
     public var amount: String = ""
@@ -176,11 +203,67 @@ public final class WithdrawalViewModel {
         }
     }
 
-    /// Crée le PIN (première configuration).
+    /// Crée le PIN (première configuration) → déverrouille la zone.
     public func createPin(_ pin: String) async {
         do {
             try await repository.setPin(newPin: pin)
             hasPin = true
+            PinSession.unlocked = true
+            unlocked = true
+            errorMessage = nil
+        } catch {
+            errorMessage = Self.friendly(error)
+        }
+    }
+
+    /// Vérifie le PIN pour déverrouiller la zone (cache de session).
+    public func verifyPin(_ pin: String) async {
+        do {
+            try await repository.verifyPin(pin)
+            PinSession.unlocked = true
+            unlocked = true
+            errorMessage = nil
+        } catch {
+            errorMessage = Self.friendly(error)
+        }
+    }
+
+    /// Verrouille la zone (invalide le cache de session).
+    public func lock() {
+        PinSession.unlocked = false
+        unlocked = false
+    }
+
+    /// Change le PIN (ancien PIN requis).
+    public func changePin(newPin: String, currentPin: String) async {
+        do {
+            try await repository.setPin(newPin: newPin, currentPin: currentPin)
+            errorMessage = nil
+        } catch {
+            errorMessage = Self.friendly(error)
+        }
+    }
+
+    /// Demande un code de réinitialisation du PIN par email.
+    public func requestPinReset() async {
+        do {
+            try await repository.requestPinReset()
+            resetSent = true
+            errorMessage = nil
+        } catch {
+            errorMessage = Self.friendly(error)
+        }
+    }
+
+    /// Réinitialise le PIN avec l'OTP reçu par email → déverrouille la zone.
+    public func confirmPinReset(otp: String, newPin: String) async {
+        do {
+            try await repository.confirmPinReset(otp: otp, newPin: newPin)
+            hasPin = true
+            PinSession.unlocked = true
+            unlocked = true
+            resetSent = false
+            errorMessage = nil
         } catch {
             errorMessage = Self.friendly(error)
         }
@@ -250,6 +333,12 @@ public struct WithdrawalView: View {
     @State private var pin = ""
     @State private var newPin = ""
     @State private var showAddMethodForm = false
+    @State private var showResetFlow = false
+    @State private var resetOtp = ""
+    @State private var resetNewPin = ""
+    @State private var showChangePinForm = false
+    @State private var changeCurrentPin = ""
+    @State private var changeNewPin = ""
 
     /// - Parameter viewModel: état + actions.
     public init(viewModel: WithdrawalViewModel) {
@@ -266,7 +355,10 @@ public struct WithdrawalView: View {
                 switch viewModel.hasPin {
                 case .some(false):
                     createPinCard
+                case .some(true) where !viewModel.unlocked:
+                    pinLockCard
                 case .some(true):
+                    unlockedControls
                     withdrawForm
                 case nil:
                     EmptyView() // en chargement
@@ -295,6 +387,74 @@ public struct WithdrawalView: View {
                 pinField(text: $newPin)
                 DMButton(s.createPin, isEnabled: newPin.count == 6) {
                     Task { await viewModel.createPin(newPin) }
+                }
+            }
+        }
+    }
+
+    /// Carte de déverrouillage (zone retrait verrouillée) : saisie du PIN + « PIN oublié ? »
+    /// → réinitialisation par OTP email. Miroir de `PinLockCard` Android.
+    private var pinLockCard: some View {
+        DMCard {
+            VStack(alignment: .leading, spacing: theme.spacing.sm) {
+                Text("🔒 \(s.pinEnterTitle)").font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+                Text(s.pinEnterDesc).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+
+                if !showResetFlow {
+                    pinField(text: $pin)
+                    DMButton(s.pinUnlock, isEnabled: pin.count == 6) {
+                        Task { await viewModel.verifyPin(pin); pin = "" }
+                    }
+                    Button(s.pinForgot) {
+                        showResetFlow = true
+                        Task { await viewModel.requestPinReset() }
+                    }
+                    .font(DMFont.caption)
+                    .foregroundStyle(theme.colors.accent)
+                } else {
+                    if viewModel.resetSent {
+                        Text(s.pinResetSent).font(DMFont.caption).foregroundStyle(theme.colors.primary)
+                    }
+                    Text(s.pinResetOtp).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                    pinField(text: $resetOtp)
+                    Text(s.pinResetNewPin).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                    pinField(text: $resetNewPin)
+                    DMButton(s.pinResetConfirmBtn, isEnabled: resetOtp.count == 6 && resetNewPin.count == 6) {
+                        Task {
+                            await viewModel.confirmPinReset(otp: resetOtp, newPin: resetNewPin)
+                            resetOtp = ""; resetNewPin = ""; showResetFlow = false
+                        }
+                    }
+                    DMButton(s.pinResetRequestBtn, style: .outline) {
+                        Task { await viewModel.requestPinReset() }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Contrôles quand la zone est déverrouillée : changer le PIN + verrouiller. Miroir de
+    /// `UnlockedControls` Android.
+    private var unlockedControls: some View {
+        DMCard {
+            VStack(alignment: .leading, spacing: theme.spacing.sm) {
+                HStack {
+                    Text("🔓 \(s.pinUnlocked)").font(DMFont.body).bold().foregroundStyle(theme.colors.primary)
+                    Spacer()
+                    Button(s.pinChange) { showChangePinForm.toggle() }.font(DMFont.caption).bold().foregroundStyle(theme.colors.accent)
+                    Button(s.pinLock) { viewModel.lock() }.font(DMFont.caption).bold().foregroundStyle(theme.colors.mutedForeground)
+                }
+                if showChangePinForm {
+                    Text(s.pinCurrent).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                    pinField(text: $changeCurrentPin)
+                    Text(s.pinNew).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                    pinField(text: $changeNewPin)
+                    DMButton(s.pinChangeBtn, isEnabled: changeCurrentPin.count == 6 && changeNewPin.count == 6) {
+                        Task {
+                            await viewModel.changePin(newPin: changeNewPin, currentPin: changeCurrentPin)
+                            changeCurrentPin = ""; changeNewPin = ""; showChangePinForm = false
+                        }
+                    }
                 }
             }
         }
