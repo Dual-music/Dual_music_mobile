@@ -14,6 +14,9 @@ struct HomeView: View {
     let onOpenRanking: () -> Void
     let onOpenArtists: () -> Void
 
+    /// Pulsation continue de l'icône « duel » (1.0 → 1.05, 1.9s aller-retour).
+    @State private var heroPulsing = false
+
     var body: some View {
         ZStack {
             Image("hero_bg")
@@ -37,11 +40,36 @@ struct HomeView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                Image("duel_icon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 104, height: 104)
-                    .accessibilityHidden(true)
+                // Mise en valeur dans un cadre moderne : bord en dégradé de marque, halo
+                // coloré (double ombre pour approcher le spot/ambient d'Android) et
+                // légère pulsation continue — miroir de HomeScreen.kt.
+                ZStack {
+                    RoundedRectangle(cornerRadius: 38, style: .continuous)
+                        .fill(theme.gradients.brand)
+                        .frame(width: 172, height: 172)
+                    RoundedRectangle(cornerRadius: 35, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: 0x1C1033), Color(hex: 0x120A24)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: 166, height: 166)
+                    Image("duel_icon")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 112, height: 112)
+                }
+                .shadow(color: Color(hex: 0xFF4FA3, alpha: 0.45), radius: 28)
+                .shadow(color: Color(hex: 0xB07CFF, alpha: 0.35), radius: 20)
+                .scaleEffect(heroPulsing ? 1.05 : 1.0)
+                .accessibilityHidden(true)
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 1.9).repeatForever(autoreverses: true)) {
+                        heroPulsing = true
+                    }
+                }
 
                 Text(s.homeTitle)
                     .font(.system(size: 30, weight: .black, design: .rounded))

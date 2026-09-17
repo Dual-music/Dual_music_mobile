@@ -12,6 +12,7 @@ import FeatureLive
 import FeatureNotifications
 import FeatureProfile
 import FeatureReplay
+import FeatureWallet
 
 /// Onglets de la navigation basse (ordre identique à Android).
 enum MainTab: Int, CaseIterable, Identifiable {
@@ -74,6 +75,11 @@ struct MainShellView: View {
     @State private var tab: MainTab = .home
     @State private var showProfile = false
     @State private var showNotifications = false
+    /// Recharge de crédits ouverte depuis l'icône portefeuille de la barre du haut.
+    @State private var showRecharge = false
+    /// Nombre de notifications non lues (badge de la cloche) — rafraîchi à chaque ouverture/
+    /// fermeture du centre de notifications, comme Android (`LaunchedEffect(notifOpen)`).
+    @State private var notifUnread = 0
     @State private var homeDestination: HomeDestination?
     @State private var openDuel: Duel?
     @State private var openCompetition: Competition?
@@ -91,12 +97,14 @@ struct MainShellView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Barre du haut masquée dans le profil et sur l'écran de notifications
+            // Barre du haut masquée dans le profil, la recharge et l'écran de notifications
             // (ces sections ont leur propre en-tête).
-            if !showProfile && !showNotifications {
+            if !showProfile && !showNotifications && !showRecharge {
                 TopBarView(
                     onOpenNotifications: { showNotifications = true },
-                    onOpenProfile: { showProfile = true }
+                    onOpenProfile: { showProfile = true },
+                    onOpenRecharge: { showRecharge = true },
+                    unreadCount: notifUnread
                 )
             }
 
@@ -107,6 +115,7 @@ struct MainShellView: View {
                 tab = selected
                 showProfile = false
                 showNotifications = false
+                showRecharge = false
                 homeDestination = nil
                 if selected == .duels { openDuel = nil }
                 if selected == .competitions { openCompetition = nil }
@@ -122,13 +131,22 @@ struct MainShellView: View {
             LiveRoomView(viewModel: container.hostLiveRoom(for: live), hostUserId: live.artistId, onEnded: { hostLive = nil })
         }
         .task { await container.profile.load() }
+        .task { notifUnread = await container.unreadNotifications() }
+        .onChange(of: showNotifications) { _, _ in
+            Task { notifUnread = await container.unreadNotifications() }
+        }
     }
 
     // MARK: - Contenu
 
     @ViewBuilder
     private var content: some View {
-        if showNotifications {
+        if showRecharge {
+            // Recharge de crédits (icône portefeuille de la barre du haut) — parité web.
+            SubScreen(title: s.rechargeCredits, onBack: { showRecharge = false }) {
+                RechargeView(viewModel: container.recharge)
+            }
+        } else if showNotifications {
             SubScreen(title: s.notifications, onBack: { showNotifications = false }) {
                 NotificationsView(viewModel: container.notifications)
             }
@@ -291,17 +309,40 @@ struct TopBarView: View {
 
     let onOpenNotifications: () -> Void
     let onOpenProfile: () -> Void
+    var onOpenRecharge: () -> Void = {}
+    var unreadCount: Int = 0
 
     var body: some View {
         HStack {
             DMLogo(height: 32)
             Spacer()
-            Button(action: onOpenNotifications) {
-                Image(systemName: "bell.fill")
+            // Recharge (crédits) — ouvre la page de recharge (parité web).
+            Button(action: onOpenRecharge) {
+                Image(systemName: "creditcard.fill")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
+            }
+            .accessibilityLabel(Text(s.rechargeCredits))
+
+            // Cloche + badge du nombre de non-lus (comme le web).
+            Button(action: onOpenNotifications) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "bell.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                    if unreadCount > 0 {
+                        Text(unreadCount > 9 ? "9+" : "\(unreadCount)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 18, height: 18)
+                            .background(Color(red: 0.882, green: 0.114, blue: 0.282), in: Circle())
+                            .offset(x: -6, y: 6)
+                    }
+                }
             }
             .accessibilityLabel(Text(s.notifications))
 

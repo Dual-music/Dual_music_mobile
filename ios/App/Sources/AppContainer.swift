@@ -514,6 +514,11 @@ public final class AppContainer {
         await profileRepository.requestsEnabled(RoleEndpoints.managerRequestsEnabled)
     }
 
+    /// Nombre de notifications non lues (badge de la cloche, barre du haut).
+    func unreadNotifications() async -> Int {
+        (try? await notificationRepository.unreadCount()) ?? 0
+    }
+
     /// Date (ISO) de suppression programmée du compte, ou `nil` si le compte est actif.
     func accountDeletionScheduledAt() async -> String? {
         try? await profileRepository.me().user.deletionScheduledAt
