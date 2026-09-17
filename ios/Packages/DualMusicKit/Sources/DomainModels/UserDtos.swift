@@ -110,6 +110,8 @@ public struct UpdateProfileRequest: Encodable, Sendable {
     public let phoneCountryCode: String?
     public let bio: String?
     public let avatarURL: String?
+    public let birthDate: String?
+    public let gender: String?
 
     enum CodingKeys: String, CodingKey {
         case fullName = "full_name"
@@ -118,6 +120,8 @@ public struct UpdateProfileRequest: Encodable, Sendable {
         case phoneCountryCode = "phone_country_code"
         case bio
         case avatarURL = "avatar_url"
+        case birthDate = "birth_date"
+        case gender
     }
 
     public init(
@@ -126,7 +130,9 @@ public struct UpdateProfileRequest: Encodable, Sendable {
         phone: String? = nil,
         phoneCountryCode: String? = nil,
         bio: String? = nil,
-        avatarURL: String? = nil
+        avatarURL: String? = nil,
+        birthDate: String? = nil,
+        gender: String? = nil
     ) {
         self.fullName = fullName
         self.countryCode = countryCode
@@ -134,6 +140,8 @@ public struct UpdateProfileRequest: Encodable, Sendable {
         self.phoneCountryCode = phoneCountryCode
         self.bio = bio
         self.avatarURL = avatarURL
+        self.birthDate = birthDate
+        self.gender = gender
     }
 
     /// Encodage explicite : les champs `nil` sont **omis** (et non envoyés en `null`), pour
@@ -146,5 +154,7 @@ public struct UpdateProfileRequest: Encodable, Sendable {
         try c.encodeIfPresent(phoneCountryCode, forKey: .phoneCountryCode)
         try c.encodeIfPresent(bio, forKey: .bio)
         try c.encodeIfPresent(avatarURL, forKey: .avatarURL)
+        try c.encodeIfPresent(birthDate, forKey: .birthDate)
+        try c.encodeIfPresent(gender, forKey: .gender)
     }
 }

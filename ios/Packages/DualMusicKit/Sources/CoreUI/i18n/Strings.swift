@@ -657,6 +657,12 @@ public struct DMStrings: Sendable {
     // Bouton contextuel "Sponsoriser" depuis un écran d'événement.
     public let requestSponsorBtn: String
     public let sponsorEventUnavailable: String
+    // Champs date de naissance / sexe (complétion de profil).
+    public let birthDateLabel: String
+    public let genderLabel: String
+    public let genderMale: String
+    public let genderFemale: String
+    public let genderOther: String
 }
 
 // MARK: - Tables de traduction
@@ -1256,7 +1262,12 @@ public extension DMStrings {
         notFollowingAny: "Vous ne suivez aucun artiste",
         followedEmptyHint: "Découvrez des artistes depuis l'accueil pour les suivre.",
         requestSponsorBtn: "📣 Sponsoriser",
-        sponsorEventUnavailable: "Cet évènement n'est plus disponible pour le sponsoring (délai dépassé ou sponsors désactivés)."
+        sponsorEventUnavailable: "Cet évènement n'est plus disponible pour le sponsoring (délai dépassé ou sponsors désactivés).",
+        birthDateLabel: "Date de naissance",
+        genderLabel: "Sexe",
+        genderMale: "Homme",
+        genderFemale: "Femme",
+        genderOther: "Autre"
     )
 
     /// Chaînes **anglaises**.
@@ -1852,7 +1863,12 @@ public extension DMStrings {
         notFollowingAny: "You don't follow any artist",
         followedEmptyHint: "Discover artists from home to follow them.",
         requestSponsorBtn: "📣 Sponsor this",
-        sponsorEventUnavailable: "This event is no longer available for sponsoring (deadline passed or sponsors disabled)."
+        sponsorEventUnavailable: "This event is no longer available for sponsoring (deadline passed or sponsors disabled).",
+        birthDateLabel: "Date of birth",
+        genderLabel: "Gender",
+        genderMale: "Male",
+        genderFemale: "Female",
+        genderOther: "Other"
     )
 
     /// Renvoie la table de chaînes d'une langue.

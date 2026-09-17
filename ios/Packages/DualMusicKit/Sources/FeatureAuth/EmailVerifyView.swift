@@ -132,6 +132,27 @@ public struct ProfileCompletionView: View {
                             autocapitalization: .never
                         )
 
+                        // Date de naissance — sélecteur natif dédié non disponible ici (comme
+                        // les autres dates saisies dans l'app) ; saisie ISO libre.
+                        DMTextField(
+                            s.birthDateLabel,
+                            text: $viewModel.birthDate,
+                            placeholder: "AAAA-MM-JJ",
+                            keyboard: .numbersAndPunctuation,
+                            autocapitalization: .never
+                        )
+
+                        VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                            Text(s.genderLabel)
+                                .font(DMFont.caption)
+                                .foregroundStyle(theme.colors.mutedForeground)
+                            HStack(spacing: theme.spacing.sm) {
+                                genderPill(s.genderMale, value: "male")
+                                genderPill(s.genderFemale, value: "female")
+                                genderPill(s.genderOther, value: "other")
+                            }
+                        }
+
                         if let info = viewModel.infoMessage { DMMessage(info) }
                         if let error = viewModel.errorMessage { DMMessage(error, kind: .error) }
 
@@ -154,5 +175,19 @@ public struct ProfileCompletionView: View {
         .scrollDismissesKeyboard(.interactively)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .dmScreenBackground()
+    }
+
+    /// Pilule sélectionnable pour le sexe (male/female/other).
+    private func genderPill(_ label: String, value: String) -> some View {
+        let selected = viewModel.gender == value
+        return Button { viewModel.gender = value } label: {
+            Text(label)
+                .font(DMFont.caption)
+                .foregroundStyle(selected ? .white : theme.colors.foreground)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(selected ? theme.colors.primary : theme.colors.muted.opacity(0.25), in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }

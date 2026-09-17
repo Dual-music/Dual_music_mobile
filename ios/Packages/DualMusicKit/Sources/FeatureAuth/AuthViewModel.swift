@@ -60,6 +60,10 @@ public final class AuthViewModel {
     public var phone: String = ""
     public var country: Country = Countries.default
     public var referralCode: String = ""
+    /// Date de naissance (complétion de profil, optionnelle) — format `AAAA-MM-JJ`.
+    public var birthDate: String = ""
+    /// Sexe (complétion de profil, optionnel) — `male`/`female`/`other`.
+    public var gender: String = ""
     /// Acceptation obligatoire des CGU/confidentialité (inscription uniquement).
     public var acceptTerms: Bool = false
     /// Code de réinitialisation reçu par email (normalisé en chiffres par la vue).
@@ -274,7 +278,9 @@ public final class AuthViewModel {
                     fullName: fullName.trimmed,
                     countryCode: country.code,
                     phone: phone.nilIfBlank,
-                    phoneCountryCode: country.dial
+                    phoneCountryCode: country.dial,
+                    birthDate: birthDate.trimmed.nilIfBlank,
+                    gender: gender.nilIfBlank
                 )
             )
             authState = .signedIn(user: user)
