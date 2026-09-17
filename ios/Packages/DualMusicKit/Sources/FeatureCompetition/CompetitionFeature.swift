@@ -7,6 +7,7 @@ import CoreRealtime
 import CoreUI
 import DomainModels
 import FeatureGiftShop
+import FeatureSponsor
 import FeatureWallet
 
 /// Message de chat d'une compétition (auteur hydraté par le backend).
@@ -599,6 +600,9 @@ public final class CompetitionRoomViewModel {
     /// Candidat actuellement mis en avant par le manager (id + fin du créneau, pour un chrono).
     public private(set) var performer = CompetitionPerformer(performerId: nil, endsAt: nil)
 
+    /// Pilotage de l'enregistrement (LiveKit Egress) de cette compétition — bouton manager.
+    public let recordingCtl: RecordingHolder
+
     private let competitionId: String
     private let callerId: String?
     private let repository: CompetitionRepository
@@ -614,6 +618,7 @@ public final class CompetitionRoomViewModel {
     ///   - media: client média dédié.
     ///   - repository: lectures + débits.
     ///   - realtime: client Socket.IO (écoute des changements de statut + chat).
+    ///   - recording: accès REST du pilotage d'enregistrement (LiveKit Egress).
     ///   - callerId: id du caller — détermine ``isManager``/``canPublish`` une fois la
     ///     compétition chargée.
     public init(
@@ -623,6 +628,7 @@ public final class CompetitionRoomViewModel {
         realtime: RealtimeClient,
         wallet: WalletRepository,
         giftShop: GiftShopRepository,
+        recording: RecordingRepository,
         callerId: String? = nil
     ) {
         self.competitionId = competitionId
@@ -631,6 +637,7 @@ public final class CompetitionRoomViewModel {
         self.realtime = realtime
         self.wallet = wallet
         self.giftShop = giftShop
+        self.recordingCtl = RecordingHolder(sourceType: "competition", sourceId: competitionId, repo: recording)
         self.callerId = callerId
     }
 
@@ -683,6 +690,7 @@ public final class CompetitionRoomViewModel {
         Task { [weak self] in await self?.loadGiftCatalog() }
         Task { [weak self] in await self?.loadInventory() }
         Task { [weak self] in await self?.refreshGiftLeaderboard() }
+        recordingCtl.startPolling()
 
         let live = realtime.session(.live)
         let chat = realtime.session(.chat)
@@ -1231,6 +1239,8 @@ public struct CompetitionRoomView: View {
     @State private var showGiftSheet = false
     @State private var showLeaderboardSheet = false
     @State private var showReactionBar = false
+    @State private var showCancelRecordingConfirm = false
+    @State private var recordingErrorMessage: String?
     @State private var localFocus: String?
 
     /// - Parameters:
@@ -1280,8 +1290,12 @@ public struct CompetitionRoomView: View {
                 .foregroundStyle(theme.colors.mutedForeground)
                 if viewModel.isManager {
                     Button { showSettingsSheet = true } label: {
-                        Image(systemName: "slider.horizontal.3")
-                            .foregroundStyle(theme.colors.accent)
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "slider.horizontal.3")
+                                .foregroundStyle(theme.colors.accent)
+                            RecordingRailBadge(active: viewModel.recordingCtl.active, paused: viewModel.recordingCtl.paused)
+                                .offset(x: 6, y: -6)
+                        }
                     }
                     .buttonStyle(.plain)
                 }
@@ -1794,10 +1808,36 @@ public struct CompetitionRoomView: View {
                 showSettingsSheet = false
                 Task { await viewModel.finalize() }
             }
+
+            Divider()
+            Text("🔴 \(s.recording)").font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+            RecordingSessionControls(
+                mode: viewModel.recordingCtl.mode,
+                active: viewModel.recordingCtl.active,
+                paused: viewModel.recordingCtl.paused,
+                finalizing: viewModel.recordingCtl.finalizing,
+                accumulatedSeconds: viewModel.recordingCtl.accumulatedSeconds,
+                runStartedAt: viewModel.recordingCtl.runStartedAt,
+                busy: viewModel.recordingCtl.busy,
+                onStart: { viewModel.recordingCtl.start(onError: { recordingErrorMessage = $0 }) },
+                onPause: { viewModel.recordingCtl.pause(onError: { recordingErrorMessage = $0 }) },
+                onResume: { viewModel.recordingCtl.resume(onError: { recordingErrorMessage = $0 }) },
+                onCancel: { showCancelRecordingConfirm = true },
+                onSave: { viewModel.recordingCtl.save(onError: { recordingErrorMessage = $0 }) }
+            )
+            if let recordingErrorMessage {
+                Text(recordingErrorMessage).font(DMFont.caption).foregroundStyle(theme.colors.destructive)
+            }
         }
         .padding(theme.spacing.lg)
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .dmScreenBackground()
+        .confirmationDialog(s.cancel, isPresented: $showCancelRecordingConfirm, titleVisibility: .visible) {
+            Button(s.cancel, role: .destructive) {
+                viewModel.recordingCtl.cancel(onError: { recordingErrorMessage = $0 })
+                showCancelRecordingConfirm = false
+            }
+        }
     }
 
     private func settingsRow(_ systemImage: String, _ label: String, action: @escaping () -> Void) -> some View {

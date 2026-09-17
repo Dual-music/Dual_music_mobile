@@ -370,6 +370,7 @@ public final class AppContainer {
             realtime: realtime,
             wallet: walletRepository,
             giftShop: giftShopRepository,
+            recording: recordingRepository,
             callerId: profile.me?.user.id
         )
         competitionRooms[competition.id] = viewModel
