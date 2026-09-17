@@ -663,6 +663,8 @@ public struct DMStrings: Sendable {
     public let genderMale: String
     public let genderFemale: String
     public let genderOther: String
+    // Bascule admin "création de duels par les managers".
+    public let adminDuelCreation: String
 }
 
 // MARK: - Tables de traduction
@@ -1267,7 +1269,8 @@ public extension DMStrings {
         genderLabel: "Sexe",
         genderMale: "Homme",
         genderFemale: "Femme",
-        genderOther: "Autre"
+        genderOther: "Autre",
+        adminDuelCreation: "Création de duels par les managers"
     )
 
     /// Chaînes **anglaises**.
@@ -1868,7 +1871,8 @@ public extension DMStrings {
         genderLabel: "Gender",
         genderMale: "Male",
         genderFemale: "Female",
-        genderOther: "Other"
+        genderOther: "Other",
+        adminDuelCreation: "Duel creation by managers"
     )
 
     /// Renvoie la table de chaînes d'une langue.

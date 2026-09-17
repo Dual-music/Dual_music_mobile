@@ -117,11 +117,19 @@ public struct ProfileRepository: Sendable {
     /// utilisateur à cause d'un réglage manquant (même politique qu'Android).
     /// - Parameter key: `artist_requests_enabled` ou `manager_requests_enabled`.
     public func requestsEnabled(_ key: String) async -> Bool {
+        await settingEnabled(key, default: true)
+    }
+
+    /// Lit un flag public `{enabled}`, avec une valeur par défaut si le réglage est absent/illisible.
+    /// - Parameters:
+    ///   - key: clé du réglage public.
+    ///   - default: valeur de repli.
+    public func settingEnabled(_ key: String, default defaultValue: Bool) async -> Bool {
         let setting = try? await http.request(
             .get(RoleEndpoints.publicSetting(key)),
             as: PublicSetting.self
         )
-        return setting?.value?.enabled ?? true
+        return setting?.value?.enabled ?? defaultValue
     }
 
     // MARK: - Admin

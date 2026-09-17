@@ -14,6 +14,8 @@ public final class AdminViewModel {
 
     public private(set) var managerEnabled = true
     public private(set) var artistEnabled = true
+    /// Autorise les managers à créer des duels eux-mêmes (défaut faux : l'admin assigne).
+    public private(set) var duelCreationEnabled = false
     public var query: String = ""
     public private(set) var users: [AdminUser] = []
     public private(set) var isSearching = false
@@ -26,10 +28,11 @@ public final class AdminViewModel {
         self.repository = repository
     }
 
-    /// Charge l'état courant des deux réglages d'ouverture des candidatures.
+    /// Charge l'état courant des réglages (candidatures + création de duels par les managers).
     public func load() async {
         managerEnabled = await repository.requestsEnabled(RoleEndpoints.managerRequestsEnabled)
         artistEnabled = await repository.requestsEnabled(RoleEndpoints.artistRequestsEnabled)
+        duelCreationEnabled = await repository.settingEnabled(RoleEndpoints.managerDuelCreation, default: false)
     }
 
     /// Ouvre/ferme les candidatures « Devenir artiste ».
@@ -40,6 +43,11 @@ public final class AdminViewModel {
     /// Ouvre/ferme les candidatures « Devenir manager ».
     public func toggleManager(_ enabled: Bool) async {
         await setRequests(key: RoleEndpoints.managerRequestsEnabled, enabled: enabled) { self.managerEnabled = enabled }
+    }
+
+    /// Autorise/interdit aux managers de créer des duels (sinon assignés par l'admin).
+    public func toggleDuelCreation(_ enabled: Bool) async {
+        await setRequests(key: RoleEndpoints.managerDuelCreation, enabled: enabled) { self.duelCreationEnabled = enabled }
     }
 
     /// Recherche des utilisateurs par nom/email.
@@ -124,6 +132,10 @@ public struct AdminView: View {
                         DMToggleRow(s.adminManagerRequests, isOn: Binding(
                             get: { viewModel.managerEnabled },
                             set: { enabled in Task { await viewModel.toggleManager(enabled) } }
+                        ))
+                        DMToggleRow(s.adminDuelCreation, isOn: Binding(
+                            get: { viewModel.duelCreationEnabled },
+                            set: { enabled in Task { await viewModel.toggleDuelCreation(enabled) } }
                         ))
                     }
                 }
