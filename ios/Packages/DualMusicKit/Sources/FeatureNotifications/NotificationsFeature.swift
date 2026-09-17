@@ -39,6 +39,16 @@ public struct NotificationRepository: Sendable {
     public func markAllRead() async throws {
         try await http.send(.post(NotificationEndpoints.readAll))
     }
+
+    /// Préférences d'emails de notification courantes.
+    public func emailPreferences() async throws -> NotificationPreferences {
+        try await http.request(.get(NotificationEndpoints.preferences), as: NotificationPreferences.self)
+    }
+
+    /// Met à jour les préférences d'emails de notification.
+    public func updateEmailPreferences(_ prefs: NotificationPreferences) async throws -> NotificationPreferences {
+        try await http.request(.put(NotificationEndpoints.preferencesEmail, body: prefs), as: NotificationPreferences.self)
+    }
 }
 
 /// ViewModel du centre de notifications in-app.
@@ -147,6 +157,126 @@ public struct NotificationsView: View {
         .dmScreenBackground()
         .task { await viewModel.start() }
         .onDisappear { viewModel.stop() }
+    }
+}
+
+/// ViewModel des préférences d'emails de notification (`GET/PUT /notifications/preferences`).
+///
+/// Miroir de `NotificationPrefsViewModel` (Android).
+@Observable
+@MainActor
+public final class NotificationPrefsViewModel {
+    public private(set) var prefs = NotificationPreferences()
+
+    private let repository: NotificationRepository
+
+    /// - Parameter repository: accès REST notifications.
+    public init(repository: NotificationRepository) {
+        self.repository = repository
+    }
+
+    /// Charge les préférences courantes.
+    public func load() async {
+        prefs = (try? await repository.emailPreferences()) ?? NotificationPreferences()
+    }
+
+    /// Applique une nouvelle valeur (optimiste) et persiste côté serveur.
+    public func update(_ newPrefs: NotificationPreferences) async {
+        prefs = newPrefs
+        if let updated = try? await repository.updateEmailPreferences(newPrefs) {
+            prefs = updated
+        }
+    }
+}
+
+/// Écran « Notifs » du menu profil — préférences d'emails par catégorie (comme le web).
+/// La liste in-app reste accessible via la cloche d'accueil.
+@MainActor
+public struct NotificationPrefsView: View {
+    @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
+
+    private let viewModel: NotificationPrefsViewModel
+
+    /// - Parameter viewModel: source d'état.
+    public init(viewModel: NotificationPrefsViewModel) {
+        self.viewModel = viewModel
+    }
+
+    public var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: theme.spacing.md) {
+                // Notifications push (opt-out global).
+                DMCard {
+                    prefRow(s.pushNotifs, viewModel.prefs.pushEnabled) { newValue in
+                        var p = viewModel.prefs
+                        p.pushEnabled = newValue
+                        Task { await viewModel.update(p) }
+                    }
+                }
+
+                Text(s.emailNotifs).font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+                Text(s.emailNotifsHint).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+
+                DMCard {
+                    VStack(spacing: 0) {
+                        prefRow(s.navConcerts, viewModel.prefs.emailConcerts) { newValue in
+                            var p = viewModel.prefs
+                            p.emailConcerts = newValue
+                            Task { await viewModel.update(p) }
+                        }
+                        prefRow(s.navDuels, viewModel.prefs.emailDuels) { newValue in
+                            var p = viewModel.prefs
+                            p.emailDuels = newValue
+                            Task { await viewModel.update(p) }
+                        }
+                        prefRow(s.navLives, viewModel.prefs.emailLives) { newValue in
+                            var p = viewModel.prefs
+                            p.emailLives = newValue
+                            Task { await viewModel.update(p) }
+                        }
+                        prefRow(s.notifGifts, viewModel.prefs.emailGifts) { newValue in
+                            var p = viewModel.prefs
+                            p.emailGifts = newValue
+                            Task { await viewModel.update(p) }
+                        }
+                        prefRow(s.notifVotes, viewModel.prefs.emailVotes) { newValue in
+                            var p = viewModel.prefs
+                            p.emailVotes = newValue
+                            Task { await viewModel.update(p) }
+                        }
+                        prefRow(s.notifRequests, viewModel.prefs.emailRequests) { newValue in
+                            var p = viewModel.prefs
+                            p.emailRequests = newValue
+                            Task { await viewModel.update(p) }
+                        }
+                        prefRow(s.notifAssignments, viewModel.prefs.emailAssignments) { newValue in
+                            var p = viewModel.prefs
+                            p.emailAssignments = newValue
+                            Task { await viewModel.update(p) }
+                        }
+                        // Emails système : requis, non désactivable.
+                        prefRow("\(s.notifSystem) · \(s.notifRequired)", true, enabled: false) { _ in }
+                    }
+                }
+            }
+            .padding(theme.spacing.lg)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .dmScreenBackground()
+        .task { await viewModel.load() }
+    }
+
+    /// Ligne d'une préférence : libellé + interrupteur.
+    private func prefRow(_ label: String, _ checked: Bool, enabled: Bool = true, onChange: @escaping (Bool) -> Void) -> some View {
+        HStack {
+            Text(label).foregroundStyle(theme.colors.foreground)
+            Spacer()
+            Toggle("", isOn: Binding(get: { checked }, set: onChange))
+                .labelsHidden()
+                .disabled(!enabled)
+        }
+        .padding(.vertical, theme.spacing.xs)
     }
 }
 

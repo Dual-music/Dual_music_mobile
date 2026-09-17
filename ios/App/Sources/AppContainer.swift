@@ -93,6 +93,7 @@ public final class AppContainer {
     @ObservationIgnored private var cachedPublicProfileEdit: PublicProfileViewModel?
     @ObservationIgnored private var cachedBecomeRole: BecomeRoleViewModel?
     @ObservationIgnored private var cachedNotifications: NotificationsViewModel?
+    @ObservationIgnored private var cachedNotificationPrefs: NotificationPrefsViewModel?
     @ObservationIgnored private var cachedWithdrawal: WithdrawalViewModel?
     @ObservationIgnored private var cachedRevenue: RevenueViewModel?
     @ObservationIgnored private var cachedReplays: ReplaysViewModel?
@@ -225,6 +226,13 @@ public final class AppContainer {
         if let cachedNotifications { return cachedNotifications }
         let viewModel = NotificationsViewModel(repository: notificationRepository, realtime: realtime)
         cachedNotifications = viewModel
+        return viewModel
+    }
+
+    var notificationPrefs: NotificationPrefsViewModel {
+        if let cachedNotificationPrefs { return cachedNotificationPrefs }
+        let viewModel = NotificationPrefsViewModel(repository: notificationRepository)
+        cachedNotificationPrefs = viewModel
         return viewModel
     }
 
@@ -537,6 +545,7 @@ public final class AppContainer {
         cachedPublicProfileEdit = nil
         cachedBecomeRole = nil
         cachedNotifications = nil
+        cachedNotificationPrefs = nil
         cachedWithdrawal = nil
         cachedRevenue = nil
         cachedReplays = nil

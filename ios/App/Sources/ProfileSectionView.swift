@@ -131,8 +131,11 @@ struct ProfileSectionView: View {
             }
 
         case .notifications:
+            // Préférences d'emails de notification (menu profil) — distinct de la liste
+            // in-app, restée accessible via la cloche d'accueil (parité Android : la ligne
+            // de menu "Notifications" ouvre les préférences, pas la liste).
             SubScreen(title: s.notifications, onBack: { route = .menu }) {
-                NotificationsView(viewModel: container.notifications)
+                NotificationPrefsView(viewModel: container.notificationPrefs)
             }
 
         case .withdrawal:

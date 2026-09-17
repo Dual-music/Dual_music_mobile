@@ -587,6 +587,16 @@ public struct DMStrings: Sendable {
     public let makeProfilePublic: String
     public let publicProfile: String
     public let menuArtistProfile: String
+    // Préférences de notifications (emails par catégorie).
+    public let pushNotifs: String
+    public let emailNotifs: String
+    public let emailNotifsHint: String
+    public let notifGifts: String
+    public let notifVotes: String
+    public let notifRequests: String
+    public let notifAssignments: String
+    public let notifSystem: String
+    public let notifRequired: String
 }
 
 // MARK: - Tables de traduction
@@ -1126,7 +1136,16 @@ public extension DMStrings {
         stageName: "Nom de scène",
         makeProfilePublic: "Profil visible publiquement",
         publicProfile: "Profil public",
-        menuArtistProfile: "Profil"
+        menuArtistProfile: "Profil",
+        pushNotifs: "Notifications push",
+        emailNotifs: "Notifications par email",
+        emailNotifsHint: "Choisissez quels emails vous souhaitez recevoir. Les notifications restent visibles dans l'application.",
+        notifGifts: "Cadeaux",
+        notifVotes: "Votes",
+        notifRequests: "Demandes & validations",
+        notifAssignments: "Assignations",
+        notifSystem: "Emails système",
+        notifRequired: "Requis"
     )
 
     /// Chaînes **anglaises**.
@@ -1662,7 +1681,16 @@ public extension DMStrings {
         stageName: "Stage name",
         makeProfilePublic: "Publicly visible profile",
         publicProfile: "Public profile",
-        menuArtistProfile: "Profile"
+        menuArtistProfile: "Profile",
+        pushNotifs: "Push notifications",
+        emailNotifs: "Email notifications",
+        emailNotifsHint: "Choose which emails you want to receive. In-app notifications stay visible.",
+        notifGifts: "Gifts",
+        notifVotes: "Votes",
+        notifRequests: "Requests & approvals",
+        notifAssignments: "Assignments",
+        notifSystem: "System emails",
+        notifRequired: "Required"
     )
 
     /// Renvoie la table de chaînes d'une langue.

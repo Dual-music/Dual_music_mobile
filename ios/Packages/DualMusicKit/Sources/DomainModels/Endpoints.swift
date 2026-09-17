@@ -230,6 +230,10 @@ public enum NotificationEndpoints {
     public static let devices = "/notifications/devices"
     public static func read(_ id: String) -> String { "/notifications/\(id)/read" }
     public static func remove(_ id: String) -> String { "/notifications/\(id)" }
+    /// Préférences email (lecture).
+    public static let preferences = "/notifications/preferences"
+    /// Mise à jour des préférences email (`PUT`).
+    public static let preferencesEmail = "/notifications/preferences/email"
 }
 
 /// Chemins des retraits.

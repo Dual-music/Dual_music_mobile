@@ -580,6 +580,69 @@ public struct UnreadCount: Codable, Sendable {
     }
 }
 
+/// Préférences d'emails de notification — `GET /notifications/preferences` (lecture) et
+/// `PUT /notifications/preferences/email` (mise à jour). Toutes booléennes, défaut `true`.
+/// `emailSystem` est requis (non désactivable).
+public struct NotificationPreferences: Codable, Sendable, Equatable {
+    public var emailConcerts: Bool
+    public var emailDuels: Bool
+    public var emailLives: Bool
+    public var emailGifts: Bool
+    public var emailVotes: Bool
+    public var emailRequests: Bool
+    public var emailAssignments: Bool
+    public var emailSystem: Bool
+    /// Préférence push (opt-out global).
+    public var pushEnabled: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case emailConcerts = "email_concerts"
+        case emailDuels = "email_duels"
+        case emailLives = "email_lives"
+        case emailGifts = "email_gifts"
+        case emailVotes = "email_votes"
+        case emailRequests = "email_requests"
+        case emailAssignments = "email_assignments"
+        case emailSystem = "email_system"
+        case pushEnabled = "push_enabled"
+    }
+
+    public init(
+        emailConcerts: Bool = true,
+        emailDuels: Bool = true,
+        emailLives: Bool = true,
+        emailGifts: Bool = true,
+        emailVotes: Bool = true,
+        emailRequests: Bool = true,
+        emailAssignments: Bool = true,
+        emailSystem: Bool = true,
+        pushEnabled: Bool = true
+    ) {
+        self.emailConcerts = emailConcerts
+        self.emailDuels = emailDuels
+        self.emailLives = emailLives
+        self.emailGifts = emailGifts
+        self.emailVotes = emailVotes
+        self.emailRequests = emailRequests
+        self.emailAssignments = emailAssignments
+        self.emailSystem = emailSystem
+        self.pushEnabled = pushEnabled
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        emailConcerts = c.val(Bool.self, .emailConcerts, true)
+        emailDuels = c.val(Bool.self, .emailDuels, true)
+        emailLives = c.val(Bool.self, .emailLives, true)
+        emailGifts = c.val(Bool.self, .emailGifts, true)
+        emailVotes = c.val(Bool.self, .emailVotes, true)
+        emailRequests = c.val(Bool.self, .emailRequests, true)
+        emailAssignments = c.val(Bool.self, .emailAssignments, true)
+        emailSystem = c.val(Bool.self, .emailSystem, true)
+        pushEnabled = c.val(Bool.self, .pushEnabled, true)
+    }
+}
+
 // MARK: - Média (LiveKit)
 
 /// Corps de `POST /livekit/token`.
