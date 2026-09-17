@@ -207,6 +207,12 @@ public final class AppContainer {
         return viewModel
     }
 
+    /// Profil public d'un artiste (tap sur son nom depuis un direct/duel/concert/compétition).
+    /// Non caché — recréé à chaque ouverture, comme côté Android (`key = "artist-pub-$id"`).
+    func artistPublicProfile(userId: String) -> ArtistPublicProfileViewModel {
+        ArtistPublicProfileViewModel(userId: userId, repository: profileRepository)
+    }
+
     var notifications: NotificationsViewModel {
         if let cachedNotifications { return cachedNotifications }
         let viewModel = NotificationsViewModel(repository: notificationRepository, realtime: realtime)

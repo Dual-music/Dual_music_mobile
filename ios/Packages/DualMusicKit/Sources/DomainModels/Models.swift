@@ -18,6 +18,8 @@ public struct DisplayProfile: Codable, Sendable, Identifiable, Equatable, Hashab
     public let countryCode: String?
     public let phone: String?
     public let phoneCountryCode: String?
+    /// Biographie du compte (présente sur `/auth/me`, absente des profils d'affichage courts).
+    public let bio: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -27,6 +29,7 @@ public struct DisplayProfile: Codable, Sendable, Identifiable, Equatable, Hashab
         case countryCode = "country_code"
         case phone
         case phoneCountryCode = "phone_country_code"
+        case bio
     }
 
     public init(from decoder: Decoder) throws {
@@ -38,6 +41,7 @@ public struct DisplayProfile: Codable, Sendable, Identifiable, Equatable, Hashab
         countryCode = c.opt(String.self, .countryCode)
         phone = c.opt(String.self, .phone)
         phoneCountryCode = c.opt(String.self, .phoneCountryCode)
+        bio = c.opt(String.self, .bio)
     }
 
     public init(
@@ -47,7 +51,8 @@ public struct DisplayProfile: Codable, Sendable, Identifiable, Equatable, Hashab
         stageName: String? = nil,
         countryCode: String? = nil,
         phone: String? = nil,
-        phoneCountryCode: String? = nil
+        phoneCountryCode: String? = nil,
+        bio: String? = nil
     ) {
         self.id = id
         self.fullName = fullName
@@ -56,6 +61,7 @@ public struct DisplayProfile: Codable, Sendable, Identifiable, Equatable, Hashab
         self.countryCode = countryCode
         self.phone = phone
         self.phoneCountryCode = phoneCountryCode
+        self.bio = bio
     }
 
     /// Nom à afficher : nom de scène si présent, sinon nom complet, sinon repli court.

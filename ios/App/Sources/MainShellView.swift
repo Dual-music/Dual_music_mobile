@@ -10,6 +10,7 @@ import FeatureFeed
 import FeatureLeaderboard
 import FeatureLive
 import FeatureNotifications
+import FeatureProfile
 import FeatureReplay
 
 /// Onglets de la navigation basse (ordre identique à Android).
@@ -78,6 +79,9 @@ struct MainShellView: View {
     @State private var openCompetition: Competition?
     @State private var openConcert: Concert?
     @State private var openConcertReplay: ReplayVideo?
+    /// Profil public d'un artiste (tap sur son nom), superposé au-dessus du direct/duel/
+    /// concert/compétition en cours — celui-ci reste en composition, pas de reconnexion.
+    @State private var openArtist: IdentifiableID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -104,6 +108,9 @@ struct MainShellView: View {
             }
         }
         .background(DMScreenBackground())
+        .fullScreenCover(item: $openArtist) { artist in
+            ArtistPublicProfileView(viewModel: container.artistPublicProfile(userId: artist.id))
+        }
     }
 
     // MARK: - Contenu
@@ -119,7 +126,7 @@ struct MainShellView: View {
         } else {
             switch tab {
             case .home: homeTab
-            case .lives: FeedView(viewModel: container.feed) { container.liveRoom(for: $0) }
+            case .lives: FeedView(viewModel: container.feed, makeLiveViewModel: { container.liveRoom(for: $0) }, onOpenArtist: { openArtist = IdentifiableID($0) })
             case .duels: duelsTab
             case .concerts: concertsTab
             case .competitions: competitionsTab
@@ -157,7 +164,11 @@ struct MainShellView: View {
     private var duelsTab: some View {
         if let duel = openDuel {
             SubScreen(title: s.screenDuels, onBack: { openDuel = nil }) {
-                DuelRoomView(viewModel: container.duelRoom(for: duel), onLeave: { openDuel = nil })
+                DuelRoomView(
+                    viewModel: container.duelRoom(for: duel),
+                    onLeave: { openDuel = nil },
+                    onOpenArtist: { openArtist = IdentifiableID($0) }
+                )
             }
         } else {
             DuelsListView(viewModel: container.duelsList) { openDuel = $0 }
@@ -169,7 +180,11 @@ struct MainShellView: View {
     private var competitionsTab: some View {
         if let competition = openCompetition {
             SubScreen(title: competition.title, onBack: { openCompetition = nil }) {
-                CompetitionRoomView(viewModel: container.competitionRoom(for: competition), onLeave: { openCompetition = nil })
+                CompetitionRoomView(
+                    viewModel: container.competitionRoom(for: competition),
+                    onLeave: { openCompetition = nil },
+                    onOpenArtist: { openArtist = IdentifiableID($0) }
+                )
             }
         } else {
             CompetitionsListView(viewModel: container.competitions) { openCompetition = $0 }
@@ -185,7 +200,9 @@ struct MainShellView: View {
                     viewModel: container.concertRoom(for: concert),
                     concertTitle: concert.title,
                     hostUserId: concert.artistId,
-                    onEnded: { openConcert = nil }
+                    artistName: concert.artist?.displayName ?? concert.artistName,
+                    onEnded: { openConcert = nil },
+                    onOpenArtist: { openArtist = IdentifiableID($0) }
                 )
             }
         } else if let replay = openConcertReplay {

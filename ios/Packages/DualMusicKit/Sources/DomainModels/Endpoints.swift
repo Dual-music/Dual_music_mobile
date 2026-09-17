@@ -285,6 +285,10 @@ public enum CreatorEndpoints {
     public static let duelRequestCreate = "/duels/requests"
     public static func duelRespond(_ id: String) -> String { "/duels/requests/\(id)/respond" }
     public static let myConcerts = "/artist-concerts/me"
+    /// Profil public COMPLET d'un utilisateur (compte + profil artiste + suivi).
+    public static func publicProfile(_ id: String) -> String { "/users/\(id)" }
+    public static let artistMe = "/artists/me"
+    public static let managerMe = "/managers/me"
 }
 
 /// Chemin du service de jetons LiveKit.

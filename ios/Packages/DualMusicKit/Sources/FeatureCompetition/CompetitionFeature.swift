@@ -1238,6 +1238,7 @@ public struct CompetitionRoomView: View {
     private let voteCredits: Int
 
     private let onLeave: () -> Void
+    private let onOpenArtist: (String) -> Void
 
     @State private var draft = ""
     @State private var showReport = false
@@ -1257,10 +1258,17 @@ public struct CompetitionRoomView: View {
     ///   - viewModel: état + actions.
     ///   - voteCredits: montant (crédits entiers) d'un vote rapide.
     ///   - onLeave: retour au catalogue (gate d'accès, barrière de bannissement).
-    public init(viewModel: CompetitionRoomViewModel, voteCredits: Int = 10, onLeave: @escaping () -> Void = {}) {
+    ///   - onOpenArtist: ouvre le profil public d'un candidat (tap sur son nom).
+    public init(
+        viewModel: CompetitionRoomViewModel,
+        voteCredits: Int = 10,
+        onLeave: @escaping () -> Void = {},
+        onOpenArtist: @escaping (String) -> Void = { _ in }
+    ) {
         self.viewModel = viewModel
         self.voteCredits = voteCredits
         self.onLeave = onLeave
+        self.onOpenArtist = onOpenArtist
     }
 
     /// Tuiles actives : moi (si je publie, sous MON identité) + les distants — triées pour un
@@ -1367,7 +1375,8 @@ public struct CompetitionRoomView: View {
                                 onTogglePerformer: {
                                     Task { await viewModel.setPerformer(candidateId: viewModel.performer.performerId == candidate.artistId ? nil : candidate.artistId, durationSeconds: 120) }
                                 },
-                                onJuryVotes: { votes in Task { await viewModel.setJuryVotes(candidateId: candidate.id, juryVotes: votes) } }
+                                onJuryVotes: { votes in Task { await viewModel.setJuryVotes(candidateId: candidate.id, juryVotes: votes) } },
+                                onOpenArtist: { onOpenArtist(candidate.artistId) }
                             )
                         }
                     }
@@ -2096,6 +2105,7 @@ private struct CandidateRow: View {
     let onToggleMute: () -> Void
     let onTogglePerformer: () -> Void
     let onJuryVotes: (Int) -> Void
+    let onOpenArtist: () -> Void
 
     @State private var juryText = ""
 
@@ -2107,6 +2117,7 @@ private struct CandidateRow: View {
                         Text("\(medal(rank)) \(candidate.artist?.displayName ?? s.artistSingular)")
                             .font(DMFont.body).bold()
                             .foregroundStyle(theme.colors.foreground)
+                            .onTapGesture(perform: onOpenArtist)
                         Text("\(Int(candidate.score)) pts · \(candidate.status)")
                             .font(DMFont.caption)
                             .foregroundStyle(theme.colors.mutedForeground)

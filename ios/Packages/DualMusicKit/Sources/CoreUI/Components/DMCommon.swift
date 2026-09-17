@@ -250,6 +250,15 @@ public struct DMRemoteImage: View {
     }
 }
 
+// MARK: - Identifiant simple
+
+/// Enveloppe un identifiant brut (id d'artiste, etc.) pour l'utiliser comme item de
+/// `.sheet(item:)`/`.fullScreenCover(item:)`, sans wrapper dédié à chaque écran.
+public struct IdentifiableID: Identifiable, Equatable, Sendable {
+    public let id: String
+    public init(_ id: String) { self.id = id }
+}
+
 // MARK: - Barre d'onglets
 
 /// Barre d'onglets segmentée aux couleurs de la marque (équivalent de `TabRow` Compose).

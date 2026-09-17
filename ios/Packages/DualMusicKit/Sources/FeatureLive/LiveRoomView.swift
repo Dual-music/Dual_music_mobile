@@ -17,8 +17,10 @@ public struct LiveRoomView: View {
 
     private let viewModel: LiveViewModel
     private let hostUserId: String
+    private let artistName: String?
     private let prewarmedToken: LiveKitToken?
     private let onEnded: () -> Void
+    private let onOpenArtist: (String) -> Void
 
     @State private var draft = ""
     @State private var showReport = false
@@ -41,18 +43,24 @@ public struct LiveRoomView: View {
     /// - Parameters:
     ///   - viewModel: état + actions du live.
     ///   - hostUserId: destinataire des cadeaux.
+    ///   - artistName: nom affiché dans la puce artiste (spectateur), tappable → ``onOpenArtist``.
     ///   - prewarmedToken: jeton LiveKit pré-chauffé par le feed.
     ///   - onEnded: hôte uniquement — appelé une fois le live terminé (retour à « Mes lives »).
+    ///   - onOpenArtist: ouvre le profil public de l'artiste (tap sur son nom).
     public init(
         viewModel: LiveViewModel,
         hostUserId: String,
+        artistName: String? = nil,
         prewarmedToken: LiveKitToken? = nil,
-        onEnded: @escaping () -> Void = {}
+        onEnded: @escaping () -> Void = {},
+        onOpenArtist: @escaping (String) -> Void = { _ in }
     ) {
         self.viewModel = viewModel
         self.hostUserId = hostUserId
+        self.artistName = artistName
         self.prewarmedToken = prewarmedToken
         self.onEnded = onEnded
+        self.onOpenArtist = onOpenArtist
     }
 
     public var body: some View {
@@ -175,6 +183,19 @@ public struct LiveRoomView: View {
     private var viewerBadge: some View {
         HStack {
             if !viewModel.isHost {
+                // Nom de l'artiste (spectateur) → profil public (parité duel « tap nom »).
+                Button { onOpenArtist(hostUserId) } label: {
+                    Text("🎤 \(artistName?.nilIfBlank ?? s.artists)")
+                        .font(DMFont.caption).bold()
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .frame(maxWidth: 110, alignment: .leading)
+                        .padding(.horizontal, theme.spacing.sm)
+                        .padding(.vertical, theme.spacing.xs)
+                        .background(.black.opacity(0.4), in: Capsule())
+                }
+                .buttonStyle(.plain)
+
                 Button { showReport = true } label: {
                     Image(systemName: "flag.fill")
                         .font(DMFont.caption)

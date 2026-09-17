@@ -18,6 +18,7 @@ public struct DuelRoomView: View {
     private let viewModel: DuelViewModel
     private let voteAmount: Double
     private let onLeave: () -> Void
+    private let onOpenArtist: (String) -> Void
 
     @State private var draft = ""
     @State private var showReport = false
@@ -36,10 +37,17 @@ public struct DuelRoomView: View {
     ///   - viewModel: état + actions du duel.
     ///   - voteAmount: montant (crédits) d'un vote rapide.
     ///   - onLeave: retour au catalogue (gate d'accès, barrière de bannissement, fin de duel).
-    public init(viewModel: DuelViewModel, voteAmount: Double = 10, onLeave: @escaping () -> Void = {}) {
+    ///   - onOpenArtist: ouvre le profil public d'un artiste (tap sur son nom dans la barre de vote).
+    public init(
+        viewModel: DuelViewModel,
+        voteAmount: Double = 10,
+        onLeave: @escaping () -> Void = {},
+        onOpenArtist: @escaping (String) -> Void = { _ in }
+    ) {
         self.viewModel = viewModel
         self.voteAmount = voteAmount
         self.onLeave = onLeave
+        self.onOpenArtist = onOpenArtist
     }
 
     public var body: some View {
@@ -347,7 +355,9 @@ public struct DuelRoomView: View {
                 leftName: viewModel.duel?.artist1?.displayName ?? s.artist1,
                 rightName: viewModel.duel?.artist2?.displayName ?? s.artist2,
                 leftTotal: viewModel.duel.flatMap { viewModel.voteTotals[$0.artist1Id] } ?? 0,
-                rightTotal: viewModel.duel.flatMap { viewModel.voteTotals[$0.artist2Id] } ?? 0
+                rightTotal: viewModel.duel.flatMap { viewModel.voteTotals[$0.artist2Id] } ?? 0,
+                onLeftTap: { if let id = viewModel.duel?.artist1Id { onOpenArtist(id) } },
+                onRightTap: { if let id = viewModel.duel?.artist2Id { onOpenArtist(id) } }
             )
             if viewModel.timer.isRunning {
                 Text(s.timerRunning)
@@ -904,6 +914,8 @@ private struct VoteBar: View {
     let rightName: String
     let leftTotal: Double
     let rightTotal: Double
+    var onLeftTap: () -> Void = {}
+    var onRightTap: () -> Void = {}
 
     /// Part du segment gauche, bornée pour rester visible même à 0 %.
     private var leftShare: Double {
@@ -918,10 +930,12 @@ private struct VoteBar: View {
                 Text("\(leftName) · \(Int(leftTotal))")
                     .font(DMFont.caption).bold()
                     .foregroundStyle(.white)
+                    .onTapGesture(perform: onLeftTap)
                 Spacer()
                 Text("\(Int(rightTotal)) · \(rightName)")
                     .font(DMFont.caption).bold()
                     .foregroundStyle(.white)
+                    .onTapGesture(perform: onRightTap)
             }
             GeometryReader { geo in
                 HStack(spacing: 0) {

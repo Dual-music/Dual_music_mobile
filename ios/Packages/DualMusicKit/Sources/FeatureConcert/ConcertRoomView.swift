@@ -646,7 +646,9 @@ public struct ConcertRoomView: View {
     private let viewModel: ConcertRoomViewModel
     private let concertTitle: String
     private let hostUserId: String
+    private let artistName: String?
     private let onEnded: () -> Void
+    private let onOpenArtist: (String) -> Void
 
     @State private var draft = ""
     @State private var showReport = false
@@ -669,17 +671,23 @@ public struct ConcertRoomView: View {
     ///   - viewModel: état + actions du concert.
     ///   - concertTitle: affiché derrière le paywall billetterie.
     ///   - hostUserId: id de l'artiste — jamais bannissable, même par lui-même.
+    ///   - artistName: nom affiché dans la puce artiste (spectateur), tappable → ``onOpenArtist``.
     ///   - onEnded: artiste uniquement — appelé une fois le concert terminé.
+    ///   - onOpenArtist: ouvre le profil public de l'artiste (tap sur son nom).
     public init(
         viewModel: ConcertRoomViewModel,
         concertTitle: String,
         hostUserId: String,
-        onEnded: @escaping () -> Void = {}
+        artistName: String? = nil,
+        onEnded: @escaping () -> Void = {},
+        onOpenArtist: @escaping (String) -> Void = { _ in }
     ) {
         self.viewModel = viewModel
         self.concertTitle = concertTitle
         self.hostUserId = hostUserId
+        self.artistName = artistName
         self.onEnded = onEnded
+        self.onOpenArtist = onOpenArtist
     }
 
     public var body: some View {
@@ -816,6 +824,19 @@ public struct ConcertRoomView: View {
     private var viewerBadge: some View {
         HStack {
             if !viewModel.isHost {
+                // Nom de l'artiste (spectateur) → profil public (parité duel « tap nom »).
+                Button { onOpenArtist(hostUserId) } label: {
+                    Text("🎤 \(artistName?.nilIfBlank ?? s.artists)")
+                        .font(DMFont.caption).bold()
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .frame(maxWidth: 110, alignment: .leading)
+                        .padding(.horizontal, theme.spacing.sm)
+                        .padding(.vertical, theme.spacing.xs)
+                        .background(.black.opacity(0.4), in: Capsule())
+                }
+                .buttonStyle(.plain)
+
                 Button { showReport = true } label: {
                     Image(systemName: "flag.fill")
                         .font(DMFont.caption)

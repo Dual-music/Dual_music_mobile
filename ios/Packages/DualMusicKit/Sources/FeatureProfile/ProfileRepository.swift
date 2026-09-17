@@ -52,6 +52,43 @@ public struct ProfileRepository: Sendable {
         )
     }
 
+    // MARK: - Profils publics créateurs (artiste / manager)
+
+    /// Profil public artiste du caller. Lu via `GET /users/:id` (pas de `GET /artists/me`
+    /// côté backend) — `nil` si l'utilisateur n'a pas encore de profil artiste.
+    public func myArtistProfile(userId: String) async throws -> ArtistProfile? {
+        try await http.request(.get(CreatorEndpoints.publicProfile(userId)), as: PublicProfileResponse.self).artistProfile
+    }
+
+    /// Profil public COMPLET d'un utilisateur (compte + profil artiste + suivi). `GET /users/:id`.
+    public func publicProfile(userId: String) async throws -> PublicProfileResponse {
+        try await http.request(.get(CreatorEndpoints.publicProfile(userId)), as: PublicProfileResponse.self)
+    }
+
+    /// Suit / ne suit plus un artiste. `POST` / `DELETE` `/users/:id/follow`.
+    public func setFollow(userId: String, follow: Bool) async throws {
+        if follow {
+            try await http.send(.post(ArtistEndpoints.follow(userId)))
+        } else {
+            try await http.send(.delete(ArtistEndpoints.follow(userId)))
+        }
+    }
+
+    /// Met à jour le profil public artiste (`PATCH /artists/me`).
+    public func updateArtistProfile(_ request: UpdateArtistProfileRequest) async throws {
+        try await http.send(.patch(CreatorEndpoints.artistMe, body: request))
+    }
+
+    /// Profil public manager du caller (`GET /managers/me`).
+    public func myManagerProfile() async throws -> ManagerProfile {
+        try await http.request(.get(CreatorEndpoints.managerMe), as: ManagerProfile.self)
+    }
+
+    /// Met à jour le profil public manager (`PATCH /managers/me`).
+    public func updateManagerProfile(_ request: UpdateManagerProfileRequest) async throws {
+        try await http.send(.patch(CreatorEndpoints.managerMe, body: request))
+    }
+
     // MARK: - Candidatures de rôle
 
     /// Candidature artiste.

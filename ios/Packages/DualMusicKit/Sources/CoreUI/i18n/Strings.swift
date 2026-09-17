@@ -576,6 +576,9 @@ public struct DMStrings: Sendable {
     public let filterStudio: String
     public let filterNeon: String
     public let filterDream: String
+    // Profil public d'un artiste (consulté depuis un direct/duel/concert/compétition).
+    public let socialLinksLabel: String
+    public let errArtistProfileLoadFailed: String
 }
 
 // MARK: - Tables de traduction
@@ -1106,7 +1109,9 @@ public extension DMStrings {
         filterNoir: "N&B",
         filterStudio: "Studio",
         filterNeon: "Néon",
-        filterDream: "Rêve"
+        filterDream: "Rêve",
+        socialLinksLabel: "Réseaux",
+        errArtistProfileLoadFailed: "Impossible de charger le profil."
     )
 
     /// Chaînes **anglaises**.
@@ -1633,7 +1638,9 @@ public extension DMStrings {
         filterNoir: "Noir",
         filterStudio: "Studio",
         filterNeon: "Neon",
-        filterDream: "Dream"
+        filterDream: "Dream",
+        socialLinksLabel: "Social",
+        errArtistProfileLoadFailed: "Could not load the profile."
     )
 
     /// Renvoie la table de chaînes d'une langue.

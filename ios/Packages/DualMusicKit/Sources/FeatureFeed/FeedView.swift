@@ -17,15 +17,22 @@ public struct FeedView: View {
     private let viewModel: FeedViewModel
     /// Fabrique un ViewModel de live pour un item (injection par la coque applicative).
     private let makeLiveViewModel: (Live) -> LiveViewModel
+    private let onOpenArtist: (String) -> Void
 
     @State private var currentId: String?
 
     /// - Parameters:
     ///   - viewModel: source du feed.
     ///   - makeLiveViewModel: fabrique (mémoïsée) d'un ViewModel de live.
-    public init(viewModel: FeedViewModel, makeLiveViewModel: @escaping (Live) -> LiveViewModel) {
+    ///   - onOpenArtist: ouvre le profil public de l'artiste (tap sur son nom dans le live actif).
+    public init(
+        viewModel: FeedViewModel,
+        makeLiveViewModel: @escaping (Live) -> LiveViewModel,
+        onOpenArtist: @escaping (String) -> Void = { _ in }
+    ) {
         self.viewModel = viewModel
         self.makeLiveViewModel = makeLiveViewModel
+        self.onOpenArtist = onOpenArtist
     }
 
     public var body: some View {
@@ -82,7 +89,9 @@ public struct FeedView: View {
             LiveRoomView(
                 viewModel: makeLiveViewModel(item),
                 hostUserId: item.artistId,
-                prewarmedToken: viewModel.prewarmedToken(for: item.id)
+                artistName: item.artist?.displayName,
+                prewarmedToken: viewModel.prewarmedToken(for: item.id),
+                onOpenArtist: onOpenArtist
             )
         } else {
             poster(for: item)
