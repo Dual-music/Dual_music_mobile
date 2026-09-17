@@ -18,7 +18,7 @@ Règle : chaque étape = lire le code Android réel → implémenter iOS → com
 
 ## 2. Withdrawal (critique)
 
-- [ ] **2.1 Gestion des méthodes de paiement** — `android/feature/withdrawal/.../PayoutMethodsSection.kt`. Ajout/suppression/défaut. iOS n'a que la lecture (`methods()`).
+- [ ] **2.1 Gestion des méthodes de paiement** — `android/feature/withdrawal/.../PayoutMethodsSection.kt`. Ajout/suppression/défaut. Fait (à confirmer CI) : `WithdrawalRepository.addMethod/removeMethod/setDefaultMethod` + `AddPayoutMethodForm` (Mobile Money/Virement/PayPal, champs conditionnels) + liste avec étoile/corbeille.
 - [ ] **2.2 Verrouillage PIN par session (PinGate)** — `android/feature/withdrawal/.../PinGate.kt`. Re-vérification du PIN au déverrouillage. Endpoint `pinVerify` mort côté iOS.
 - [ ] **2.3 Changement de PIN** (`changePin`) — absent d'iOS.
 - [ ] **2.4 Réinitialisation PIN par OTP email** (`requestPinReset`/`confirmPinReset`) — absente d'iOS.

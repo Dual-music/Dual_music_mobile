@@ -4,6 +4,12 @@ import CoreNetwork
 import CoreUI
 import DomainModels
 
+/// Corps de `PATCH /withdrawals/methods/:id` — définit cette méthode comme défaut.
+private struct SetDefaultMethodBody: Encodable, Sendable {
+    let isDefault = true
+    enum CodingKeys: String, CodingKey { case isDefault = "is_default" }
+}
+
 /// Accès REST au flux de retrait.
 ///
 /// Sécurité : la création d'un retrait exige le **PIN de retrait** (6 chiffres), re-vérifié
@@ -29,6 +35,21 @@ public struct WithdrawalRepository: Sendable {
     /// Méthodes de retrait enregistrées (celle par défaut en premier).
     public func methods() async throws -> [PayoutMethodData] {
         try await http.request(.get(WithdrawalEndpoints.methods), as: [PayoutMethodData].self)
+    }
+
+    /// Ajoute une méthode de paiement. Le backend efface l'ancien défaut si `isDefault == true`.
+    public func addMethod(_ input: PayoutMethodInput) async throws {
+        try await http.send(.post(WithdrawalEndpoints.methods, body: input))
+    }
+
+    /// Supprime une méthode de paiement.
+    public func removeMethod(id: String) async throws {
+        try await http.send(.delete("\(WithdrawalEndpoints.methods)/\(id)"))
+    }
+
+    /// Définit une méthode par défaut (le backend efface le défaut des autres).
+    public func setDefaultMethod(id: String) async throws {
+        try await http.send(.patch("\(WithdrawalEndpoints.methods)/\(id)", body: SetDefaultMethodBody()))
     }
 
     /// Aperçu du net après frais pour un montant brut.
@@ -123,6 +144,38 @@ public final class WithdrawalViewModel {
     /// Sélectionne une méthode de retrait.
     public func selectMethod(id: String) { selectedMethodId = id }
 
+    /// Ajoute une méthode de paiement puis recharge la liste.
+    public func addMethod(_ input: PayoutMethodInput) async {
+        do {
+            try await repository.addMethod(input)
+            methods = (try? await repository.methods()) ?? methods
+            selectedMethodId = methods.first(where: { $0.isDefault })?.id ?? methods.first?.id
+        } catch {
+            errorMessage = Self.friendly(error)
+        }
+    }
+
+    /// Supprime une méthode de paiement puis recharge la liste.
+    public func removeMethod(id: String) async {
+        do {
+            try await repository.removeMethod(id: id)
+            methods = (try? await repository.methods()) ?? methods
+            if selectedMethodId == id { selectedMethodId = methods.first(where: { $0.isDefault })?.id ?? methods.first?.id }
+        } catch {
+            errorMessage = Self.friendly(error)
+        }
+    }
+
+    /// Définit une méthode par défaut puis recharge la liste.
+    public func setDefaultMethod(id: String) async {
+        do {
+            try await repository.setDefaultMethod(id: id)
+            methods = (try? await repository.methods()) ?? methods
+        } catch {
+            errorMessage = Self.friendly(error)
+        }
+    }
+
     /// Crée le PIN (première configuration).
     public func createPin(_ pin: String) async {
         do {
@@ -196,6 +249,7 @@ public struct WithdrawalView: View {
 
     @State private var pin = ""
     @State private var newPin = ""
+    @State private var showAddMethodForm = false
 
     /// - Parameter viewModel: état + actions.
     public init(viewModel: WithdrawalViewModel) {
@@ -246,41 +300,93 @@ public struct WithdrawalView: View {
         }
     }
 
-    /// Formulaire de retrait : méthode + montant + net + PIN.
+    /// Formulaire de retrait : gestion des méthodes + montant + net + PIN (ces deux derniers
+    /// masqués tant qu'aucune méthode n'est enregistrée).
     @ViewBuilder
     private var withdrawForm: some View {
-        if viewModel.methods.isEmpty {
-            DMCard {
-                Text(s.noWithdrawMethod)
-                    .font(DMFont.caption)
-                    .foregroundStyle(theme.colors.mutedForeground)
-            }
-        } else {
-            methodsSection
+        methodsSection
+        if !viewModel.methods.isEmpty {
             amountSection
             pinSection
         }
     }
 
-    /// Liste des méthodes de retrait enregistrées (sélection par tap).
+    /// Gestion des méthodes de retrait (parité `PayoutMethodsSection` Android) : liste
+    /// (sélection par tap, défaut, suppression) + formulaire d'ajout (Mobile Money/Virement/
+    /// PayPal, champs conditionnels).
     private var methodsSection: some View {
-        VStack(alignment: .leading, spacing: theme.spacing.sm) {
-            DMSectionTitle(s.method)
-            ForEach(viewModel.methods) { method in
-                Button { viewModel.selectMethod(id: method.id) } label: {
-                    DMCard(isSelected: method.id == viewModel.selectedMethodId) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(method.label ?? method.method)
-                                .font(DMFont.body).bold()
-                                .foregroundStyle(theme.colors.foreground)
-                            Text(method.subtitle)
-                                .font(DMFont.caption)
-                                .foregroundStyle(theme.colors.mutedForeground)
-                        }
+        DMCard {
+            VStack(alignment: .leading, spacing: theme.spacing.sm) {
+                HStack {
+                    Text(s.payoutTitle).font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+                    Spacer()
+                    DMButton(s.payoutAdd, style: .secondary) { showAddMethodForm.toggle() }
+                }
+                Text(s.payoutDesc).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+
+                if showAddMethodForm {
+                    AddPayoutMethodForm { input in
+                        Task { await viewModel.addMethod(input) }
+                        showAddMethodForm = false
                     }
+                }
+
+                if viewModel.methods.isEmpty {
+                    Text(s.payoutEmpty).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                } else {
+                    ForEach(viewModel.methods) { method in
+                        payoutMethodRow(method)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Ligne d'une méthode enregistrée : sélection (retrait), étoile (défaut), corbeille
+    /// (suppression).
+    private func payoutMethodRow(_ method: PayoutMethodData) -> some View {
+        Button { viewModel.selectMethod(id: method.id) } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(method.label?.isEmpty == false ? method.label! : methodTypeLabel(method.method))
+                        .font(DMFont.body).bold()
+                        .foregroundStyle(theme.colors.foreground)
+                    Text(method.subtitle)
+                        .font(DMFont.caption)
+                        .foregroundStyle(theme.colors.mutedForeground)
+                }
+                Spacer()
+                if method.isDefault {
+                    Text("★ \(s.payoutDefault)")
+                        .font(.system(size: 11)).bold()
+                        .foregroundStyle(theme.colors.primary)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(theme.colors.primary.opacity(0.2), in: Capsule())
+                } else {
+                    Button { Task { await viewModel.setDefaultMethod(id: method.id) } } label: {
+                        Text("★").foregroundStyle(theme.colors.mutedForeground)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Button { Task { await viewModel.removeMethod(id: method.id) } } label: {
+                    Image(systemName: "trash").foregroundStyle(theme.colors.destructive)
                 }
                 .buttonStyle(.plain)
             }
+        }
+        .buttonStyle(.plain)
+        .padding(theme.spacing.sm)
+        .background(
+            method.id == viewModel.selectedMethodId ? theme.colors.accent.opacity(0.15) : Color.black.opacity(0.15),
+            in: RoundedRectangle(cornerRadius: theme.radius.md, style: .continuous)
+        )
+    }
+
+    private func methodTypeLabel(_ method: String) -> String {
+        switch method {
+        case "mobile_money": return s.payoutMobileMoney
+        case "paypal": return s.payoutPaypal
+        default: return s.payoutBankTransfer
         }
     }
 
@@ -334,6 +440,82 @@ public struct WithdrawalView: View {
                 let digits = newValue.digitsOnly.take(6)
                 if digits != newValue { text.wrappedValue = digits }
             }
+    }
+}
+
+/// Formulaire d'ajout d'une méthode de paiement — sélecteur de type + champs conditionnels
+/// (parité `AddMethodForm` Android).
+private struct AddPayoutMethodForm: View {
+    @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
+
+    let onSave: (PayoutMethodInput) -> Void
+
+    @State private var method = "mobile_money"
+    @State private var label = ""
+    @State private var mobileOperator = ""
+    @State private var phone = ""
+    @State private var bankName = ""
+    @State private var iban = ""
+    @State private var holder = ""
+    @State private var paypalEmail = ""
+    @State private var isDefault = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.sm) {
+            HStack(spacing: theme.spacing.xs) {
+                ForEach(["mobile_money", "bank", "paypal"], id: \.self) { m in
+                    Button { method = m } label: {
+                        Text(typeLabel(m))
+                            .font(.system(size: 12))
+                            .foregroundStyle(method == m ? Color.white : theme.colors.mutedForeground)
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(method == m ? theme.colors.primary : Color.black.opacity(0.3), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            DMTextField(s.payoutLabelOptional, text: $label)
+
+            switch method {
+            case "mobile_money":
+                DMTextField(s.payoutOperator, text: $mobileOperator)
+                DMTextField(s.payoutPhone, text: $phone, keyboard: .phonePad)
+            case "bank":
+                DMTextField(s.payoutBank, text: $bankName)
+                DMTextField(s.payoutIban, text: $iban, autocapitalization: .characters)
+                DMTextField(s.payoutHolder, text: $holder)
+            default:
+                DMTextField(s.payoutPaypalEmail, text: $paypalEmail, keyboard: .emailAddress, autocapitalization: .never)
+            }
+
+            Toggle(s.payoutSetDefault, isOn: $isDefault)
+                .foregroundStyle(theme.colors.foreground)
+
+            DMButton(s.payoutSave) {
+                onSave(PayoutMethodInput(
+                    method: method,
+                    label: label.trimmed.nilIfBlank,
+                    phoneNumber: method == "mobile_money" ? phone.trimmed.nilIfBlank : nil,
+                    mobileOperator: method == "mobile_money" ? mobileOperator.trimmed.nilIfBlank : nil,
+                    iban: method == "bank" ? iban.trimmed.nilIfBlank : nil,
+                    bankName: method == "bank" ? bankName.trimmed.nilIfBlank : nil,
+                    accountHolder: method == "bank" ? holder.trimmed.nilIfBlank : nil,
+                    paypalEmail: method == "paypal" ? paypalEmail.trimmed.nilIfBlank : nil,
+                    isDefault: isDefault
+                ))
+            }
+        }
+        .padding(theme.spacing.sm)
+        .background(Color.black.opacity(0.15), in: RoundedRectangle(cornerRadius: theme.radius.md, style: .continuous))
+    }
+
+    private func typeLabel(_ method: String) -> String {
+        switch method {
+        case "mobile_money": return s.payoutMobileMoney
+        case "paypal": return s.payoutPaypal
+        default: return s.payoutBankTransfer
+        }
     }
 }
 

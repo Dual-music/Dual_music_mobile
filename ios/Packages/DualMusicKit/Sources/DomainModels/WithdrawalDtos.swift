@@ -63,6 +63,53 @@ public struct PayoutMethodData: Codable, Sendable, Identifiable, Equatable {
     }
 }
 
+/// Corps de `POST /withdrawals/methods` (ajout d'une méthode). Champs `nil` omis à la
+/// sérialisation. `method` ∈ `mobile_money | bank | paypal`.
+public struct PayoutMethodInput: Encodable, Sendable {
+    public let method: String
+    public let label: String?
+    public let phoneNumber: String?
+    public let mobileOperator: String?
+    public let iban: String?
+    public let bankName: String?
+    public let accountHolder: String?
+    public let paypalEmail: String?
+    public let isDefault: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case method, label
+        case phoneNumber = "phone_number"
+        case mobileOperator = "mobile_operator"
+        case iban
+        case bankName = "bank_name"
+        case accountHolder = "account_holder"
+        case paypalEmail = "paypal_email"
+        case isDefault = "is_default"
+    }
+
+    public init(
+        method: String,
+        label: String? = nil,
+        phoneNumber: String? = nil,
+        mobileOperator: String? = nil,
+        iban: String? = nil,
+        bankName: String? = nil,
+        accountHolder: String? = nil,
+        paypalEmail: String? = nil,
+        isDefault: Bool = false
+    ) {
+        self.method = method
+        self.label = label
+        self.phoneNumber = phoneNumber
+        self.mobileOperator = mobileOperator
+        self.iban = iban
+        self.bankName = bankName
+        self.accountHolder = accountHolder
+        self.paypalEmail = paypalEmail
+        self.isDefault = isDefault
+    }
+}
+
 /// Réponse de `GET /withdrawals/pin` — l'utilisateur a-t-il déjà un PIN de retrait.
 public struct PinStatus: Codable, Sendable {
     public let hasPin: Bool

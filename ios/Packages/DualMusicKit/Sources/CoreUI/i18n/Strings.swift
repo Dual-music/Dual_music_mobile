@@ -365,6 +365,24 @@ public struct DMStrings: Sendable {
     public let sponsorStopAd: String
     public let sponsorNoAds: String
     public let sponsorAdBadge: String
+    // Méthodes de paiement (retrait).
+    public let payoutTitle: String
+    public let payoutDesc: String
+    public let payoutAdd: String
+    public let payoutMobileMoney: String
+    public let payoutBankTransfer: String
+    public let payoutPaypal: String
+    public let payoutLabelOptional: String
+    public let payoutOperator: String
+    public let payoutPhone: String
+    public let payoutBank: String
+    public let payoutIban: String
+    public let payoutHolder: String
+    public let payoutPaypalEmail: String
+    public let payoutSetDefault: String
+    public let payoutDefault: String
+    public let payoutSave: String
+    public let payoutEmpty: String
     public let noCandidatesHint: String
     public let timerRunning: String
     public let artistSingular: String
@@ -845,6 +863,23 @@ public extension DMStrings {
         sponsorStopAd: "Arrêter",
         sponsorNoAds: "Aucune pub disponible",
         sponsorAdBadge: "PUBLICITÉ",
+        payoutTitle: "Méthodes de paiement",
+        payoutDesc: "Ajoute et gère tes moyens de recevoir tes retraits.",
+        payoutAdd: "Ajouter",
+        payoutMobileMoney: "Mobile Money",
+        payoutBankTransfer: "Virement bancaire",
+        payoutPaypal: "PayPal",
+        payoutLabelOptional: "Libellé (optionnel)",
+        payoutOperator: "Opérateur",
+        payoutPhone: "Téléphone",
+        payoutBank: "Banque",
+        payoutIban: "IBAN",
+        payoutHolder: "Titulaire du compte",
+        payoutPaypalEmail: "Email PayPal",
+        payoutSetDefault: "Définir par défaut",
+        payoutDefault: "Par défaut",
+        payoutSave: "Enregistrer",
+        payoutEmpty: "Aucune méthode enregistrée.",
         noCandidatesHint: "Le classement s'affichera dès les premières candidatures.",
         timerRunning: "⏱ Minuteur en cours",
         artistSingular: "Artiste",
@@ -1310,6 +1345,23 @@ public extension DMStrings {
         sponsorStopAd: "Stop",
         sponsorNoAds: "No ad available",
         sponsorAdBadge: "ADVERTISEMENT",
+        payoutTitle: "Payout methods",
+        payoutDesc: "Add and manage how you receive your withdrawals.",
+        payoutAdd: "Add",
+        payoutMobileMoney: "Mobile Money",
+        payoutBankTransfer: "Bank transfer",
+        payoutPaypal: "PayPal",
+        payoutLabelOptional: "Label (optional)",
+        payoutOperator: "Operator",
+        payoutPhone: "Phone",
+        payoutBank: "Bank",
+        payoutIban: "IBAN",
+        payoutHolder: "Account holder",
+        payoutPaypalEmail: "PayPal email",
+        payoutSetDefault: "Set as default",
+        payoutDefault: "Default",
+        payoutSave: "Save",
+        payoutEmpty: "No method saved yet.",
         noCandidatesHint: "The ranking will appear once candidacies start.",
         timerRunning: "⏱ Timer running",
         artistSingular: "Artist",
