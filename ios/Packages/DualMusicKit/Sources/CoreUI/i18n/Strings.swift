@@ -632,6 +632,9 @@ public struct DMStrings: Sendable {
     // Suppression d'un concert planifié.
     public let deleteConcertAction: String
     public let deleteConcertConfirm: String
+    // Dates limites sponsor/dédicace à la création d'un concert.
+    public let dedicationDeadlineLabel: String
+    public let sponsorDeadlineLabel: String
 }
 
 // MARK: - Tables de traduction
@@ -1211,7 +1214,9 @@ public extension DMStrings {
         duelDeclined: "Duel refusé",
         duelDateChanged: "Date du duel modifiée 📅",
         deleteConcertAction: "Supprimer",
-        deleteConcertConfirm: "Supprimer ce concert planifié ? Cette action est irréversible."
+        deleteConcertConfirm: "Supprimer ce concert planifié ? Cette action est irréversible.",
+        dedicationDeadlineLabel: "Date de fin des demandes de dédicace",
+        sponsorDeadlineLabel: "Date de fin des demandes de sponsor"
     )
 
     /// Chaînes **anglaises**.
@@ -1787,7 +1792,9 @@ public extension DMStrings {
         duelDeclined: "Duel declined",
         duelDateChanged: "Duel date changed 📅",
         deleteConcertAction: "Delete",
-        deleteConcertConfirm: "Delete this scheduled concert? This action cannot be undone."
+        deleteConcertConfirm: "Delete this scheduled concert? This action cannot be undone.",
+        dedicationDeadlineLabel: "Dedication requests deadline",
+        sponsorDeadlineLabel: "Sponsor requests deadline"
     )
 
     /// Renvoie la table de chaînes d'une langue.

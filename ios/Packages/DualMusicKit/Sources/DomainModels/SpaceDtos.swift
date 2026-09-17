@@ -308,6 +308,10 @@ public struct CreateArtistConcert: Encodable, Sendable {
     public let coverImageUrl: String?
     public let allowsDedications: Bool
     public let allowsSponsorAds: Bool
+    /// Date limite (ISO 8601) des demandes de sponsor — n'a de sens que si ``allowsSponsorAds``.
+    public let sponsorSubmissionDeadline: String?
+    /// Date limite (ISO 8601) des demandes de dédicace — n'a de sens que si ``allowsDedications``.
+    public let dedicationSubmissionDeadline: String?
 
     public init(
         title: String,
@@ -317,7 +321,9 @@ public struct CreateArtistConcert: Encodable, Sendable {
         maxTickets: Int? = nil,
         coverImageUrl: String? = nil,
         allowsDedications: Bool = true,
-        allowsSponsorAds: Bool = true
+        allowsSponsorAds: Bool = true,
+        sponsorSubmissionDeadline: String? = nil,
+        dedicationSubmissionDeadline: String? = nil
     ) {
         self.title = title
         self.description = description
@@ -327,6 +333,8 @@ public struct CreateArtistConcert: Encodable, Sendable {
         self.coverImageUrl = coverImageUrl
         self.allowsDedications = allowsDedications
         self.allowsSponsorAds = allowsSponsorAds
+        self.sponsorSubmissionDeadline = sponsorSubmissionDeadline
+        self.dedicationSubmissionDeadline = dedicationSubmissionDeadline
     }
 }
 

@@ -138,6 +138,8 @@ public final class CreatorViewModel {
     ///   - maxTickets: jauge maximale (optionnelle).
     ///   - allowsDedications: autorise les dédicaces.
     ///   - allowsSponsorAds: autorise les pubs sponsors.
+    ///   - sponsorSubmissionDeadline: date limite des demandes de sponsor (si ``allowsSponsorAds``).
+    ///   - dedicationSubmissionDeadline: date limite des demandes de dédicace (si ``allowsDedications``).
     ///   - onDone: exécuté après création réussie.
     public func createConcert(
         title: String,
@@ -147,6 +149,8 @@ public final class CreatorViewModel {
         maxTickets: Int?,
         allowsDedications: Bool,
         allowsSponsorAds: Bool,
+        sponsorSubmissionDeadline: String,
+        dedicationSubmissionDeadline: String,
         onDone: @escaping () -> Void
     ) async {
         let s = AppStrings.current
@@ -169,7 +173,9 @@ public final class CreatorViewModel {
                         maxTickets: maxTickets,
                         coverImageUrl: coverURL,
                         allowsDedications: allowsDedications,
-                        allowsSponsorAds: allowsSponsorAds
+                        allowsSponsorAds: allowsSponsorAds,
+                        sponsorSubmissionDeadline: (allowsSponsorAds ? sponsorSubmissionDeadline.trimmed.nilIfBlank : nil).map(Self.normalizeISODate),
+                        dedicationSubmissionDeadline: (allowsDedications ? dedicationSubmissionDeadline.trimmed.nilIfBlank : nil).map(Self.normalizeISODate)
                     )
                 )
             )
@@ -399,6 +405,8 @@ private struct CreateConcertForm: View {
     @State private var maxTickets = ""
     @State private var dedications = true
     @State private var sponsorAds = true
+    @State private var dedicationDeadline = ""
+    @State private var sponsorDeadline = ""
     @State private var pickedItem: PhotosPickerItem?
 
     var body: some View {
@@ -418,7 +426,23 @@ private struct CreateConcertForm: View {
                 DMCard {
                     VStack(spacing: theme.spacing.sm) {
                         DMToggleRow(s.allowDedications, isOn: $dedications)
+                        if dedications {
+                            DMTextField(
+                                s.dedicationDeadlineLabel,
+                                text: $dedicationDeadline,
+                                placeholder: "2026-08-01T20:00",
+                                autocapitalization: .never
+                            )
+                        }
                         DMToggleRow(s.allowSponsorAds, isOn: $sponsorAds)
+                        if sponsorAds {
+                            DMTextField(
+                                s.sponsorDeadlineLabel,
+                                text: $sponsorDeadline,
+                                placeholder: "2026-08-01T20:00",
+                                autocapitalization: .never
+                            )
+                        }
                     }
                 }
 
@@ -453,6 +477,8 @@ private struct CreateConcertForm: View {
                             maxTickets: Int(maxTickets.digitsOnly),
                             allowsDedications: dedications,
                             allowsSponsorAds: sponsorAds,
+                            sponsorSubmissionDeadline: sponsorDeadline,
+                            dedicationSubmissionDeadline: dedicationDeadline,
                             onDone: onCreated
                         )
                     }
