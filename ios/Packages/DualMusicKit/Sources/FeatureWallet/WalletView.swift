@@ -17,6 +17,7 @@ public final class WalletViewModel {
     public private(set) var purchases: [CreditPurchase] = []
     public private(set) var spending: [SpendItem] = []
     public private(set) var revenues: [RevenueEvent] = []
+    public private(set) var withdrawals: [WithdrawalRequest] = []
     public private(set) var isLoading = false
     public private(set) var errorMessage: String?
 
@@ -40,6 +41,7 @@ public final class WalletViewModel {
             purchases = (try? await repository.purchases()) ?? []
             spending = (try? await repository.spending()) ?? []
             revenues = (try? await repository.revenues()) ?? []
+            withdrawals = (try? await repository.withdrawals()) ?? []
         } catch {
             errorMessage = Self.friendlyMessage(error)
         }
@@ -113,9 +115,12 @@ public struct WalletView: View {
         .refreshable { await viewModel.load() }
     }
 
-    /// Onglets affichés : « Revenus » n'apparaît que pour ceux qui peuvent en générer.
+    /// Onglets affichés : « Revenus »/« Retraits » n'apparaissent que pour ceux qui peuvent
+    /// en générer.
     private var tabTitles: [String] {
-        canEarn ? [s.creditPurchases, s.walletExpenses, s.walletIncome] : [s.creditPurchases, s.walletExpenses]
+        canEarn
+            ? [s.creditPurchases, s.walletExpenses, s.walletIncome, s.walletWithdrawals]
+            : [s.creditPurchases, s.walletExpenses]
     }
 
     @ViewBuilder
@@ -133,8 +138,16 @@ public struct WalletView: View {
                     ForEach(viewModel.purchases) { PurchaseRow(item: $0) }
                 case 1:
                     ForEach(viewModel.spending) { SpendRow(item: $0) }
-                default:
+                case 2:
                     ForEach(viewModel.revenues) { RevenueRow(item: $0) }
+                default:
+                    if viewModel.withdrawals.isEmpty {
+                        Text(s.noWithdrawals)
+                            .font(DMFont.caption)
+                            .foregroundStyle(theme.colors.mutedForeground)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    ForEach(viewModel.withdrawals) { WalletWithdrawalRow(item: $0) }
                 }
             }
         }
@@ -211,6 +224,42 @@ private struct RevenueRow: View {
                     .font(DMFont.mono)
                     .foregroundStyle(theme.colors.primary)
             }
+        }
+    }
+}
+
+/// Ligne d'historique d'un retrait : montant, méthode, date, statut.
+private struct WalletWithdrawalRow: View {
+    @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
+    let item: WithdrawalRequest
+
+    var body: some View {
+        DMCard {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.paymentMethod ?? "Mobile Money")
+                        .foregroundStyle(theme.colors.foreground)
+                    Text([isoDay(item.createdAt), statusLabel].compactMap { $0 }.joined(separator: " · "))
+                        .font(DMFont.caption)
+                        .foregroundStyle(theme.colors.mutedForeground)
+                }
+                Spacer()
+                Text("-\(formatAmount(item.amount))")
+                    .font(DMFont.mono)
+                    .foregroundStyle(theme.colors.destructive)
+            }
+        }
+    }
+
+    private var statusLabel: String {
+        switch item.status {
+        case .pending: return s.statusPending
+        case .approved: return s.statusApproved
+        case .processing: return s.statusProcessing
+        case .completed: return s.statusPaid
+        case .rejected: return s.statusRejected
+        case .failed: return s.statusFailed
         }
     }
 }

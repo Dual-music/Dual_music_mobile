@@ -27,9 +27,9 @@ Règle : chaque étape = lire le code Android réel → implémenter iOS → com
 
 ## 3. Wallet (critique)
 
-- [ ] **3.1 Mobile Money (CinetPay) multi-pays/opérateurs** — `android/feature/wallet/.../RechargeScreen.kt` (`CountrySelector`, `OperatorSelector`, `pay()`). iOS = StoreKit 5 paliers fixes (contrainte Apple 3.1.1 — à trancher avec l'utilisateur avant implémentation : IAP obligatoire pour du contenu numérique consommé dans l'app).
-- [ ] **3.2 Paiement carte montant libre (Stripe Checkout)** — `payWithStripe()` + préréglages 5/10/20/50/100. Même contrainte Apple que 3.1.
-- [ ] **3.3 Historique des retraits dans l'écran Wallet** — `WalletScreen.kt` (`WithdrawalRow`, 4ᵉ onglet). Absent d'iOS.
+- [x] **3.1 Mobile Money (CinetPay) multi-pays/opérateurs** — `android/feature/wallet/.../RechargeScreen.kt` (`CountrySelector`, `OperatorSelector`, `pay()`). **Décision utilisateur (2026-09-17) : ne pas implémenter.** StoreKit (5 paliers fixes) reste l'unique voie de recharge sur iOS, contrainte Apple 3.1.1 (IAP obligatoire pour du contenu numérique consommé dans l'app) — écart assumé et définitif.
+- [x] **3.2 Paiement carte montant libre (Stripe Checkout)** — `payWithStripe()` + préréglages 5/10/20/50/100. Même décision/contrainte que 3.1 — ne pas implémenter.
+- [ ] **3.3 Historique des retraits dans l'écran Wallet** — `WalletScreen.kt` (`WithdrawalRow`, 4ᵉ onglet). Fait (à confirmer CI) : `WalletRepository.withdrawals()` + 4ᵉ onglet dans `WalletView`.
 
 ## 4. Live (critique)
 

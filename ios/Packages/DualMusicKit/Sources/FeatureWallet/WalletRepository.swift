@@ -52,6 +52,11 @@ public struct WalletRepository: Sendable {
         try await http.request(.get(PaymentEndpoints.history), as: [CreditPurchase].self)
     }
 
+    /// Historique des demandes de retrait du caller — `GET /withdrawals/me`.
+    public func withdrawals() async throws -> [WithdrawalRequest] {
+        try await http.request(.get(WithdrawalEndpoints.mine), as: [WithdrawalRequest].self)
+    }
+
     /// Vote payant pour un artiste dans un duel (débit atomique côté serveur).
     ///
     /// - Parameters:

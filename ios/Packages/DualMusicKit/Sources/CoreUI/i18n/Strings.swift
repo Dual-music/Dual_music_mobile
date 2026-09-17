@@ -426,6 +426,8 @@ public struct DMStrings: Sendable {
     public let pinCurrent: String
     public let pinNew: String
     public let pinChangeBtn: String
+    public let walletWithdrawals: String
+    public let noWithdrawals: String
     public let noCandidatesHint: String
     public let timerRunning: String
     public let artistSingular: String
@@ -964,6 +966,8 @@ public extension DMStrings {
         pinCurrent: "PIN actuel",
         pinNew: "Nouveau PIN",
         pinChangeBtn: "Changer",
+        walletWithdrawals: "Retraits",
+        noWithdrawals: "Aucun retrait pour le moment.",
         noCandidatesHint: "Le classement s'affichera dès les premières candidatures.",
         timerRunning: "⏱ Minuteur en cours",
         artistSingular: "Artiste",
@@ -1487,6 +1491,8 @@ public extension DMStrings {
         pinCurrent: "Current PIN",
         pinNew: "New PIN",
         pinChangeBtn: "Change",
+        walletWithdrawals: "Withdrawals",
+        noWithdrawals: "No withdrawal yet.",
         noCandidatesHint: "The ranking will appear once candidacies start.",
         timerRunning: "⏱ Timer running",
         artistSingular: "Artist",
