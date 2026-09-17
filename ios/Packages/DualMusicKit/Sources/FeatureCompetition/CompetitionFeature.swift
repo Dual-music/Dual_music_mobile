@@ -602,6 +602,8 @@ public final class CompetitionRoomViewModel {
 
     /// Pilotage de l'enregistrement (LiveKit Egress) de cette compétition — bouton manager.
     public let recordingCtl: RecordingHolder
+    /// Diffusion de pub sponsor pendant cette compétition — déclenchée par le manager.
+    public let sponsorAd: SponsorAdHolder
 
     private let competitionId: String
     private let callerId: String?
@@ -619,6 +621,7 @@ public final class CompetitionRoomViewModel {
     ///   - repository: lectures + débits.
     ///   - realtime: client Socket.IO (écoute des changements de statut + chat).
     ///   - recording: accès REST du pilotage d'enregistrement (LiveKit Egress).
+    ///   - sponsorAds: accès REST de la diffusion de pub sponsor.
     ///   - callerId: id du caller — détermine ``isManager``/``canPublish`` une fois la
     ///     compétition chargée.
     public init(
@@ -629,6 +632,7 @@ public final class CompetitionRoomViewModel {
         wallet: WalletRepository,
         giftShop: GiftShopRepository,
         recording: RecordingRepository,
+        sponsorAds: SponsorAdRepository,
         callerId: String? = nil
     ) {
         self.competitionId = competitionId
@@ -638,6 +642,7 @@ public final class CompetitionRoomViewModel {
         self.wallet = wallet
         self.giftShop = giftShop
         self.recordingCtl = RecordingHolder(sourceType: "competition", sourceId: competitionId, repo: recording)
+        self.sponsorAd = SponsorAdHolder(eventType: "competition", eventId: competitionId, repo: sponsorAds)
         self.callerId = callerId
     }
 
@@ -795,6 +800,10 @@ public final class CompetitionRoomViewModel {
         // Modération : un modérateur a été désigné/révoqué par le manager → recharge pour tous.
         subscriptions.append(live.onEvent(Realtime.Event.moderatorAppointed, as: EventModeratorPayload.self) { [weak self] _ in
             Task { await self?.loadModerators() }
+        })
+        // Pub sponsor (start/stop) diffusée à toute la room.
+        subscriptions.append(live.onEvent(Realtime.Event.sponsorAd, as: SponsorAdPayload.self) { [weak self] payload in
+            self?.sponsorAd.onEvent(payload)
         })
         subscriptions.append(live.onEvent(Realtime.Event.moderatorRevoked, as: EventModeratorPayload.self) { [weak self] _ in
             Task { await self?.loadModerators() }
@@ -1241,6 +1250,7 @@ public struct CompetitionRoomView: View {
     @State private var showReactionBar = false
     @State private var showCancelRecordingConfirm = false
     @State private var recordingErrorMessage: String?
+    @State private var showSponsorAdPicker = false
     @State private var localFocus: String?
 
     /// - Parameters:
@@ -1376,6 +1386,20 @@ public struct CompetitionRoomView: View {
         }
         .overlay {
             if viewModel.iAmBanned { bannedGate }
+        }
+        // Pub sponsor : overlay vidéo plein écran pour tous quand une pub est active — le
+        // déclencheur est dans la feuille de réglages (voir `settingsSheet`), pas un bouton ici.
+        .overlay {
+            SponsorAdLayer(
+                activeAd: viewModel.sponsorAd.activeAd,
+                canTrigger: viewModel.isManager,
+                ads: viewModel.sponsorAd.ads,
+                busy: viewModel.sponsorAd.busy,
+                onLoadAds: { viewModel.sponsorAd.loadAds() },
+                onPlay: { viewModel.sponsorAd.play(adVideoId: $0) },
+                onStop: { viewModel.sponsorAd.stop() },
+                showTriggerButton: false
+            )
         }
         // Gate d'accès programmé (parité web `ScheduledAccessGate`) : rendu en dernier →
         // toujours au-dessus (même de la barrière de bannissement).
@@ -1828,6 +1852,17 @@ public struct CompetitionRoomView: View {
             if let recordingErrorMessage {
                 Text(recordingErrorMessage).font(DMFont.caption).foregroundStyle(theme.colors.destructive)
             }
+
+            Divider()
+            Text("📢 \(s.sponsorStartAd)").font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+            if viewModel.sponsorAd.activeAd != nil {
+                DMButton(s.sponsorStopAd, style: .destructive, isEnabled: !viewModel.sponsorAd.busy) { viewModel.sponsorAd.stop() }
+            } else {
+                DMButton(s.sponsorStartAd, style: .secondary, isEnabled: !viewModel.sponsorAd.busy) {
+                    viewModel.sponsorAd.loadAds()
+                    showSponsorAdPicker = true
+                }
+            }
         }
         .padding(theme.spacing.lg)
         .presentationDetents([.medium, .large])
@@ -1836,6 +1871,15 @@ public struct CompetitionRoomView: View {
             Button(s.cancel, role: .destructive) {
                 viewModel.recordingCtl.cancel(onError: { recordingErrorMessage = $0 })
                 showCancelRecordingConfirm = false
+            }
+        }
+        .confirmationDialog(s.sponsorStartAd, isPresented: $showSponsorAdPicker, titleVisibility: .visible) {
+            if viewModel.sponsorAd.ads.isEmpty {
+                Button(s.sponsorNoAds) {}.disabled(true)
+            } else {
+                ForEach(viewModel.sponsorAd.ads) { ad in
+                    Button("\(ad.title) · \(ad.durationSeconds)s") { viewModel.sponsorAd.play(adVideoId: ad.id) }
+                }
             }
         }
     }
