@@ -110,7 +110,7 @@ let package = Package(
         .target(name: "FeatureLeaderboard", dependencies: ["CoreNetwork", "CoreUI", "DomainModels"]),
         .target(name: "FeatureReferral", dependencies: ["CoreNetwork", "CoreUI", "DomainModels"]),
         .target(name: "FeatureSubscription", dependencies: ["CoreNetwork", "CoreUI", "DomainModels"]),
-        .target(name: "FeatureContent", dependencies: ["CoreNetwork", "CoreUI", "DomainModels"]),
+        .target(name: "FeatureContent", dependencies: ["CoreNetwork", "CoreUI", "CoreUpload", "DomainModels", "FeatureReplay", "FeatureProfile"]),
         .target(name: "FeatureArtists", dependencies: ["CoreNetwork", "CoreUI", "DomainModels"]),
         .target(name: "FeatureSponsor", dependencies: ["CoreNetwork", "CoreUI", "CoreUpload", "DomainModels"]),
         .target(name: "FeatureCreator", dependencies: ["CoreNetwork", "CoreUI", "CoreUpload", "DomainModels"]),

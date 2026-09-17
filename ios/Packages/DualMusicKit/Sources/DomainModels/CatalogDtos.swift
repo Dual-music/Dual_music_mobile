@@ -383,9 +383,14 @@ public struct ReplayVideo: Codable, Sendable, Identifiable, Equatable {
     public let replayPrice: Double
     /// Vrai si l'accès requiert un déblocage payant.
     public let isPremium: Bool
+    /// Vrai si visible sur la page publique des replays (réglable par le propriétaire).
+    public let isPublic: Bool
     public let duration: Int?
     public let viewsCount: Int
     public let sourceType: String?
+    public let artistId: String?
+    /// Créateur du replay (peut différer de ``artistId`` — ex. un manager de duel/compétition).
+    public let createdBy: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title, description, duration
@@ -393,8 +398,11 @@ public struct ReplayVideo: Codable, Sendable, Identifiable, Equatable {
         case videoURL = "video_url"
         case replayPrice = "replay_price"
         case isPremium = "is_premium"
+        case isPublic = "is_public"
         case viewsCount = "views_count"
         case sourceType = "source_type"
+        case artistId = "artist_id"
+        case createdBy = "created_by"
     }
 
     public init(from decoder: Decoder) throws {
@@ -406,9 +414,12 @@ public struct ReplayVideo: Codable, Sendable, Identifiable, Equatable {
         videoURL = c.opt(String.self, .videoURL)
         replayPrice = c.amount(.replayPrice)
         isPremium = c.bool(.isPremium)
+        isPublic = c.val(Bool.self, .isPublic, true)
         duration = c.opt(Int.self, .duration)
         viewsCount = c.int(.viewsCount)
         sourceType = c.opt(String.self, .sourceType)
+        artistId = c.opt(String.self, .artistId)
+        createdBy = c.opt(String.self, .createdBy)
     }
 
     /// Vrai si un déblocage payant est nécessaire (premium **et** prix > 0).

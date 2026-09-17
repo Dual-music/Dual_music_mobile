@@ -601,6 +601,17 @@ public struct DMStrings: Sendable {
     public let iAcceptThe: String
     public let termsOfUse: String
     public let privacyPolicy: String
+    // Espace « Mon contenu » créateur (publier une vidéo lifestyle + gérer ses replays).
+    public let menuContent: String
+    public let publishLifestyle: String
+    public let chooseVideo: String
+    public let publishVideo: String
+    public let videoReady: String
+    public let myVideos: String
+    public let myReplays: String
+    public let noMyVideos: String
+    public let noMyReplays: String
+    public let videoPublished: String
 }
 
 // MARK: - Tables de traduction
@@ -1152,7 +1163,17 @@ public extension DMStrings {
         notifRequired: "Requis",
         iAcceptThe: "J'accepte les",
         termsOfUse: "Conditions d'utilisation",
-        privacyPolicy: "Politique de confidentialité"
+        privacyPolicy: "Politique de confidentialité",
+        menuContent: "Lifestyle",
+        publishLifestyle: "Publier du contenu Lifestyle",
+        chooseVideo: "Choisir la vidéo",
+        publishVideo: "Publier la vidéo",
+        videoReady: "Vidéo prête à publier ✓",
+        myVideos: "Mes vidéos",
+        myReplays: "Mes replays",
+        noMyVideos: "Aucune vidéo publiée",
+        noMyReplays: "Aucun replay",
+        videoPublished: "✅ Vidéo publiée."
     )
 
     /// Chaînes **anglaises**.
@@ -1700,7 +1721,17 @@ public extension DMStrings {
         notifRequired: "Required",
         iAcceptThe: "I accept the",
         termsOfUse: "Terms of Use",
-        privacyPolicy: "Privacy Policy"
+        privacyPolicy: "Privacy Policy",
+        menuContent: "Lifestyle",
+        publishLifestyle: "Publish Lifestyle content",
+        chooseVideo: "Choose video",
+        publishVideo: "Publish video",
+        videoReady: "Video ready to publish ✓",
+        myVideos: "My videos",
+        myReplays: "My replays",
+        noMyVideos: "No published video",
+        noMyReplays: "No replay",
+        videoPublished: "✅ Video published."
     )
 
     /// Renvoie la table de chaînes d'une langue.

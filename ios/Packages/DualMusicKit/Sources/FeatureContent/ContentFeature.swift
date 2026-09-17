@@ -47,6 +47,16 @@ public struct ContentRepository: Sendable {
     public func registerVideoView(videoId: String) async {
         try? await http.send(.post(ContentEndpoints.lifestyleViews(videoId)))
     }
+
+    /// Vidéos lifestyle publiées par un artiste précis (espace créateur).
+    public func myLifestyle(artistId: String) async throws -> [LifestyleVideo] {
+        try await http.request(.get(ContentEndpoints.lifestyle, query: ["artistId": artistId]), as: [LifestyleVideo].self)
+    }
+
+    /// Publie une nouvelle vidéo lifestyle (URL déjà uploadée).
+    public func publish(_ request: CreateLifestyleRequest) async throws {
+        try await http.send(.post(ContentEndpoints.lifestyle, body: request))
+    }
 }
 
 /// ViewModel du contenu : vidéos lifestyle + articles de blog.

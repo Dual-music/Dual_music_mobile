@@ -418,6 +418,41 @@ public struct LifestyleVideo: Codable, Sendable, Identifiable, Equatable {
     }
 }
 
+/// Corps de `POST /lifestyle` — publication d'une vidéo lifestyle (**camelCase**, contrairement
+/// aux autres DTOs de requête — validation stricte côté backend). `duration` est une chaîne
+/// libre préformatée (ex. `1:23`), requise côté backend.
+public struct CreateLifestyleRequest: Encodable, Sendable {
+    public let artistName: String
+    public let title: String
+    public let videoURL: String
+    public let thumbnailURL: String?
+    public let description: String?
+    public let duration: String
+
+    enum CodingKeys: String, CodingKey {
+        case artistName, title
+        case videoURL = "videoUrl"
+        case thumbnailURL = "thumbnailUrl"
+        case description, duration
+    }
+
+    public init(
+        artistName: String,
+        title: String,
+        videoURL: String,
+        thumbnailURL: String? = nil,
+        description: String? = nil,
+        duration: String
+    ) {
+        self.artistName = artistName
+        self.title = title
+        self.videoURL = videoURL
+        self.thumbnailURL = thumbnailURL
+        self.description = description
+        self.duration = duration
+    }
+}
+
 /// Article de blog (`blogs`).
 public struct BlogPost: Codable, Sendable, Identifiable, Equatable {
     public let id: String

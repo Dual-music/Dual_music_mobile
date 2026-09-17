@@ -102,6 +102,7 @@ public final class AppContainer {
     @ObservationIgnored private var cachedReferral: ReferralViewModel?
     @ObservationIgnored private var cachedSubscription: SubscriptionViewModel?
     @ObservationIgnored private var cachedContent: ContentViewModel?
+    @ObservationIgnored private var cachedMyContent: MyContentViewModel?
     @ObservationIgnored private var cachedArtists: ArtistsViewModel?
     @ObservationIgnored private var cachedSponsor: SponsorViewModel?
     @ObservationIgnored private var cachedCreator: CreatorViewModel?
@@ -289,6 +290,18 @@ public final class AppContainer {
         if let cachedContent { return cachedContent }
         let viewModel = ContentViewModel(repository: contentRepository)
         cachedContent = viewModel
+        return viewModel
+    }
+
+    var myContent: MyContentViewModel {
+        if let cachedMyContent { return cachedMyContent }
+        let viewModel = MyContentViewModel(
+            contentRepository: contentRepository,
+            replayRepository: replayRepository,
+            profileRepository: profileRepository,
+            uploader: mediaUploader
+        )
+        cachedMyContent = viewModel
         return viewModel
     }
 
@@ -554,6 +567,7 @@ public final class AppContainer {
         cachedReferral = nil
         cachedSubscription = nil
         cachedContent = nil
+        cachedMyContent = nil
         cachedArtists = nil
         cachedSponsor = nil
         cachedCreator = nil

@@ -51,6 +51,60 @@ public struct ReplayRepository: Sendable {
             return false
         }
     }
+
+    /// Mes replays (`mine=true`) : couvre à la fois ceux où je suis l'ARTISTE (`artist_id`) et
+    /// ceux dont je suis le CRÉATEUR (`created_by`, ex. un manager de duel/compétition) —
+    /// `artistId` seul ne renverrait jamais les replays gérés par un manager. Parité web
+    /// (`MyReplays.tsx`).
+    public func myReplays() async throws -> [ReplayVideo] {
+        try await http.request(.get(ReplayEndpoints.list, query: ["mine": "true"]), as: [ReplayVideo].self)
+    }
+
+    /// Réglages (prix, publication) d'un replay — propriétaire uniquement.
+    /// - Returns: `true` si la mise à jour a réussi.
+    public func updateSettings(id: String, replayPrice: Double, isPublic: Bool) async -> Bool {
+        do {
+            try await http.send(
+                .patch(
+                    ReplayEndpoints.detail(id),
+                    body: UpdateReplaySettingsBody(replayPrice: replayPrice, isPublic: isPublic, isPremium: replayPrice > 0)
+                )
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Remplace le fichier vidéo d'un replay (déjà uploadé, catégorie `replay`).
+    /// - Returns: `true` si le remplacement a réussi.
+    public func replaceVideo(id: String, videoURL: String) async -> Bool {
+        do {
+            try await http.send(.patch(ReplayEndpoints.detail(id), body: ReplaceReplayVideoBody(videoURL: videoURL)))
+            return true
+        } catch {
+            return false
+        }
+    }
+}
+
+/// Corps de `PATCH /replays/:id` — réglages (prix, publication).
+private struct UpdateReplaySettingsBody: Encodable {
+    let replayPrice: Double
+    let isPublic: Bool
+    let isPremium: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case replayPrice = "replay_price"
+        case isPublic = "is_public"
+        case isPremium = "is_premium"
+    }
+}
+
+/// Corps de `PATCH /replays/:id` — remplacement du fichier vidéo.
+private struct ReplaceReplayVideoBody: Encodable {
+    let videoURL: String
+    enum CodingKeys: String, CodingKey { case videoURL = "video_url" }
 }
 
 /// ViewModel du catalogue de replays.

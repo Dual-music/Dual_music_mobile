@@ -3,6 +3,7 @@ import CoreUI
 import DomainModels
 import FeatureArtists
 import FeatureCompetition
+import FeatureContent
 import FeatureCreator
 import FeatureDuel
 import FeatureGiftShop
@@ -30,6 +31,7 @@ enum ProfileRoute: Hashable {
     case notifications
     case withdrawal
     case publicProfile
+    case myContent
     case replays
     case giftShop
     case referral
@@ -150,6 +152,15 @@ struct ProfileSectionView: View {
                     isArtist: container.profile.isArtist,
                     onSaved: { route = .menu }
                 )
+            }
+
+        case .myContent:
+            // Espace « Mon contenu » créateur (publier une vidéo lifestyle + gérer ses
+            // replays). Simplification assumée : même écran/route pour artiste ET manager
+            // (comme Android, `isArtist` masque juste la partie lifestyle), avec un unique
+            // libellé de menu (« Lifestyle ») — Android affiche « Replays » pour le manager.
+            SubScreen(title: s.menuContent, onBack: { route = .menu }) {
+                MyContentView(viewModel: container.myContent, isArtist: container.profile.isArtist)
             }
 
         case .replays:
@@ -298,6 +309,7 @@ struct ProfileMenuView: View {
                     }
                     row("mic.fill", s.menuArtistProfile) { onNavigate(.publicProfile) }
                     row("star.fill", s.menuCreatorSpace) { onNavigate(.creator) }
+                    row("film.fill", s.menuContent) { onNavigate(.myContent) }
                     row("wallet.pass.fill", s.managerSpace) { onNavigate(.withdrawal) }
                     row("play.rectangle.fill", s.menuReplays) { onNavigate(.replays) }
                     row("giftcard.fill", s.menuGiftShop) { onNavigate(.giftShop) }
