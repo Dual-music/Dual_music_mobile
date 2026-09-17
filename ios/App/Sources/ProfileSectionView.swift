@@ -29,6 +29,7 @@ enum ProfileRoute: Hashable {
     case recharge
     case notifications
     case withdrawal
+    case publicProfile
     case replays
     case giftShop
     case referral
@@ -137,6 +138,15 @@ struct ProfileSectionView: View {
         case .withdrawal:
             SubScreen(title: s.managerSpace, onBack: { route = .menu }) {
                 ManagerSpaceView(revenueViewModel: container.revenue, withdrawalViewModel: container.withdrawal)
+            }
+
+        case .publicProfile:
+            SubScreen(title: s.publicProfile, onBack: { route = .menu }) {
+                PublicProfileEditView(
+                    viewModel: container.publicProfileEdit,
+                    isArtist: container.profile.isArtist,
+                    onSaved: { route = .menu }
+                )
             }
 
         case .replays:
@@ -283,6 +293,7 @@ struct ProfileMenuView: View {
                     if isManager {
                         row("trophy.fill", s.managedCompetitions) { onNavigate(.managerCompetitions) }
                     }
+                    row("mic.fill", s.menuArtistProfile) { onNavigate(.publicProfile) }
                     row("star.fill", s.menuCreatorSpace) { onNavigate(.creator) }
                     row("wallet.pass.fill", s.managerSpace) { onNavigate(.withdrawal) }
                     row("play.rectangle.fill", s.menuReplays) { onNavigate(.replays) }

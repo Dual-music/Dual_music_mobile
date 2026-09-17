@@ -579,6 +579,14 @@ public struct DMStrings: Sendable {
     // Profil public d'un artiste (consulté depuis un direct/duel/concert/compétition).
     public let socialLinksLabel: String
     public let errArtistProfileLoadFailed: String
+    // Édition du profil public créateur (artiste/manager).
+    public let socialLinksHeader: String
+    public let socialLinksHint: String
+    public let coverImage: String
+    public let stageName: String
+    public let makeProfilePublic: String
+    public let publicProfile: String
+    public let menuArtistProfile: String
 }
 
 // MARK: - Tables de traduction
@@ -1111,7 +1119,14 @@ public extension DMStrings {
         filterNeon: "Néon",
         filterDream: "Rêve",
         socialLinksLabel: "Réseaux",
-        errArtistProfileLoadFailed: "Impossible de charger le profil."
+        errArtistProfileLoadFailed: "Impossible de charger le profil.",
+        socialLinksHeader: "Liens sociaux",
+        socialLinksHint: "Ajoutez les URL complètes de vos réseaux (https://…)",
+        coverImage: "Image de couverture",
+        stageName: "Nom de scène",
+        makeProfilePublic: "Profil visible publiquement",
+        publicProfile: "Profil public",
+        menuArtistProfile: "Profil"
     )
 
     /// Chaînes **anglaises**.
@@ -1640,7 +1655,14 @@ public extension DMStrings {
         filterNeon: "Neon",
         filterDream: "Dream",
         socialLinksLabel: "Social",
-        errArtistProfileLoadFailed: "Could not load the profile."
+        errArtistProfileLoadFailed: "Could not load the profile.",
+        socialLinksHeader: "Social links",
+        socialLinksHint: "Add the full URLs of your networks (https://…)",
+        coverImage: "Cover image",
+        stageName: "Stage name",
+        makeProfilePublic: "Publicly visible profile",
+        publicProfile: "Public profile",
+        menuArtistProfile: "Profile"
     )
 
     /// Renvoie la table de chaînes d'une langue.

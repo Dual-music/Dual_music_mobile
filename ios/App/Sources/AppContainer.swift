@@ -90,6 +90,7 @@ public final class AppContainer {
     @ObservationIgnored private var cachedRecharge: RechargeViewModel?
     @ObservationIgnored private var cachedProfile: ProfileViewModel?
     @ObservationIgnored private var cachedEditProfile: EditProfileViewModel?
+    @ObservationIgnored private var cachedPublicProfileEdit: PublicProfileViewModel?
     @ObservationIgnored private var cachedBecomeRole: BecomeRoleViewModel?
     @ObservationIgnored private var cachedNotifications: NotificationsViewModel?
     @ObservationIgnored private var cachedWithdrawal: WithdrawalViewModel?
@@ -197,6 +198,13 @@ public final class AppContainer {
         if let cachedEditProfile { return cachedEditProfile }
         let viewModel = EditProfileViewModel(repository: profileRepository, uploader: mediaUploader)
         cachedEditProfile = viewModel
+        return viewModel
+    }
+
+    var publicProfileEdit: PublicProfileViewModel {
+        if let cachedPublicProfileEdit { return cachedPublicProfileEdit }
+        let viewModel = PublicProfileViewModel(repository: profileRepository, uploader: mediaUploader)
+        cachedPublicProfileEdit = viewModel
         return viewModel
     }
 
@@ -526,6 +534,7 @@ public final class AppContainer {
         cachedRecharge = nil
         cachedProfile = nil
         cachedEditProfile = nil
+        cachedPublicProfileEdit = nil
         cachedBecomeRole = nil
         cachedNotifications = nil
         cachedWithdrawal = nil
