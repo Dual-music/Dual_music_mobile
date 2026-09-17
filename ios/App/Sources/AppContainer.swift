@@ -400,7 +400,8 @@ public final class AppContainer {
             callerId: profile.me?.user.id,
             wallet: walletRepository,
             giftShop: giftShopRepository,
-            recording: recordingRepository
+            recording: recordingRepository,
+            sponsorAds: sponsorAdRepository
         )
         concertRooms[concert.id] = viewModel
         return viewModel

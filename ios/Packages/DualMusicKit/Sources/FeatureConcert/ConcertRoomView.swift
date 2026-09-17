@@ -103,6 +103,8 @@ public final class ConcertRoomViewModel {
     public let isHost: Bool
     /// Pilotage de l'enregistrement (LiveKit Egress) de ce concert — bouton hôte uniquement.
     public let recordingCtl: RecordingHolder
+    /// Diffusion de pub sponsor pendant ce concert — déclenchée par l'hôte.
+    public let sponsorAd: SponsorAdHolder
     /// Vrai tant qu'un billet payant est requis et non possédé — bloque l'accès à la vidéo
     /// (jamais vrai pour l'artiste, ni pour un concert gratuit).
     public private(set) var needsTicket = false
@@ -191,6 +193,7 @@ public final class ConcertRoomViewModel {
     ///   - wallet: achat de cadeaux (boutique).
     ///   - giftShop: catalogue + inventaire des cadeaux.
     ///   - recording: accès REST du pilotage d'enregistrement (LiveKit Egress).
+    ///   - sponsorAds: accès REST de la diffusion de pub sponsor.
     public init(
         concertId: String,
         roomName: String,
@@ -206,7 +209,8 @@ public final class ConcertRoomViewModel {
         callerId: String? = nil,
         wallet: WalletRepository,
         giftShop: GiftShopRepository,
-        recording: RecordingRepository
+        recording: RecordingRepository,
+        sponsorAds: SponsorAdRepository
     ) {
         self.concertId = concertId
         self.roomName = roomName
@@ -223,6 +227,7 @@ public final class ConcertRoomViewModel {
         self.wallet = wallet
         self.giftShop = giftShop
         self.recordingCtl = RecordingHolder(sourceType: "concert", sourceId: concertId, repo: recording)
+        self.sponsorAd = SponsorAdHolder(eventType: "concert", eventId: concertId, repo: sponsorAds)
     }
 
     /// Démarre : billetterie, vidéo (si accès autorisé), historique de chat, rooms temps réel.
@@ -592,6 +597,10 @@ public final class ConcertRoomViewModel {
         subscriptions.append(live.onEvent(Realtime.Event.moderatorAppointed, as: EventModeratorPayload.self) { [weak self] _ in
             Task { await self?.loadModerators() }
         })
+        // Pub sponsor (start/stop) diffusée à toute la room.
+        subscriptions.append(live.onEvent(Realtime.Event.sponsorAd, as: SponsorAdPayload.self) { [weak self] payload in
+            self?.sponsorAd.onEvent(payload)
+        })
         subscriptions.append(live.onEvent(Realtime.Event.moderatorRevoked, as: EventModeratorPayload.self) { [weak self] _ in
             Task { await self?.loadModerators() }
         })
@@ -654,6 +663,7 @@ public struct ConcertRoomView: View {
     @State private var showRecordingSheet = false
     @State private var showCancelRecordingConfirm = false
     @State private var recordingErrorMessage: String?
+    @State private var showSponsorAdPicker = false
 
     /// - Parameters:
     ///   - viewModel: état + actions du concert.
@@ -720,6 +730,19 @@ public struct ConcertRoomView: View {
 
             if viewModel.needsTicket { ticketPaywall }
 
+            // Pub sponsor : overlay vidéo plein écran pour tous quand une pub est active — le
+            // déclencheur est l'icône du rail (voir `hostControls`), pas le bouton intégré.
+            SponsorAdLayer(
+                activeAd: viewModel.sponsorAd.activeAd,
+                canTrigger: viewModel.isHost,
+                ads: viewModel.sponsorAd.ads,
+                busy: viewModel.sponsorAd.busy,
+                onLoadAds: { viewModel.sponsorAd.loadAds() },
+                onPlay: { viewModel.sponsorAd.play(adVideoId: $0) },
+                onStop: { viewModel.sponsorAd.stop() },
+                showTriggerButton: false
+            )
+
             // Gate d'accès programmé (parité web `ScheduledAccessGate`) : bloque l'entrée AVANT
             // l'heure programmée (aucune exception artiste/admin), et exige un billet si le
             // concert est déjà en direct, payant, sans billet. Rendu en dernier → toujours au-dessus.
@@ -749,6 +772,15 @@ public struct ConcertRoomView: View {
         .sheet(isPresented: $showLeaderboardSheet) { leaderboardSheet }
         // Hôte : enregistrement manuel du concert (LiveKit Egress).
         .sheet(isPresented: $showRecordingSheet) { recordingSheet }
+        .confirmationDialog(s.sponsorStartAd, isPresented: $showSponsorAdPicker, titleVisibility: .visible) {
+            if viewModel.sponsorAd.ads.isEmpty {
+                Button(s.sponsorNoAds) {}.disabled(true)
+            } else {
+                ForEach(viewModel.sponsorAd.ads) { ad in
+                    Button("\(ad.title) · \(ad.durationSeconds)s") { viewModel.sponsorAd.play(adVideoId: ad.id) }
+                }
+            }
+        }
         // Fan : demande de dédicace (message + prix, prix plancher forcé par l'artiste).
         .sheet(isPresented: $showDedicationSheet) { dedicationRequestSheet }
         // Artiste : demandes en attente (accepter/rejeter) + historique (marquer comme livrée).
@@ -1024,6 +1056,9 @@ public struct ConcertRoomView: View {
                 showFilterSheet = true
             }
             recordingControl
+            controlButton(viewModel.sponsorAd.activeAd != nil ? "play.tv.fill" : "play.tv") {
+                if viewModel.sponsorAd.activeAd != nil { viewModel.sponsorAd.stop() } else { viewModel.sponsorAd.loadAds(); showSponsorAdPicker = true }
+            }
             controlButton(viewModel.chatEnabled ? "bubble.left.fill" : "bubble.left.slash.fill") {
                 Task { await viewModel.toggleChat(!viewModel.chatEnabled) }
             }
