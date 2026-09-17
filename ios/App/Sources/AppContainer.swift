@@ -353,6 +353,7 @@ public final class AppContainer {
             repository: duelRepository,
             wallet: walletRepository,
             giftShop: giftShopRepository,
+            recording: recordingRepository,
             callerId: callerId
         )
         duelRooms[duel.id] = viewModel

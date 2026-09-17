@@ -6,6 +6,7 @@ import CoreRealtime
 import CoreUI
 import DomainModels
 import FeatureGiftShop
+import FeatureSponsor
 import FeatureWallet
 
 /// Cadeau reçu en direct dans le duel (pour l'animation).
@@ -137,6 +138,9 @@ public final class DuelViewModel {
     public private(set) var hasTicket = false
     public private(set) var isAdmin = false
 
+    /// Pilotage de l'enregistrement (LiveKit Egress) de ce duel — bouton manager uniquement.
+    public let recordingCtl: RecordingHolder
+
     // MARK: - Likes / réactions emoji
 
     public private(set) var likes = 0
@@ -196,6 +200,7 @@ public final class DuelViewModel {
     ///   - repository: lectures REST du duel.
     ///   - wallet: opérations de débit (vote, cadeau, billet).
     ///   - giftShop: catalogue + inventaire de cadeaux (partagé avec la boutique).
+    ///   - recording: accès REST du pilotage d'enregistrement (LiveKit Egress).
     ///   - callerId: id du caller — détermine ``isManager``/``isModerator`` une fois le duel
     ///     chargé.
     public init(
@@ -209,6 +214,7 @@ public final class DuelViewModel {
         repository: DuelRepository,
         wallet: WalletRepository,
         giftShop: GiftShopRepository,
+        recording: RecordingRepository,
         callerId: String? = nil
     ) {
         self.duelId = duelId
@@ -221,6 +227,7 @@ public final class DuelViewModel {
         self.repository = repository
         self.wallet = wallet
         self.giftShop = giftShop
+        self.recordingCtl = RecordingHolder(sourceType: "duel", sourceId: duelId, repo: recording)
         self.callerId = callerId
     }
 
@@ -273,6 +280,7 @@ public final class DuelViewModel {
         Task { [weak self] in await self?.loadInventory() }
         Task { [weak self] in await self?.loadGiftLeaderboard() }
         Task { [weak self] in await self?.loadTopDonor() }
+        recordingCtl.startPolling()
         await connectRealtime()
     }
 

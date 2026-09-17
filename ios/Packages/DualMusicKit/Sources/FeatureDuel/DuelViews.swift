@@ -3,6 +3,7 @@ import LiveKit
 import CoreLiveMedia
 import CoreUI
 import DomainModels
+import FeatureSponsor
 
 /// Écran d'une room de duel (viewer).
 ///
@@ -27,6 +28,8 @@ public struct DuelRoomView: View {
     @State private var showGiftSheet = false
     @State private var showLeaderboardSheet = false
     @State private var showReactionBar = false
+    @State private var showCancelRecordingConfirm = false
+    @State private var recordingErrorMessage: String?
 
     /// - Parameters:
     ///   - viewModel: état + actions du duel.
@@ -287,11 +290,15 @@ public struct DuelRoomView: View {
                 }
                 if viewModel.isManager {
                     Button { showManagerSheet = true } label: {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(DMFont.caption)
-                            .foregroundStyle(.white)
-                            .padding(theme.spacing.xs)
-                            .background(theme.colors.accent, in: Circle())
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(DMFont.caption)
+                                .foregroundStyle(.white)
+                                .padding(theme.spacing.xs)
+                                .background(theme.colors.accent, in: Circle())
+                            RecordingRailBadge(active: viewModel.recordingCtl.active, paused: viewModel.recordingCtl.paused)
+                                .offset(x: 4, y: -4)
+                        }
                     }
                     .buttonStyle(.plain)
                 }
@@ -579,11 +586,37 @@ public struct DuelRoomView: View {
                     onAnnounceWinner: { viewModel.announceWinnerAuto(); showManagerSheet = false },
                     onEnd: { viewModel.endDuel(onEnded: onLeave) }
                 )
+
+                Divider()
+                Text("🔴 \(s.recording)").font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+                RecordingSessionControls(
+                    mode: viewModel.recordingCtl.mode,
+                    active: viewModel.recordingCtl.active,
+                    paused: viewModel.recordingCtl.paused,
+                    finalizing: viewModel.recordingCtl.finalizing,
+                    accumulatedSeconds: viewModel.recordingCtl.accumulatedSeconds,
+                    runStartedAt: viewModel.recordingCtl.runStartedAt,
+                    busy: viewModel.recordingCtl.busy,
+                    onStart: { viewModel.recordingCtl.start(onError: { recordingErrorMessage = $0 }) },
+                    onPause: { viewModel.recordingCtl.pause(onError: { recordingErrorMessage = $0 }) },
+                    onResume: { viewModel.recordingCtl.resume(onError: { recordingErrorMessage = $0 }) },
+                    onCancel: { showCancelRecordingConfirm = true },
+                    onSave: { viewModel.recordingCtl.save(onError: { recordingErrorMessage = $0 }) }
+                )
+                if let recordingErrorMessage {
+                    Text(recordingErrorMessage).font(DMFont.caption).foregroundStyle(theme.colors.destructive)
+                }
             }
             .padding(theme.spacing.lg)
         }
         .presentationDetents([.large])
         .dmScreenBackground()
+        .confirmationDialog(s.cancel, isPresented: $showCancelRecordingConfirm, titleVisibility: .visible) {
+            Button(s.cancel, role: .destructive) {
+                viewModel.recordingCtl.cancel(onError: { recordingErrorMessage = $0 })
+                showCancelRecordingConfirm = false
+            }
+        }
     }
 
     // MARK: - Cadeaux
