@@ -291,3 +291,13 @@ public enum UploadEndpoints {
     public static let presign = "/uploads/presign"
     public static let confirm = "/uploads/confirm"
 }
+
+/// Chemins REST du pilotage d'enregistrement (source unique, miroir `RecordingEndpoints` Kotlin).
+public enum RecordingEndpoints {
+    public static let status = "/recordings/status"
+    public static let start = "/recordings/start"
+    public static let pause = "/recordings/pause"
+    public static let resume = "/recordings/resume"
+    public static let cancel = "/recordings/cancel"
+    public static let stop = "/recordings/stop"
+}

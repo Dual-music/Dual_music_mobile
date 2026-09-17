@@ -351,6 +351,15 @@ public struct DMStrings: Sendable {
     public let pendingApproval: String
     public let searchPlaceholder: String
     public let noCandidates: String
+    // Enregistrement (LiveKit Egress, partagé live/duel/compétition/concert).
+    public let recordStart: String
+    public let recordStop: String
+    public let recording: String
+    public let recordPause: String
+    public let recordResume: String
+    public let recordFinalizing: String
+    public let recordPausedSuffix: String
+    public let recordingNotStartedHint: String
     public let noCandidatesHint: String
     public let timerRunning: String
     public let artistSingular: String
@@ -819,6 +828,14 @@ public extension DMStrings {
         pendingApproval: "En attente d'approbation",
         searchPlaceholder: "Rechercher",
         noCandidates: "Aucun candidat approuvé",
+        recordStart: "Enregistrer",
+        recordStop: "Arrêter",
+        recording: "REC",
+        recordPause: "Pause l'enregistrement",
+        recordResume: "Reprendre l'enregistrement",
+        recordFinalizing: "Finalisation…",
+        recordPausedSuffix: "en pause",
+        recordingNotStartedHint: "Le direct n'est pas encore enregistré. Démarre l'enregistrement pour pouvoir en publier le replay ensuite.",
         noCandidatesHint: "Le classement s'affichera dès les premières candidatures.",
         timerRunning: "⏱ Minuteur en cours",
         artistSingular: "Artiste",
@@ -1272,6 +1289,14 @@ public extension DMStrings {
         pendingApproval: "Pending approval",
         searchPlaceholder: "Search",
         noCandidates: "No approved candidate",
+        recordStart: "Record",
+        recordStop: "Stop",
+        recording: "REC",
+        recordPause: "Pause recording",
+        recordResume: "Resume recording",
+        recordFinalizing: "Finalizing…",
+        recordPausedSuffix: "paused",
+        recordingNotStartedHint: "This stream isn't being recorded yet. Start recording to publish a replay afterwards.",
         noCandidatesHint: "The ranking will appear once candidacies start.",
         timerRunning: "⏱ Timer running",
         artistSingular: "Artist",
