@@ -182,6 +182,13 @@ public final class CreatorViewModel {
         }
     }
 
+    /// Supprime un concert planifié, puis recharge.
+    /// - Parameter id: identifiant du concert.
+    public func deleteConcert(id: String) async {
+        try? await http.send(.delete(ConcertEndpoints.artistDetail(id)))
+        await load()
+    }
+
     /// Complète une saisie `YYYY-MM-DDTHH:MM` en ISO `…:00` si nécessaire.
     /// - Parameter input: date saisie.
     static func normalizeISODate(_ input: String) -> String {
@@ -203,6 +210,7 @@ public struct CreatorView: View {
     @State private var selectedArtist: ArtistSummary?
     @State private var proposedDate = ""
     @State private var duelMessage = ""
+    @State private var deleteTarget: Concert?
 
     /// - Parameter viewModel: source d'état.
     public init(viewModel: CreatorViewModel) {
@@ -347,16 +355,31 @@ public struct CreatorView: View {
 
     @ViewBuilder
     private var concertsTab: some View {
-        if viewModel.concerts.isEmpty {
-            DMEmptyState(title: s.noConcerts, subtitle: s.noConcertsHint, systemImage: "calendar")
-            Spacer()
-        } else {
-            ScrollView {
-                LazyVStack(spacing: theme.spacing.sm) {
-                    ForEach(viewModel.concerts) { MyConcertRow(concert: $0) }
+        Group {
+            if viewModel.concerts.isEmpty {
+                DMEmptyState(title: s.noConcerts, subtitle: s.noConcertsHint, systemImage: "calendar")
+                Spacer()
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: theme.spacing.sm) {
+                        ForEach(viewModel.concerts) { concert in
+                            MyConcertRow(concert: concert, onDelete: { deleteTarget = concert })
+                        }
+                    }
                 }
             }
         }
+        .confirmationDialog(s.deleteConcertConfirm, isPresented: deleteConfirmBinding, titleVisibility: .visible) {
+            Button(s.deleteConcertAction, role: .destructive) {
+                if let id = deleteTarget?.id { Task { await viewModel.deleteConcert(id: id) } }
+                deleteTarget = nil
+            }
+            Button(s.cancel, role: .cancel) { deleteTarget = nil }
+        }
+    }
+
+    private var deleteConfirmBinding: Binding<Bool> {
+        Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } })
     }
 }
 
@@ -561,23 +584,28 @@ private struct SentDuelRow: View {
 /// Ligne d'un concert de l'artiste.
 private struct MyConcertRow: View {
     @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
     let concert: Concert
+    let onDelete: () -> Void
 
     var body: some View {
         DMCard {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(concert.title)
-                        .font(DMFont.body).bold()
-                        .foregroundStyle(theme.colors.foreground)
-                    if let date = isoMinute(concert.scheduledDate) {
-                        Text(date).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            VStack(alignment: .leading, spacing: theme.spacing.sm) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(concert.title)
+                            .font(DMFont.body).bold()
+                            .foregroundStyle(theme.colors.foreground)
+                        if let date = isoMinute(concert.scheduledDate) {
+                            Text(date).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                        }
                     }
+                    Spacer()
+                    Text(concert.status.rawValue.capitalizedFirst)
+                        .font(DMFont.caption)
+                        .foregroundStyle(theme.colors.mutedForeground)
                 }
-                Spacer()
-                Text(concert.status.rawValue.capitalizedFirst)
-                    .font(DMFont.caption)
-                    .foregroundStyle(theme.colors.mutedForeground)
+                DMButton(s.deleteConcertAction, style: .outline, action: onDelete)
             }
         }
     }

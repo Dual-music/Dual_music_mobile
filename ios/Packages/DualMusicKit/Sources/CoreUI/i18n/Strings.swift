@@ -629,6 +629,9 @@ public struct DMStrings: Sendable {
     public let duelAccepted: String
     public let duelDeclined: String
     public let duelDateChanged: String
+    // Suppression d'un concert planifié.
+    public let deleteConcertAction: String
+    public let deleteConcertConfirm: String
 }
 
 // MARK: - Tables de traduction
@@ -1206,7 +1209,9 @@ public extension DMStrings {
         duelRequestSent: "✅ Invitation envoyée.",
         duelAccepted: "Duel accepté ✅",
         duelDeclined: "Duel refusé",
-        duelDateChanged: "Date du duel modifiée 📅"
+        duelDateChanged: "Date du duel modifiée 📅",
+        deleteConcertAction: "Supprimer",
+        deleteConcertConfirm: "Supprimer ce concert planifié ? Cette action est irréversible."
     )
 
     /// Chaînes **anglaises**.
@@ -1780,7 +1785,9 @@ public extension DMStrings {
         duelRequestSent: "✅ Invitation sent.",
         duelAccepted: "Duel accepted ✅",
         duelDeclined: "Duel declined",
-        duelDateChanged: "Duel date changed 📅"
+        duelDateChanged: "Duel date changed 📅",
+        deleteConcertAction: "Delete",
+        deleteConcertConfirm: "Delete this scheduled concert? This action cannot be undone."
     )
 
     /// Renvoie la table de chaînes d'une langue.
