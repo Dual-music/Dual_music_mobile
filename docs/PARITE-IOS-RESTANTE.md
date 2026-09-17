@@ -29,15 +29,15 @@ Règle : chaque étape = lire le code Android réel → implémenter iOS → com
 
 - [x] **3.1 Mobile Money (CinetPay) multi-pays/opérateurs** — `android/feature/wallet/.../RechargeScreen.kt` (`CountrySelector`, `OperatorSelector`, `pay()`). **Décision utilisateur (2026-09-17) : ne pas implémenter.** StoreKit (5 paliers fixes) reste l'unique voie de recharge sur iOS, contrainte Apple 3.1.1 (IAP obligatoire pour du contenu numérique consommé dans l'app) — écart assumé et définitif.
 - [x] **3.2 Paiement carte montant libre (Stripe Checkout)** — `payWithStripe()` + préréglages 5/10/20/50/100. Même décision/contrainte que 3.1 — ne pas implémenter.
-- [ ] **3.3 Historique des retraits dans l'écran Wallet** — `WalletScreen.kt` (`WithdrawalRow`, 4ᵉ onglet). Fait (à confirmer CI) : `WalletRepository.withdrawals()` + 4ᵉ onglet dans `WalletView`.
+- [x] **3.3 Historique des retraits dans l'écran Wallet** — `WalletScreen.kt` (`WithdrawalRow`, 4ᵉ onglet). Fait, CI verte (bd7bb8b) : `WalletRepository.withdrawals()` + 4ᵉ onglet dans `WalletView`.
 
 ## 4. Live (critique)
 
-- [ ] **4.1 Likes** — `LiveRepository.kt`/`LiveViewModel.kt` (`likeLive`, `likesCount`). Fait (à confirmer CI) : event temps réel dédié `likes` (pas l'enveloppe broadcast générique, à la différence de Duel/Compétition) + réactions emoji flottantes (`sendReaction`, absentes de Live jusqu'ici).
-- [ ] **4.2 Suivre l'artiste depuis le live** — `LiveViewModel.kt` L337 (`followArtist`). Fait (à confirmer CI) : réutilise `ArtistEndpoints.follow` existant.
-- [ ] **4.3 Boutique de cadeaux complète** — `LiveViewModel.kt` L183-192/789-819, `LiveRoomScreen.kt` L884-936. Fait (à confirmer CI) : `giftCatalog`/`inventory`/`loadGiftCatalog`/`loadInventory`/`purchaseGift` (réutilise `GiftShopRepository`/`WalletRepository`) + `LiveGiftSendSheet` (Mes cadeaux/Boutique), remplace le `quickGiftId` fixe (toujours vide en pratique — bouton mort) supprimé du `LiveRoomView.init`.
-- [ ] **4.4 Classement des donateurs** — `giftLeaderboard`, `LiveRoomScreen.kt` L1126-1133. Fait (à confirmer CI) : `LiveDonorEntry` + trophée dans `actionBar` ouvrant une feuille de classement (même simplification qu'ailleurs : feuille plutôt que la bulle top-donateur flottante d'Android).
-- [ ] **4.5 Mute à distance d'un invité par l'hôte** — `LiveViewModel.kt` L548-549 (`toggleGuestMic`, event `toggle_mic`), `LiveRoomScreen.kt` L1072-1089.
+- [x] **4.1 Likes** — `LiveRepository.kt`/`LiveViewModel.kt` (`likeLive`, `likesCount`). Fait, CI verte (7eba25d) : event temps réel dédié `likes` (pas l'enveloppe broadcast générique, à la différence de Duel/Compétition) + réactions emoji flottantes (`sendReaction`, absentes de Live jusqu'ici).
+- [x] **4.2 Suivre l'artiste depuis le live** — `LiveViewModel.kt` L337 (`followArtist`). Fait, CI verte (60f2ccb) : réutilise `ArtistEndpoints.follow` existant.
+- [x] **4.3 Boutique de cadeaux complète** — `LiveViewModel.kt` L183-192/789-819, `LiveRoomScreen.kt` L884-936. Fait, CI verte (190bea0) : `giftCatalog`/`inventory`/`loadGiftCatalog`/`loadInventory`/`purchaseGift` (réutilise `GiftShopRepository`/`WalletRepository`) + `LiveGiftSendSheet` (Mes cadeaux/Boutique), remplace le `quickGiftId` fixe (toujours vide en pratique — bouton mort) supprimé du `LiveRoomView.init`.
+- [x] **4.4 Classement des donateurs** — `giftLeaderboard`, `LiveRoomScreen.kt` L1126-1133. Fait, CI verte (60f2ccb) : `LiveDonorEntry` + trophée dans `actionBar` ouvrant une feuille de classement (même simplification qu'ailleurs : feuille plutôt que la bulle top-donateur flottante d'Android).
+- [x] **4.5 Mute à distance d'un invité par l'hôte** — `LiveViewModel.kt` L548-549 (`toggleGuestMic`, event `toggle_mic`), `LiveRoomScreen.kt` L1072-1089. Fait (à confirmer CI, a858628) : `BroadcastPayload.action/targetUserId/value` + `toggleGuestMic`/`onGuestAction` (canal `live-controls-<id>`, event `guest_action`) + bouton micro par invité dans `guestsSheet`. `kick`/`start_timer` non repris : le retrait d'invité passe déjà côté iOS par un mécanisme REST équivalent (`joinUpdate` → statut `ended`), et le chrono de parole n'était pas dans le périmètre audité.
 
 ## 5. Majeur
 
