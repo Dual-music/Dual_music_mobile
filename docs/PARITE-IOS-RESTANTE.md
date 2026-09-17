@@ -36,7 +36,7 @@ Règle : chaque étape = lire le code Android réel → implémenter iOS → com
 - [ ] **4.1 Likes** — `LiveRepository.kt`/`LiveViewModel.kt` (`likeLive`, `likesCount`). Fait (à confirmer CI) : event temps réel dédié `likes` (pas l'enveloppe broadcast générique, à la différence de Duel/Compétition) + réactions emoji flottantes (`sendReaction`, absentes de Live jusqu'ici).
 - [ ] **4.2 Suivre l'artiste depuis le live** — `LiveViewModel.kt` L337 (`followArtist`). Fait (à confirmer CI) : réutilise `ArtistEndpoints.follow` existant.
 - [ ] **4.3 Boutique de cadeaux complète** — `LiveViewModel.kt` L183-192/789-819, `LiveRoomScreen.kt` L884-936. iOS n'a qu'un cadeau rapide fixe. Réutiliser `GiftShopRepository`/`WalletRepository` comme pour Duel/Compétition/Concert.
-- [ ] **4.4 Classement des donateurs** — `giftLeaderboard`, `LiveRoomScreen.kt` L1126-1133.
+- [ ] **4.4 Classement des donateurs** — `giftLeaderboard`, `LiveRoomScreen.kt` L1126-1133. Fait (à confirmer CI) : `LiveDonorEntry` + trophée dans `actionBar` ouvrant une feuille de classement (même simplification qu'ailleurs : feuille plutôt que la bulle top-donateur flottante d'Android).
 - [ ] **4.5 Mute à distance d'un invité par l'hôte** — `LiveViewModel.kt` L548-549 (`toggleGuestMic`, event `toggle_mic`), `LiveRoomScreen.kt` L1072-1089.
 
 ## 5. Majeur

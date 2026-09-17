@@ -36,6 +36,7 @@ public struct LiveRoomView: View {
     @State private var showCancelRecordingConfirm = false
     @State private var recordingErrorMessage: String?
     @State private var showReactionBar = false
+    @State private var showLeaderboardSheet = false
 
     /// - Parameters:
     ///   - viewModel: état + actions du live.
@@ -143,6 +144,7 @@ public struct LiveRoomView: View {
         // Hôte ET modérateurs (pour voir qui d'autre a ce pouvoir) : liste + désignation.
         .sheet(isPresented: $showModeratorsSheet) { moderatorsSheet }
         .sheet(isPresented: $showFilterSheet) { filterSheet }
+        .sheet(isPresented: $showLeaderboardSheet) { leaderboardSheet }
         // Hôte : enregistrement manuel de l'événement (LiveKit Egress) — démarrer/pause/
         // reprendre/annuler/sauvegarder, pour pouvoir en publier un replay ensuite.
         .sheet(isPresented: $showRecordingSheet) { recordingSheet }
@@ -349,6 +351,18 @@ public struct LiveRoomView: View {
             .buttonStyle(.plain)
 
             Button {
+                showLeaderboardSheet = true
+                Task { await viewModel.loadGiftLeaderboard() }
+            } label: {
+                Image(systemName: "trophy.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(.white.opacity(0.15), in: Circle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
                 Task { await viewModel.sendGift(giftId: quickGiftId, toUserId: hostUserId) }
             } label: {
                 Image(systemName: "gift.fill")
@@ -382,6 +396,40 @@ public struct LiveRoomView: View {
                     .buttonStyle(.plain)
                 }
             }
+        }
+    }
+
+    /// Classement des donateurs de ce live.
+    private var leaderboardSheet: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text("🏆 \(s.donors)").font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+            if viewModel.leaderboard.isEmpty {
+                Text(s.emptyRanking).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: theme.spacing.sm) {
+                        ForEach(Array(viewModel.leaderboard.enumerated()), id: \.element.id) { index, entry in
+                            HStack {
+                                Text("\(medal(index)) \(entry.displayName)").foregroundStyle(theme.colors.foreground)
+                                Spacer()
+                                Text("\(entry.value) \(s.credits)").bold().foregroundStyle(theme.colors.accent)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(theme.spacing.lg)
+        .presentationDetents([.medium])
+        .dmScreenBackground()
+    }
+
+    private func medal(_ index: Int) -> String {
+        switch index {
+        case 0: return "🥇"
+        case 1: return "🥈"
+        case 2: return "🥉"
+        default: return "#\(index + 1)"
         }
     }
 

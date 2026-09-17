@@ -216,6 +216,14 @@ public struct LiveRepository: Sendable {
         try? await http.send(.post(ArtistEndpoints.follow(artistId)))
     }
 
+    /// Classement des donateurs de ce live.
+    public func giftLeaderboard(liveId: String) async -> [LiveDonorEntry] {
+        (try? await http.request(
+            .get(LeaderboardEndpoints.gifts, query: ["contextType": "live", "contextId": liveId]),
+            as: [LiveDonorEntry].self
+        )) ?? []
+    }
+
     /// Envoie un cadeau au host dans le contexte du live.
     ///
     /// Débit atomique côté backend ; l'`Idempotency-Key` empêche tout double débit sur
@@ -421,4 +429,47 @@ public struct LiveRepository: Sendable {
 /// Réponse de `GET /lives/:id/likes`, et payload de l'événement temps réel `likes` (même forme).
 struct LiveLikesResponse: Decodable, Sendable {
     let likes: Int
+}
+
+/// Entrée du classement des donateurs d'un live (`GET /leaderboards/gifts?contextType=live`).
+public struct LiveDonorEntry: Decodable, Sendable, Identifiable {
+    public let id: String
+    public let userId: String?
+    public let fullName: String?
+    public let stageName: String?
+    public let total: Double
+    public let score: Double
+    public let user: DisplayProfile?
+
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
+        case fullName = "full_name"
+        case stageName = "stage_name"
+        case total, score, user
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userId = c.opt(String.self, .userId)
+        fullName = c.opt(String.self, .fullName)
+        stageName = c.opt(String.self, .stageName)
+        total = c.amount(.total)
+        score = c.amount(.score)
+        user = c.opt(DisplayProfile.self, .user)
+        // Identité STABLE (générée une seule fois) : `userId` peut être absent selon
+        // l'endpoint, un id recalculé à chaque accès casserait le diffing SwiftUI (`ForEach`).
+        id = userId ?? UUID().uuidString
+    }
+
+    /// Nom affiché : profil hydraté, sinon nom de scène, sinon nom complet, sinon repli générique.
+    @MainActor
+    public var displayName: String {
+        if let user { return user.displayName }
+        if let s = stageName, !s.isEmpty { return s }
+        if let f = fullName, !f.isEmpty { return f }
+        return AppStrings.current.donors
+    }
+
+    /// Valeur affichée (crédits) : `total` si positif, sinon repli sur `score`.
+    public var value: Int { Int(total > 0 ? total : score) }
 }

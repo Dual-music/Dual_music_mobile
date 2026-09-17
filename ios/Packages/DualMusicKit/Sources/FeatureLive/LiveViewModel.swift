@@ -41,6 +41,8 @@ public final class LiveViewModel {
     public private(set) var likes = 0
     public private(set) var emojiFeed: [LiveFloatingReaction] = []
     private var emojiCounter = 0
+    public private(set) var topDonor: LiveDonorEntry?
+    public private(set) var leaderboard: [LiveDonorEntry] = []
 
     /// Spectateurs bannis de ce live (ids) — leurs messages restent en mémoire mais sont
     /// masqués de l'affichage (``visibleMessages``), pas supprimés.
@@ -175,6 +177,7 @@ public final class LiveViewModel {
             guard let self else { return }
             self.likes = await self.repository.likesCount(liveId: self.liveId)
         }
+        Task { [weak self] in await self?.loadTopDonor() }
         recordingCtl.startPolling()
         Task { [weak self] in
             guard let self else { return }
@@ -330,6 +333,16 @@ public final class LiveViewModel {
     /// Suit l'artiste hôte du live.
     public func follow(_ artistId: String) {
         Task { await repository.followArtist(artistId) }
+    }
+
+    /// Recharge le classement des donateurs.
+    public func loadGiftLeaderboard() async {
+        leaderboard = await repository.giftLeaderboard(liveId: liveId)
+    }
+
+    /// Recharge le meilleur donateur courant (bulle top-donateur).
+    private func loadTopDonor() async {
+        topDonor = await repository.giftLeaderboard(liveId: liveId).first
     }
 
     // MARK: - Dédicaces
@@ -579,6 +592,7 @@ public final class LiveViewModel {
                     value: payload.value
                 )
             )
+            Task { await self.loadTopDonor() }
         })
         subscriptions.append(live.onEvent(Realtime.Event.presence, as: PresencePayload.self) { [weak self] payload in
             self?.viewerCount = payload.count
