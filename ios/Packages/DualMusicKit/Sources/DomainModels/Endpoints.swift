@@ -288,6 +288,8 @@ public enum CreatorEndpoints {
     public static let duelRequestsMine = "/duels/requests/mine"
     public static let duelRequestCreate = "/duels/requests"
     public static func duelRespond(_ id: String) -> String { "/duels/requests/\(id)/respond" }
+    /// Change la date proposée d'un défi envoyé (`PATCH`).
+    public static func duelChangeDate(_ id: String) -> String { "/duels/requests/\(id)" }
     public static let myConcerts = "/artist-concerts/me"
     /// Profil public COMPLET d'un utilisateur (compte + profil artiste + suivi).
     public static func publicProfile(_ id: String) -> String { "/users/\(id)" }

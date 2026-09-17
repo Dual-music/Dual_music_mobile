@@ -612,6 +612,23 @@ public struct DMStrings: Sendable {
     public let noMyVideos: String
     public let noMyReplays: String
     public let videoPublished: String
+    // Invitation de duel peer-to-peer entre artistes.
+    public let requestDuel: String
+    public let requestDuelHint: String
+    public let artistsAvailable: String
+    public let selectedArtist: String
+    public let changeDate: String
+    public let messageOptional: String
+    public let sendDuelRequest: String
+    public let noArtistAvailable: String
+    public let receivedInvitations: String
+    public let mySentRequests: String
+    public let noSentRequests: String
+    public let duelPlanned: String
+    public let duelRequestSent: String
+    public let duelAccepted: String
+    public let duelDeclined: String
+    public let duelDateChanged: String
 }
 
 // MARK: - Tables de traduction
@@ -1173,7 +1190,23 @@ public extension DMStrings {
         myReplays: "Mes replays",
         noMyVideos: "Aucune vidéo publiée",
         noMyReplays: "Aucun replay",
-        videoPublished: "✅ Vidéo publiée."
+        videoPublished: "✅ Vidéo publiée.",
+        requestDuel: "Demander un Duel",
+        requestDuelHint: "Défiez un autre artiste pour un duel musical",
+        artistsAvailable: "artiste(s) disponible(s)",
+        selectedArtist: "Artiste sélectionné",
+        changeDate: "Modifier la date",
+        messageOptional: "Message (optionnel)",
+        sendDuelRequest: "Envoyer la demande de duel",
+        noArtistAvailable: "Aucun artiste disponible",
+        receivedInvitations: "Demandes reçues",
+        mySentRequests: "Mes demandes envoyées",
+        noSentRequests: "Aucune demande envoyée.",
+        duelPlanned: "Duel prévu :",
+        duelRequestSent: "✅ Invitation envoyée.",
+        duelAccepted: "Duel accepté ✅",
+        duelDeclined: "Duel refusé",
+        duelDateChanged: "Date du duel modifiée 📅"
     )
 
     /// Chaînes **anglaises**.
@@ -1731,7 +1764,23 @@ public extension DMStrings {
         myReplays: "My replays",
         noMyVideos: "No published video",
         noMyReplays: "No replay",
-        videoPublished: "✅ Video published."
+        videoPublished: "✅ Video published.",
+        requestDuel: "Request a Duel",
+        requestDuelHint: "Challenge another artist to a music duel",
+        artistsAvailable: "artist(s) available",
+        selectedArtist: "Selected artist",
+        changeDate: "Change date",
+        messageOptional: "Message (optional)",
+        sendDuelRequest: "Send duel request",
+        noArtistAvailable: "No artist available",
+        receivedInvitations: "Received requests",
+        mySentRequests: "My sent requests",
+        noSentRequests: "No request sent yet.",
+        duelPlanned: "Duel scheduled:",
+        duelRequestSent: "✅ Invitation sent.",
+        duelAccepted: "Duel accepted ✅",
+        duelDeclined: "Duel declined",
+        duelDateChanged: "Duel date changed 📅"
     )
 
     /// Renvoie la table de chaînes d'une langue.

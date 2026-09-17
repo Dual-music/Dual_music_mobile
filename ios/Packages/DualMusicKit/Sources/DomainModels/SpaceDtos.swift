@@ -287,6 +287,13 @@ public struct CreateDuelRequest: Encodable, Sendable {
     }
 }
 
+/// Corps de `PATCH /duels/requests/:id` — change la date proposée d'un défi ENVOYÉ encore en
+/// attente (réservé à l'émetteur). Le backend renotifie l'autre partie (notif + email).
+public struct ChangeDuelDateRequest: Encodable, Sendable {
+    public let proposedDate: String?
+    public init(proposedDate: String?) { self.proposedDate = proposedDate }
+}
+
 /// Corps de `POST /artist-concerts` — création d'un concert d'artiste.
 ///
 /// ⚠️ camelCase STRICT (Joi `stripUnknown`). Le concert est créé en

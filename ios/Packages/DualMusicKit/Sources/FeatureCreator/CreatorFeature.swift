@@ -13,6 +13,8 @@ public final class CreatorViewModel {
 
     public private(set) var myUserId: String?
     public private(set) var duelRequests: [DuelRequestItem] = []
+    /// Annuaire des artistes (pour rechercher un adversaire à défier).
+    public private(set) var artists: [ArtistSummary] = []
     public private(set) var concerts: [Concert] = []
     /// URL publique de la pochette uploadée (prête à être persistée).
     public private(set) var coverURL: String?
@@ -41,15 +43,69 @@ public final class CreatorViewModel {
         concerts = (try? await http.request(
             .get(CreatorEndpoints.myConcerts), as: [Concert].self
         )) ?? []
+        artists = (try? await http.request(.get(ArtistEndpoints.list), as: [ArtistSummary].self)) ?? []
     }
 
-    /// Répond à un défi reçu (accepter/refuser), puis recharge.
+    /// Répond à un défi reçu (accepter/refuser), avec retour clair, puis recharge.
     /// - Parameters:
     ///   - id: identifiant du défi.
     ///   - accept: `true` pour accepter.
     public func respond(id: String, accept: Bool) async {
-        try? await http.send(.post(CreatorEndpoints.duelRespond(id), body: RespondDuelRequest(accept: accept)))
+        let s = AppStrings.current
+        do {
+            try await http.send(.post(CreatorEndpoints.duelRespond(id), body: RespondDuelRequest(accept: accept)))
+            message = accept ? s.duelAccepted : s.duelDeclined
+        } catch {
+            message = (error as? APIError)?.message ?? s.errCreateFailed
+        }
         await load()
+    }
+
+    /// Envoie une invitation de duel à un artiste (date + message optionnels), puis recharge.
+    /// - Parameters:
+    ///   - opponentId: id UTILISATEUR de l'adversaire (``ArtistSummary/opponentUserId``).
+    ///   - proposedDate: date proposée, saisie `AAAA-MM-JJTHH:MM` (normalisée en ISO UTC).
+    ///   - message: message d'accompagnement, optionnel.
+    public func createDuel(opponentId: String, proposedDate: String?, message: String?) async {
+        let s = AppStrings.current
+        isSubmitting = true
+        self.message = nil
+        defer { isSubmitting = false }
+        do {
+            try await http.send(
+                .post(
+                    CreatorEndpoints.duelRequestCreate,
+                    body: CreateDuelRequest(
+                        opponentId: opponentId,
+                        proposedDate: proposedDate?.trimmed.nilIfBlank.map(Self.normalizeISODate),
+                        message: message?.trimmed.nilIfBlank
+                    )
+                )
+            )
+            self.message = s.duelRequestSent
+            await load()
+        } catch {
+            self.message = (error as? APIError)?.message ?? s.errCreateFailed
+        }
+    }
+
+    /// Change la date proposée d'un défi ENVOYÉ encore en attente (émetteur). Renotifie
+    /// l'adversaire côté backend.
+    /// - Parameters:
+    ///   - id: identifiant du défi.
+    ///   - newDate: nouvelle date saisie `AAAA-MM-JJTHH:MM` (normalisée en ISO UTC).
+    public func changeDuelDate(id: String, newDate: String) async {
+        guard !newDate.trimmed.isEmpty else { return }
+        let s = AppStrings.current
+        do {
+            try await http.send(
+                .patch(CreatorEndpoints.duelChangeDate(id), body: ChangeDuelDateRequest(proposedDate: Self.normalizeISODate(newDate.trimmed)))
+            )
+            message = s.duelDateChanged
+            await load()
+        } catch {
+            message = (error as? APIError)?.message ?? s.errCreateFailed
+        }
     }
 
     /// Affiche un message (erreur de lecture de fichier…).
@@ -142,6 +198,11 @@ public struct CreatorView: View {
 
     private let viewModel: CreatorViewModel
     @State private var tab = 0
+    // « Demander un Duel ».
+    @State private var duelQuery = ""
+    @State private var selectedArtist: ArtistSummary?
+    @State private var proposedDate = ""
+    @State private var duelMessage = ""
 
     /// - Parameter viewModel: source d'état.
     public init(viewModel: CreatorViewModel) {
@@ -165,23 +226,120 @@ public struct CreatorView: View {
         .task { await viewModel.load() }
     }
 
+    /// Candidats au défi : tous les artistes, hors moi-même, filtrés par la recherche —
+    /// limités à 10 comme Android.
+    private var duelCandidates: [ArtistSummary] {
+        Array(
+            viewModel.artists
+                .filter { $0.opponentUserId != viewModel.myUserId }
+                .filter { duelQuery.isEmpty || $0.displayName.localizedCaseInsensitiveContains(duelQuery) }
+                .prefix(10)
+        )
+    }
+
+    /// Demandes ENVOYÉES (moi = émetteur) et REÇUES (moi = destinataire).
+    private var sentRequests: [DuelRequestItem] { viewModel.duelRequests.filter { $0.requesterId == viewModel.myUserId } }
+    private var receivedRequests: [DuelRequestItem] { viewModel.duelRequests.filter { $0.opponentId == viewModel.myUserId } }
+
+    private func opponentName(_ userId: String?) -> String {
+        viewModel.artists.first { $0.opponentUserId == userId }?.displayName ?? s.artistSingular
+    }
+
     @ViewBuilder
     private var challengesTab: some View {
-        if viewModel.duelRequests.isEmpty {
-            DMEmptyState(title: s.noChallenges, subtitle: s.noChallengesHint, systemImage: "bell")
-            Spacer()
-        } else {
-            ScrollView {
-                LazyVStack(spacing: theme.spacing.sm) {
-                    ForEach(viewModel.duelRequests) { request in
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: theme.spacing.sm) {
+                requestDuelCard
+
+                Text(s.mySentRequests).font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+                if sentRequests.isEmpty {
+                    Text(s.noSentRequests).foregroundStyle(theme.colors.mutedForeground)
+                } else {
+                    ForEach(sentRequests) { request in
+                        SentDuelRow(
+                            opponentName: opponentName(request.opponentId),
+                            request: request,
+                            onChangeDate: { newDate in Task { await viewModel.changeDuelDate(id: request.id, newDate: newDate) } }
+                        )
+                    }
+                }
+
+                Text(s.receivedInvitations)
+                    .font(DMFont.body).bold()
+                    .foregroundStyle(theme.colors.foreground)
+                    .padding(.top, theme.spacing.md)
+                if receivedRequests.isEmpty {
+                    Text(s.noChallengesHint).foregroundStyle(theme.colors.mutedForeground)
+                } else {
+                    ForEach(receivedRequests) { request in
                         DuelRequestRow(
                             request: request,
-                            // Seul le destinataire peut répondre, et seulement si en attente.
-                            canRespond: request.opponentId == viewModel.myUserId && request.status == "pending",
+                            canRespond: request.status == "pending",
                             onAccept: { Task { await viewModel.respond(id: request.id, accept: true) } },
                             onDecline: { Task { await viewModel.respond(id: request.id, accept: false) } }
                         )
                     }
+                }
+            }
+        }
+    }
+
+    /// « Demander un Duel » : rechercher un artiste, le sélectionner, puis envoyer l'invitation.
+    private var requestDuelCard: some View {
+        DMCard {
+            VStack(alignment: .leading, spacing: theme.spacing.sm) {
+                Text(s.requestDuel).font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+                Text(s.requestDuelHint).foregroundStyle(theme.colors.mutedForeground)
+                DMTextField(s.searchArtist, text: $duelQuery)
+
+                Text("\(duelCandidates.count) \(s.artistsAvailable)")
+                    .font(DMFont.caption)
+                    .foregroundStyle(theme.colors.mutedForeground)
+
+                if duelCandidates.isEmpty {
+                    Text(s.noArtistAvailable).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                } else {
+                    ForEach(duelCandidates) { artist in
+                        let isSelected = selectedArtist?.opponentUserId == artist.opponentUserId
+                        Button { selectedArtist = artist } label: {
+                            Text("🎤  \(artist.displayName)")
+                                .font(DMFont.body).bold()
+                                .foregroundStyle(isSelected ? theme.colors.primary : theme.colors.foreground)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(theme.spacing.md)
+                                .background(
+                                    isSelected ? theme.colors.primary.opacity(0.15) : theme.colors.muted.opacity(0.3),
+                                    in: RoundedRectangle(cornerRadius: theme.radius.md, style: .continuous)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                if let artist = selectedArtist {
+                    VStack(alignment: .leading, spacing: theme.spacing.sm) {
+                        Text("\(artist.displayName) · \(s.selectedArtist)")
+                            .font(DMFont.body).bold()
+                            .foregroundStyle(theme.colors.foreground)
+                        DMTextField(
+                            s.proposedDateOptional,
+                            text: $proposedDate,
+                            placeholder: "2026-08-01T20:00",
+                            autocapitalization: .never
+                        )
+                        DMTextField(s.messageOptional, text: $duelMessage)
+                        DMButton(
+                            viewModel.isSubmitting ? s.sending : s.sendDuelRequest,
+                            isLoading: viewModel.isSubmitting,
+                            isEnabled: !viewModel.isSubmitting
+                        ) {
+                            Task { await viewModel.createDuel(opponentId: artist.opponentUserId, proposedDate: proposedDate, message: duelMessage) }
+                            selectedArtist = nil
+                            proposedDate = ""
+                            duelMessage = ""
+                        }
+                    }
+                    .padding(.top, theme.spacing.xs)
                 }
             }
         }
@@ -332,6 +490,69 @@ private struct DuelRequestRow: View {
         case "pending": return s.statusPending
         case "accepted": return s.statusAccepted
         case "declined": return s.statusDeclined
+        default: return request.status
+        }
+    }
+}
+
+/// Ligne d'un défi ENVOYÉ : statut + reproposition de date tant qu'il est en attente.
+private struct SentDuelRow: View {
+    @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
+
+    let opponentName: String
+    let request: DuelRequestItem
+    let onChangeDate: (String) -> Void
+
+    @State private var editing = false
+    @State private var newDate = ""
+
+    var body: some View {
+        DMCard {
+            VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("🎤 \(opponentName)").font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+                        if let date = isoMinute(request.proposedDate) {
+                            Text("\(s.duelPlanned) \(date)")
+                                .font(DMFont.caption)
+                                .foregroundStyle(theme.colors.mutedForeground)
+                        }
+                    }
+                    Spacer()
+                    Text(sentStatusLabel)
+                        .font(DMFont.caption).bold()
+                        .foregroundStyle(theme.colors.accent)
+                }
+                if request.status == "pending" {
+                    if !editing {
+                        DMButton(s.changeDate, style: .outline) { editing = true }
+                    } else {
+                        DMTextField(
+                            s.proposedDateOptional,
+                            text: $newDate,
+                            placeholder: "2026-08-01T20:00",
+                            autocapitalization: .never
+                        )
+                        HStack(spacing: theme.spacing.sm) {
+                            DMButton(s.save, isEnabled: !newDate.trimmed.isEmpty) {
+                                onChangeDate(newDate)
+                                editing = false
+                            }
+                            DMButton(s.cancel, style: .outline) { editing = false }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var sentStatusLabel: String {
+        switch request.status {
+        case "pending": return s.statusPending
+        case "accepted", "admin_pending": return s.statusAccepted
+        case "approved": return s.statusApproved
+        case "rejected", "declined": return s.statusRejected
         default: return request.status
         }
     }
