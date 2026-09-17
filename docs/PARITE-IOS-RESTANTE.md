@@ -43,9 +43,9 @@ Règle : chaque étape = lire le code Android réel → implémenter iOS → com
 
 ## 5. Majeur
 
-- [ ] **5.1 Profil public complet d'un artiste** — `android/feature/profile/.../ArtistPublicProfileScreen.kt` + ViewModel (cover, bio, réseaux sociaux, follow).
-- [ ] **5.2 Édition du profil public créateur** — `android/feature/profile/.../PublicProfileEditScreen.kt` (cover, bio publique, réseaux, visibilité). Ajouter `updateArtistProfile`/`updateManagerProfile`/`myArtistProfile`/`myManagerProfile` au repository iOS.
-- [ ] **5.3 Écran de préférences de notifications** — `android/feature/notifications/.../NotificationPrefsScreen.kt` + endpoints `PREFERENCES`/`PREFERENCES_EMAIL`. Absent d'iOS (endpoint même pas déclaré).
+- [x] **5.1 Profil public complet d'un artiste** — `android/feature/profile/.../ArtistPublicProfileScreen.kt` + ViewModel (cover, bio, réseaux sociaux, follow). Fait, CI verte (df91e87) : point d'entrée ajouté (puce nom tappable Live/Concert, noms tappables barre de vote Duel, nom tappable par candidat Compétition), présenté en `fullScreenCover` par-dessus l'événement en cours, câblé au niveau `MainShellView` (comme `MainActivity.kt`).
+- [x] **5.2 Édition du profil public créateur** — `android/feature/profile/.../PublicProfileEditScreen.kt` (cover, bio publique, réseaux, visibilité). Fait, CI verte (eb3df10) : `PublicProfileViewModel`/`PublicProfileEditView`, nouvelle route menu "Profil".
+- [x] **5.3 Écran de préférences de notifications** — `android/feature/notifications/.../NotificationPrefsScreen.kt` + endpoints `PREFERENCES`/`PREFERENCES_EMAIL`. Fait (à confirmer CI, 061f9c9) : `NotificationPreferences` + `NotificationPrefsViewModel`/`NotificationPrefsView`, la ligne de menu "Notifications" ouvre désormais ces préférences (la cloche reste l'accès à la liste in-app).
 - [ ] **5.4 CGU / Politique de confidentialité à l'inscription** — `android/feature/auth/.../LegalDocScreen.kt` + `TermsAcceptance`. Case à cocher obligatoire + consultation in-app. Absent d'iOS.
 - [ ] **5.5 Espace "Mon contenu" créateur** — `android/feature/content/.../MyContentScreen.kt` (fichier entier). Publier une vidéo lifestyle, "Mes vidéos", `ReplayManageDialog` (public/privé, prix, téléchargement, remplacement fichier). Absent d'iOS.
 - [ ] **5.6 Invitation de duel peer-to-peer entre artistes** — `CreatorScreen.kt` (`createDuel` L131-151, UI "Demander un Duel" L293-375) + reproposer une date (`changeDuelDate` L169-181, `SentDuelRow`).
