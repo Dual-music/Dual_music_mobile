@@ -395,7 +395,8 @@ public final class AppContainer {
             isHost: profile.me?.user.id == concert.artistId,
             callerId: profile.me?.user.id,
             wallet: walletRepository,
-            giftShop: giftShopRepository
+            giftShop: giftShopRepository,
+            recording: recordingRepository
         )
         concertRooms[concert.id] = viewModel
         return viewModel

@@ -6,6 +6,7 @@ import CoreRealtime
 import CoreUI
 import DomainModels
 import FeatureGiftShop
+import FeatureSponsor
 import FeatureWallet
 
 /// Message de chat d'un concert (auteur hydraté par le backend).
@@ -100,6 +101,8 @@ public final class ConcertRoomViewModel {
 
     /// Vrai pour l'artiste (diffuse) — contrôle l'accès au bannissement et aux contrôles hôte.
     public let isHost: Bool
+    /// Pilotage de l'enregistrement (LiveKit Egress) de ce concert — bouton hôte uniquement.
+    public let recordingCtl: RecordingHolder
     /// Vrai tant qu'un billet payant est requis et non possédé — bloque l'accès à la vidéo
     /// (jamais vrai pour l'artiste, ni pour un concert gratuit).
     public private(set) var needsTicket = false
@@ -187,6 +190,7 @@ public final class ConcertRoomViewModel {
     ///   - callerId: id du caller (spectateur) — sert au filtrage des événements temps réel.
     ///   - wallet: achat de cadeaux (boutique).
     ///   - giftShop: catalogue + inventaire des cadeaux.
+    ///   - recording: accès REST du pilotage d'enregistrement (LiveKit Egress).
     public init(
         concertId: String,
         roomName: String,
@@ -201,7 +205,8 @@ public final class ConcertRoomViewModel {
         isHost: Bool = false,
         callerId: String? = nil,
         wallet: WalletRepository,
-        giftShop: GiftShopRepository
+        giftShop: GiftShopRepository,
+        recording: RecordingRepository
     ) {
         self.concertId = concertId
         self.roomName = roomName
@@ -217,6 +222,7 @@ public final class ConcertRoomViewModel {
         self.callerId = callerId
         self.wallet = wallet
         self.giftShop = giftShop
+        self.recordingCtl = RecordingHolder(sourceType: "concert", sourceId: concertId, repo: recording)
     }
 
     /// Démarre : billetterie, vidéo (si accès autorisé), historique de chat, rooms temps réel.
@@ -265,6 +271,7 @@ public final class ConcertRoomViewModel {
         Task { [weak self] in await self?.loadGiftCatalog() }
         Task { [weak self] in await self?.loadInventory() }
         Task { [weak self] in await self?.refreshGiftLeaderboard() }
+        recordingCtl.startPolling()
         if allowsDedications {
             Task { [weak self] in
                 guard let self else { return }
@@ -644,6 +651,9 @@ public struct ConcertRoomView: View {
     @State private var showFilterSheet = false
     @State private var showGiftSheet = false
     @State private var showLeaderboardSheet = false
+    @State private var showRecordingSheet = false
+    @State private var showCancelRecordingConfirm = false
+    @State private var recordingErrorMessage: String?
 
     /// - Parameters:
     ///   - viewModel: état + actions du concert.
@@ -737,6 +747,8 @@ public struct ConcertRoomView: View {
         .sheet(isPresented: $showFilterSheet) { filterSheet }
         .sheet(isPresented: $showGiftSheet) { giftSheet }
         .sheet(isPresented: $showLeaderboardSheet) { leaderboardSheet }
+        // Hôte : enregistrement manuel du concert (LiveKit Egress).
+        .sheet(isPresented: $showRecordingSheet) { recordingSheet }
         // Fan : demande de dédicace (message + prix, prix plancher forcé par l'artiste).
         .sheet(isPresented: $showDedicationSheet) { dedicationRequestSheet }
         // Artiste : demandes en attente (accepter/rejeter) + historique (marquer comme livrée).
@@ -1011,6 +1023,7 @@ public struct ConcertRoomView: View {
             controlButton("camera.filters") {
                 showFilterSheet = true
             }
+            recordingControl
             controlButton(viewModel.chatEnabled ? "bubble.left.fill" : "bubble.left.slash.fill") {
                 Task { await viewModel.toggleChat(!viewModel.chatEnabled) }
             }
@@ -1047,6 +1060,62 @@ public struct ConcertRoomView: View {
                     .background(theme.colors.destructive, in: Capsule())
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    /// Enregistrement (hôte) : icône ronde ouvrant la feuille dédiée en mode `manual` (avec
+    /// pastille REC quand actif/pause) ; simple indicateur non-tapable en mode `auto`.
+    @ViewBuilder
+    private var recordingControl: some View {
+        if viewModel.recordingCtl.mode == "manual" {
+            Button { showRecordingSheet = true } label: {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "record.circle")
+                        .foregroundStyle(.white)
+                        .padding(theme.spacing.sm)
+                        .background(.black.opacity(0.4), in: Circle())
+                    RecordingRailBadge(active: viewModel.recordingCtl.active, paused: viewModel.recordingCtl.paused)
+                        .offset(x: 2, y: -2)
+                }
+            }
+            .buttonStyle(.plain)
+        } else if viewModel.recordingCtl.mode == "auto" && viewModel.recordingCtl.active {
+            RecordingHostButton(mode: viewModel.recordingCtl.mode, active: true, busy: false, onToggle: {})
+        }
+    }
+
+    /// Feuille hôte : contrôles complets d'enregistrement (LiveKit Egress, mode `manual`).
+    private var recordingSheet: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text("🔴 \(s.recording)").font(DMFont.pageTitle).bold().foregroundStyle(theme.colors.foreground)
+            RecordingSessionControls(
+                mode: viewModel.recordingCtl.mode,
+                active: viewModel.recordingCtl.active,
+                paused: viewModel.recordingCtl.paused,
+                finalizing: viewModel.recordingCtl.finalizing,
+                accumulatedSeconds: viewModel.recordingCtl.accumulatedSeconds,
+                runStartedAt: viewModel.recordingCtl.runStartedAt,
+                busy: viewModel.recordingCtl.busy,
+                onStart: { viewModel.recordingCtl.start(onError: { recordingErrorMessage = $0 }) },
+                onPause: { viewModel.recordingCtl.pause(onError: { recordingErrorMessage = $0 }) },
+                onResume: { viewModel.recordingCtl.resume(onError: { recordingErrorMessage = $0 }) },
+                onCancel: { showCancelRecordingConfirm = true },
+                onSave: {
+                    viewModel.recordingCtl.save(onError: { recordingErrorMessage = $0 })
+                    showRecordingSheet = false
+                }
+            )
+            if let recordingErrorMessage {
+                Text(recordingErrorMessage).font(DMFont.caption).foregroundStyle(theme.colors.destructive)
+            }
+            Spacer()
+        }
+        .padding(theme.spacing.lg)
+        .confirmationDialog(s.cancel, isPresented: $showCancelRecordingConfirm, titleVisibility: .visible) {
+            Button(s.cancel, role: .destructive) {
+                viewModel.recordingCtl.cancel(onError: { recordingErrorMessage = $0 })
+                showCancelRecordingConfirm = false
+            }
         }
     }
 
