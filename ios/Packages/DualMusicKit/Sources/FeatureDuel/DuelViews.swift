@@ -961,13 +961,20 @@ public struct DuelsListView: View {
 
     private let viewModel: DuelsListViewModel
     private let onOpen: (Duel) -> Void
+    private let onRequestSponsor: (String, String) -> Void
 
     /// - Parameters:
     ///   - viewModel: source du catalogue.
     ///   - onOpen: callback à l'ouverture d'un duel.
-    public init(viewModel: DuelsListViewModel, onOpen: @escaping (Duel) -> Void) {
+    ///   - onRequestSponsor: ouvre le sponsoring présélectionné sur ce duel (`"duel"`, id).
+    public init(
+        viewModel: DuelsListViewModel,
+        onOpen: @escaping (Duel) -> Void,
+        onRequestSponsor: @escaping (String, String) -> Void = { _, _ in }
+    ) {
         self.viewModel = viewModel
         self.onOpen = onOpen
+        self.onRequestSponsor = onRequestSponsor
     }
 
     public var body: some View {
@@ -986,8 +993,7 @@ public struct DuelsListView: View {
                 ScrollView {
                     LazyVStack(spacing: theme.spacing.sm) {
                         ForEach(viewModel.duels) { duel in
-                            Button { onOpen(duel) } label: { DuelRow(duel: duel) }
-                                .buttonStyle(.plain)
+                            DuelRow(duel: duel, onOpen: { onOpen(duel) }, onRequestSponsor: { onRequestSponsor("duel", duel.id) })
                         }
                     }
                 }
@@ -1001,27 +1007,38 @@ public struct DuelsListView: View {
     }
 }
 
-/// Carte d'un duel : les deux artistes + son statut.
+/// Carte d'un duel : les deux artistes + son statut + bouton « Sponsoriser » contextuel.
 private struct DuelRow: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
     let duel: Duel
+    let onOpen: () -> Void
+    let onRequestSponsor: () -> Void
 
     var body: some View {
         DMCard {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(duel.artist1?.displayName ?? s.artist1)  vs  \(duel.artist2?.displayName ?? s.artist2)")
-                        .font(DMFont.body).bold()
-                        .foregroundStyle(theme.colors.foreground)
-                    if let time = isoMinute(duel.scheduledTime) {
-                        Text(time).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            VStack(spacing: theme.spacing.sm) {
+                Button(action: onOpen) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(duel.artist1?.displayName ?? s.artist1)  vs  \(duel.artist2?.displayName ?? s.artist2)")
+                                .font(DMFont.body).bold()
+                                .foregroundStyle(theme.colors.foreground)
+                            if let time = isoMinute(duel.scheduledTime) {
+                                Text(time).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                            }
+                        }
+                        Spacer()
+                        Text(statusLabel)
+                            .font(DMFont.caption).bold()
+                            .foregroundStyle(duel.status == .live ? theme.colors.accent : theme.colors.mutedForeground)
                     }
                 }
-                Spacer()
-                Text(statusLabel)
-                    .font(DMFont.caption).bold()
-                    .foregroundStyle(duel.status == .live ? theme.colors.accent : theme.colors.mutedForeground)
+                .buttonStyle(.plain)
+
+                if duel.acceptsSponsors && !isDeadlinePassed(duel.sponsorSubmissionDeadline) {
+                    DMButton(s.requestSponsorBtn, style: .outline, action: onRequestSponsor)
+                }
             }
         }
     }

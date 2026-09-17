@@ -136,6 +136,9 @@ public struct Duel: Codable, Sendable, Identifiable, Equatable {
     public let roomId: String?
     /// L'organisateur autorise-t-il la diffusion de pubs sponsor sur ce duel.
     public let allowsSponsorAds: Bool
+    /// L'admin a-t-il autorisé les DEMANDES de sponsor pour ce duel (décidé à l'approbation).
+    public let acceptsSponsors: Bool
+    public let sponsorSubmissionDeadline: String?
     /// Le manager (hôte) a-t-il activé le chat pour ce duel (défaut vrai côté backend).
     public let chatEnabled: Bool
     /// Profils hydratés côté serveur (peuvent être absents selon l'endpoint).
@@ -156,6 +159,8 @@ public struct Duel: Codable, Sendable, Identifiable, Equatable {
         case currentTimerTargetId = "current_timer_target_id"
         case roomId = "room_id"
         case allowsSponsorAds = "allows_sponsor_ads"
+        case acceptsSponsors = "accepts_sponsors"
+        case sponsorSubmissionDeadline = "sponsor_submission_deadline"
         case chatEnabled = "chat_enabled"
         case artist1, artist2, manager
     }
@@ -174,6 +179,8 @@ public struct Duel: Codable, Sendable, Identifiable, Equatable {
         currentTimerTargetId = c.opt(String.self, .currentTimerTargetId)
         roomId = c.opt(String.self, .roomId)
         allowsSponsorAds = c.bool(.allowsSponsorAds, true)
+        acceptsSponsors = c.bool(.acceptsSponsors, true)
+        sponsorSubmissionDeadline = c.opt(String.self, .sponsorSubmissionDeadline)
         chatEnabled = c.bool(.chatEnabled, true)
         artist1 = c.opt(DisplayProfile.self, .artist1)
         artist2 = c.opt(DisplayProfile.self, .artist2)

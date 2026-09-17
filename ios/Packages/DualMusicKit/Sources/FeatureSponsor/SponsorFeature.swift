@@ -65,7 +65,7 @@ public final class SponsorViewModel {
         )) ?? [])
             .filter {
                 ($0.status == .upcoming || $0.status == .live) && $0.allowsSponsorAds
-                    && !Self.isSponsorDeadlinePassed($0.sponsorSubmissionDeadline)
+                    && !isDeadlinePassed($0.sponsorSubmissionDeadline)
             }
             .map { SponsorableEvent(type: "artist_concert", eventId: $0.id, label: $0.title) }
 
@@ -74,7 +74,7 @@ public final class SponsorViewModel {
         )) ?? [])
             .filter {
                 $0.status != "ended" && $0.status != "cancelled" && $0.acceptsSponsors
-                    && !Self.isSponsorDeadlinePassed($0.sponsorSubmissionDeadline)
+                    && !isDeadlinePassed($0.sponsorSubmissionDeadline)
             }
             .map { SponsorableEvent(type: "competition", eventId: $0.id, label: "🏆 \($0.title)") }
 
@@ -83,7 +83,7 @@ public final class SponsorViewModel {
         )) ?? [])
             .filter {
                 ($0.status == .upcoming || $0.status == .live) && $0.acceptsSponsors
-                    && !Self.isSponsorDeadlinePassed($0.sponsorSubmissionDeadline)
+                    && !isDeadlinePassed($0.sponsorSubmissionDeadline)
             }
             .map { duel -> SponsorableEvent in
                 let a = duel.artist1?.displayName ?? "?"
@@ -92,15 +92,6 @@ public final class SponsorViewModel {
             }
 
         return concerts + competitions + duels
-    }
-
-    /// `true` seulement si une date limite est fixée ET déjà dépassée (pas de date = jamais fermé).
-    private static func isSponsorDeadlinePassed(_ deadline: String?) -> Bool {
-        guard let deadline else { return false }
-        let date = ISO8601DateFormatter().date(from: deadline)
-            ?? { let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f.date(from: deadline) }()
-        guard let date else { return false }
-        return date < Date()
     }
 
     /// Paie une demande approuvée (débit idempotent), puis recharge.
@@ -201,11 +192,19 @@ public struct SponsorView: View {
     @Environment(\.dmStrings) private var s
 
     private let viewModel: SponsorViewModel
-    @State private var tab = 0
+    /// `(type, id)` quand on arrive via le bouton « Sponsoriser » d'une affiche
+    /// (duel/concert/compétition) — ouvre directement l'onglet « Nouvelle » avec cet
+    /// événement verrouillé (pas de liste déroulante), au lieu de « Mes demandes » par défaut.
+    private let preselectedTarget: (type: String, id: String)?
+    @State private var tab: Int
 
-    /// - Parameter viewModel: source d'état.
-    public init(viewModel: SponsorViewModel) {
+    /// - Parameters:
+    ///   - viewModel: source d'état.
+    ///   - preselectedTarget: événement présélectionné (bouton « Sponsoriser » contextuel).
+    public init(viewModel: SponsorViewModel, preselectedTarget: (type: String, id: String)? = nil) {
         self.viewModel = viewModel
+        self.preselectedTarget = preselectedTarget
+        self._tab = State(initialValue: preselectedTarget != nil ? 1 : 0)
     }
 
     public var body: some View {
@@ -216,7 +215,7 @@ public struct SponsorView: View {
             if tab == 0 {
                 MyRequestsTab(viewModel: viewModel)
             } else {
-                NewRequestTab(viewModel: viewModel) { tab = 0 }
+                NewRequestTab(viewModel: viewModel, preselectedTarget: preselectedTarget) { tab = 0 }
             }
         }
         .padding(theme.spacing.lg)
@@ -280,11 +279,17 @@ private struct NewRequestTab: View {
     @Environment(\.dmStrings) private var s
 
     let viewModel: SponsorViewModel
+    /// Événement présélectionné (bouton « Sponsoriser » contextuel) — verrouille le choix,
+    /// pas de liste déroulante.
+    let preselectedTarget: (type: String, id: String)?
     let onSent: () -> Void
 
     @State private var selected: SponsorableEvent?
     @State private var description = ""
     @State private var pickedItem: PhotosPickerItem?
+
+    /// Vrai si l'événement est imposé par ``preselectedTarget`` (pas de choix libre).
+    private var isEventLocked: Bool { preselectedTarget != nil }
 
     var body: some View {
         ScrollView {
@@ -293,22 +298,34 @@ private struct NewRequestTab: View {
                     .font(DMFont.caption)
                     .foregroundStyle(theme.colors.mutedForeground)
 
-                if viewModel.events.isEmpty {
-                    DMEmptyState(title: s.noEvents, subtitle: s.noEventsHint, systemImage: "magnifyingglass")
-                }
-
-                ForEach(viewModel.events) { event in
-                    Button { selected = event } label: {
-                        DMCard(isSelected: selected?.id == event.id) {
-                            Text((selected?.id == event.id ? "◉ " : "○ ") + event.label)
-                                .font(DMFont.body)
-                                .fontWeight(selected?.id == event.id ? .bold : .regular)
-                                .foregroundStyle(
-                                    selected?.id == event.id ? theme.colors.foreground : theme.colors.mutedForeground
-                                )
+                if isEventLocked {
+                    if let event = selected {
+                        DMCard(isSelected: true) {
+                            Text("◉ \(event.label)")
+                                .font(DMFont.body).bold()
+                                .foregroundStyle(theme.colors.foreground)
                         }
+                    } else {
+                        Text(s.sponsorEventUnavailable)
+                            .font(DMFont.caption)
+                            .foregroundStyle(theme.colors.mutedForeground)
                     }
-                    .buttonStyle(.plain)
+                } else if viewModel.events.isEmpty {
+                    DMEmptyState(title: s.noEvents, subtitle: s.noEventsHint, systemImage: "magnifyingglass")
+                } else {
+                    ForEach(viewModel.events) { event in
+                        Button { selected = event } label: {
+                            DMCard(isSelected: selected?.id == event.id) {
+                                Text((selected?.id == event.id ? "◉ " : "○ ") + event.label)
+                                    .font(DMFont.body)
+                                    .fontWeight(selected?.id == event.id ? .bold : .regular)
+                                    .foregroundStyle(
+                                        selected?.id == event.id ? theme.colors.foreground : theme.colors.mutedForeground
+                                    )
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
 
                 Text(s.step2Media)
@@ -353,6 +370,14 @@ private struct NewRequestTab: View {
             guard let item else { return }
             Task { await viewModel.uploadMedia(item) }
         }
+        .task(id: viewModel.events.count) { selectPreselectedTarget() }
+        .onAppear { selectPreselectedTarget() }
+    }
+
+    /// Présélectionne l'événement ciblé dès que le catalogue est chargé.
+    private func selectPreselectedTarget() {
+        guard let target = preselectedTarget else { return }
+        selected = viewModel.events.first { $0.type == target.type && $0.id == target.id }
     }
 
     /// Texte d'état du média du brouillon.

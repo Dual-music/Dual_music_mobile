@@ -444,6 +444,7 @@ public struct ConcertsListView: View {
     private let viewModel: ConcertsViewModel
     private let onOpen: (Concert) -> Void
     private let onOpenReplay: (ReplayVideo) -> Void
+    private let onRequestSponsor: (String, String) -> Void
 
     @State private var tab = 0
     @State private var search = ""
@@ -452,14 +453,17 @@ public struct ConcertsListView: View {
     ///   - viewModel: source du catalogue.
     ///   - onOpen: callback à l'ouverture d'un concert (détail/billetterie).
     ///   - onOpenReplay: callback à l'ouverture d'un replay de concert.
+    ///   - onRequestSponsor: ouvre le sponsoring présélectionné sur ce concert (`"artist_concert"`, id).
     public init(
         viewModel: ConcertsViewModel,
         onOpen: @escaping (Concert) -> Void = { _ in },
-        onOpenReplay: @escaping (ReplayVideo) -> Void = { _ in }
+        onOpenReplay: @escaping (ReplayVideo) -> Void = { _ in },
+        onRequestSponsor: @escaping (String, String) -> Void = { _, _ in }
     ) {
         self.viewModel = viewModel
         self.onOpen = onOpen
         self.onOpenReplay = onOpenReplay
+        self.onRequestSponsor = onRequestSponsor
     }
 
     private var query: String { search.trimmed.lowercased() }
@@ -530,7 +534,7 @@ public struct ConcertsListView: View {
             } else {
                 LazyVStack(spacing: theme.spacing.sm) {
                     ForEach(filtered) { concert in
-                        Button { onOpen(concert) } label: { ConcertRow(concert: concert) }.buttonStyle(.plain)
+                        ConcertRow(concert: concert, onOpen: { onOpen(concert) }, onRequestSponsor: { onRequestSponsor("artist_concert", concert.id) })
                     }
                 }
             }
@@ -541,7 +545,7 @@ public struct ConcertsListView: View {
             } else {
                 LazyVStack(spacing: theme.spacing.sm) {
                     ForEach(filtered) { concert in
-                        Button { onOpen(concert) } label: { ConcertRow(concert: concert) }.buttonStyle(.plain)
+                        ConcertRow(concert: concert, onOpen: { onOpen(concert) }, onRequestSponsor: { onRequestSponsor("artist_concert", concert.id) })
                     }
                 }
             }
@@ -608,42 +612,54 @@ private struct ConcertReplayRow: View {
     }
 }
 
-/// Carte d'un concert : titre, date, dédicaces, statut et prix du billet.
+/// Carte d'un concert : titre, date, dédicaces, statut, prix du billet + bouton « Sponsoriser »
+/// contextuel (concerts d'artiste uniquement).
 private struct ConcertRow: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
     let concert: Concert
+    let onOpen: () -> Void
+    let onRequestSponsor: () -> Void
 
     var body: some View {
         DMCard {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(concert.title)
-                        .font(DMFont.body).bold()
-                        .foregroundStyle(theme.colors.foreground)
-                    if let date = isoMinute(concert.scheduledDate) {
-                        Text(date).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
-                    }
-                    if concert.allowsDedications {
-                        Text(s.dedicationsOpen)
-                            .font(DMFont.caption)
-                            .foregroundStyle(theme.colors.accent)
+            VStack(spacing: theme.spacing.sm) {
+                Button(action: onOpen) {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(concert.title)
+                                .font(DMFont.body).bold()
+                                .foregroundStyle(theme.colors.foreground)
+                            if let date = isoMinute(concert.scheduledDate) {
+                                Text(date).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                            }
+                            if concert.allowsDedications {
+                                Text(s.dedicationsOpen)
+                                    .font(DMFont.caption)
+                                    .foregroundStyle(theme.colors.accent)
+                            }
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(statusLabel)
+                                .font(DMFont.caption).bold()
+                                .foregroundStyle(concert.status == .live ? theme.colors.accent : theme.colors.mutedForeground)
+                            if concert.ticketPrice > 0 {
+                                Text("\(formatAmount(concert.ticketPrice)) \(s.credits)")
+                                    .font(DMFont.caption)
+                                    .foregroundStyle(theme.colors.foreground)
+                            } else {
+                                Text(s.freeLabel)
+                                    .font(DMFont.caption)
+                                    .foregroundStyle(theme.colors.mutedForeground)
+                            }
+                        }
                     }
                 }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(statusLabel)
-                        .font(DMFont.caption).bold()
-                        .foregroundStyle(concert.status == .live ? theme.colors.accent : theme.colors.mutedForeground)
-                    if concert.ticketPrice > 0 {
-                        Text("\(formatAmount(concert.ticketPrice)) \(s.credits)")
-                            .font(DMFont.caption)
-                            .foregroundStyle(theme.colors.foreground)
-                    } else {
-                        Text(s.freeLabel)
-                            .font(DMFont.caption)
-                            .foregroundStyle(theme.colors.mutedForeground)
-                    }
+                .buttonStyle(.plain)
+
+                if concert.isArtistConcert && concert.allowsSponsorAds && !isDeadlinePassed(concert.sponsorSubmissionDeadline) {
+                    DMButton(s.requestSponsorBtn, style: .outline, action: onRequestSponsor)
                 }
             }
         }

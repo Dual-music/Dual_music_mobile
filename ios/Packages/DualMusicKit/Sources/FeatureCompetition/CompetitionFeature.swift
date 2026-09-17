@@ -1156,13 +1156,20 @@ public struct CompetitionsListView: View {
 
     private let viewModel: CompetitionsViewModel
     private let onOpen: (Competition) -> Void
+    private let onRequestSponsor: (String, String) -> Void
 
     /// - Parameters:
     ///   - viewModel: source du catalogue.
     ///   - onOpen: callback à l'ouverture d'une compétition (room + classement).
-    public init(viewModel: CompetitionsViewModel, onOpen: @escaping (Competition) -> Void) {
+    ///   - onRequestSponsor: ouvre le sponsoring présélectionné sur cette compétition (`"competition"`, id).
+    public init(
+        viewModel: CompetitionsViewModel,
+        onOpen: @escaping (Competition) -> Void,
+        onRequestSponsor: @escaping (String, String) -> Void = { _, _ in }
+    ) {
         self.viewModel = viewModel
         self.onOpen = onOpen
+        self.onRequestSponsor = onRequestSponsor
     }
 
     public var body: some View {
@@ -1181,8 +1188,11 @@ public struct CompetitionsListView: View {
                 ScrollView {
                     LazyVStack(spacing: theme.spacing.sm) {
                         ForEach(viewModel.competitions) { competition in
-                            Button { onOpen(competition) } label: { CompetitionRow(competition: competition) }
-                                .buttonStyle(.plain)
+                            CompetitionRow(
+                                competition: competition,
+                                onOpen: { onOpen(competition) },
+                                onRequestSponsor: { onRequestSponsor("competition", competition.id) }
+                            )
                         }
                     }
                 }
@@ -1196,32 +1206,44 @@ public struct CompetitionsListView: View {
     }
 }
 
-/// Carte d'une compétition : titre, période, statut, récompense.
+/// Carte d'une compétition : titre, période, statut, récompense + bouton « Sponsoriser » contextuel.
 private struct CompetitionRow: View {
     @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
     let competition: Competition
+    let onOpen: () -> Void
+    let onRequestSponsor: () -> Void
 
     var body: some View {
         DMCard {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(competition.title)
-                        .font(DMFont.body).bold()
-                        .foregroundStyle(theme.colors.foreground)
-                    if let start = isoDay(competition.startAt) {
-                        Text(start).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            VStack(spacing: theme.spacing.sm) {
+                Button(action: onOpen) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(competition.title)
+                                .font(DMFont.body).bold()
+                                .foregroundStyle(theme.colors.foreground)
+                            if let start = isoDay(competition.startAt) {
+                                Text(start).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                            }
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(competition.status.capitalizedFirst)
+                                .font(DMFont.caption)
+                                .foregroundStyle(theme.colors.mutedForeground)
+                            if competition.rewardAmount > 0 {
+                                Text("🏆 \(formatAmount(competition.rewardAmount))")
+                                    .font(DMFont.caption).bold()
+                                    .foregroundStyle(theme.colors.accent)
+                            }
+                        }
                     }
                 }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(competition.status.capitalizedFirst)
-                        .font(DMFont.caption)
-                        .foregroundStyle(theme.colors.mutedForeground)
-                    if competition.rewardAmount > 0 {
-                        Text("🏆 \(formatAmount(competition.rewardAmount))")
-                            .font(DMFont.caption).bold()
-                            .foregroundStyle(theme.colors.accent)
-                    }
+                .buttonStyle(.plain)
+
+                if competition.acceptsSponsors && !isDeadlinePassed(competition.sponsorSubmissionDeadline) {
+                    DMButton(s.requestSponsorBtn, style: .outline, action: onRequestSponsor)
                 }
             }
         }

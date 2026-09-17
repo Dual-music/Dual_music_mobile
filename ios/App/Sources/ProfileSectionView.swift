@@ -61,8 +61,14 @@ struct ProfileSectionView: View {
     let container: AppContainer
     /// Ferme la section profil et revient à l'onglet courant.
     let onClose: () -> Void
+    /// Événement présélectionné (bouton « Sponsoriser » contextuel depuis une liste) — ouvre
+    /// directement l'onglet sponsoring, sur cet événement verrouillé.
+    let initialSponsorTarget: (type: String, id: String)?
+    /// Efface la présélection une fois consommée (tout changement de menu la réinitialise,
+    /// comme Android — évite qu'une visite manuelle ultérieure la réapplique).
+    let onClearSponsorTarget: () -> Void
 
-    @State private var route: ProfileRoute = .root
+    @State private var route: ProfileRoute
     @State private var managerEnabled = false
     @State private var openedReplay: ReplayVideo?
     /// Live en cours de diffusion (hôte) — plein écran, hors de la sous-navigation profil.
@@ -71,6 +77,24 @@ struct ProfileSectionView: View {
     @State private var openManagedDuel: Duel?
     /// Compétition gérée ouverte depuis « Mes Compétitions » (manager) — plein écran.
     @State private var openManagedCompetition: Competition?
+
+    /// - Parameters:
+    ///   - container: accès aux ViewModels.
+    ///   - onClose: ferme la section profil.
+    ///   - initialSponsorTarget: événement présélectionné pour le sponsoring (défaut `nil`).
+    ///   - onClearSponsorTarget: efface la présélection consommée.
+    init(
+        container: AppContainer,
+        onClose: @escaping () -> Void,
+        initialSponsorTarget: (type: String, id: String)? = nil,
+        onClearSponsorTarget: @escaping () -> Void = {}
+    ) {
+        self.container = container
+        self.onClose = onClose
+        self.initialSponsorTarget = initialSponsorTarget
+        self.onClearSponsorTarget = onClearSponsorTarget
+        self._route = State(initialValue: initialSponsorTarget != nil ? .sponsor : .root)
+    }
 
     var body: some View {
         content
@@ -110,7 +134,7 @@ struct ProfileSectionView: View {
                     isAdmin: container.profile.isAdmin,
                     isArtist: container.profile.isArtist,
                     isManager: container.profile.isManager,
-                    onNavigate: { route = $0 },
+                    onNavigate: { onClearSponsorTarget(); route = $0 },
                     onSignOut: {
                         Task {
                             await container.signOut()
@@ -182,8 +206,8 @@ struct ProfileSectionView: View {
             }
 
         case .sponsor:
-            SubScreen(title: s.menuSponsor, onBack: { route = .menu }) {
-                SponsorView(viewModel: container.sponsor)
+            SubScreen(title: s.menuSponsor, onBack: { onClearSponsorTarget(); route = .menu }) {
+                SponsorView(viewModel: container.sponsor, preselectedTarget: initialSponsorTarget)
             }
 
         case .creator:

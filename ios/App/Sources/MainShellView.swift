@@ -83,6 +83,8 @@ struct MainShellView: View {
     @State private var openLive: Live?
     /// Mon propre live ouvert depuis la liste — j'y entre comme HÔTE, pas spectateur.
     @State private var hostLive: Live?
+    /// Événement présélectionné pour le sponsoring (bouton contextuel depuis une liste).
+    @State private var sponsorPreselect: (type: String, id: String)?
     /// Profil public d'un artiste (tap sur son nom), superposé au-dessus du direct/duel/
     /// concert/compétition en cours — celui-ci reste en composition, pas de reconnexion.
     @State private var openArtist: IdentifiableID?
@@ -131,7 +133,12 @@ struct MainShellView: View {
                 NotificationsView(viewModel: container.notifications)
             }
         } else if showProfile {
-            ProfileSectionView(container: container, onClose: { showProfile = false })
+            ProfileSectionView(
+                container: container,
+                onClose: { showProfile = false },
+                initialSponsorTarget: sponsorPreselect,
+                onClearSponsorTarget: { sponsorPreselect = nil }
+            )
         } else {
             switch tab {
             case .home: homeTab
@@ -202,7 +209,11 @@ struct MainShellView: View {
                 )
             }
         } else {
-            DuelsListView(viewModel: container.duelsList) { openDuel = $0 }
+            DuelsListView(
+                viewModel: container.duelsList,
+                onOpen: { openDuel = $0 },
+                onRequestSponsor: { type, id in sponsorPreselect = (type, id); showProfile = true }
+            )
         }
     }
 
@@ -218,7 +229,11 @@ struct MainShellView: View {
                 )
             }
         } else {
-            CompetitionsListView(viewModel: container.competitions) { openCompetition = $0 }
+            CompetitionsListView(
+                viewModel: container.competitions,
+                onOpen: { openCompetition = $0 },
+                onRequestSponsor: { type, id in sponsorPreselect = (type, id); showProfile = true }
+            )
         }
     }
 
@@ -244,7 +259,8 @@ struct MainShellView: View {
             ConcertsListView(
                 viewModel: container.concerts,
                 onOpen: { openConcert = $0 },
-                onOpenReplay: { openConcertReplay = $0 }
+                onOpenReplay: { openConcertReplay = $0 },
+                onRequestSponsor: { type, id in sponsorPreselect = (type, id); showProfile = true }
             )
         }
     }

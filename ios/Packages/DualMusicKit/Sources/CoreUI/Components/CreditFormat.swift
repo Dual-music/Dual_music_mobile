@@ -65,3 +65,17 @@ public func isoMinute(_ iso: String?) -> String? {
     guard let iso, iso.count >= 16 else { return iso }
     return String(iso.prefix(16))
 }
+
+/// `true` seulement si une date limite est fixée ET déjà dépassée (`nil` = jamais fermé).
+///
+/// Partagé par le sponsoring (paliers, filtrage du catalogue, bouton contextuel) : la même
+/// règle doit s'appliquer partout où une date limite de soumission sponsor/dédicace est
+/// vérifiée.
+/// - Parameter deadline: horodatage ISO (peut être `nil`).
+public func isDeadlinePassed(_ deadline: String?) -> Bool {
+    guard let deadline else { return false }
+    let date = ISO8601DateFormatter().date(from: deadline)
+        ?? { let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f.date(from: deadline) }()
+    guard let date else { return false }
+    return date < Date()
+}
