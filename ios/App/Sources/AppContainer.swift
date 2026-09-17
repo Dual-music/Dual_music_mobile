@@ -63,6 +63,7 @@ public final class AppContainer {
     private let feedRepository: FeedRepository
     private let liveRepository: LiveRepository
     private let recordingRepository: RecordingRepository
+    private let sponsorAdRepository: SponsorAdRepository
     private let walletRepository: WalletRepository
     private let profileRepository: ProfileRepository
     private let notificationRepository: NotificationRepository
@@ -133,6 +134,7 @@ public final class AppContainer {
         feedRepository = FeedRepository(http: http)
         liveRepository = LiveRepository(http: http)
         recordingRepository = RecordingRepository(http: http)
+        sponsorAdRepository = SponsorAdRepository(http: http)
         walletRepository = WalletRepository(http: http)
         profileRepository = ProfileRepository(http: http)
         notificationRepository = NotificationRepository(http: http)
@@ -354,6 +356,7 @@ public final class AppContainer {
             wallet: walletRepository,
             giftShop: giftShopRepository,
             recording: recordingRepository,
+            sponsorAds: sponsorAdRepository,
             callerId: callerId
         )
         duelRooms[duel.id] = viewModel

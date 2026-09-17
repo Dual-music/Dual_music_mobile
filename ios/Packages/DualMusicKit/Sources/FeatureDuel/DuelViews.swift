@@ -30,6 +30,7 @@ public struct DuelRoomView: View {
     @State private var showReactionBar = false
     @State private var showCancelRecordingConfirm = false
     @State private var recordingErrorMessage: String?
+    @State private var showSponsorAdPicker = false
 
     /// - Parameters:
     ///   - viewModel: état + actions du duel.
@@ -93,6 +94,19 @@ public struct DuelRoomView: View {
             if viewModel.iAmBanned {
                 bannedGate
             }
+
+            // Pub sponsor : overlay vidéo plein écran pour tous quand une pub est active — le
+            // déclencheur est l'icône du rail (voir `hostControls`), pas le bouton intégré.
+            SponsorAdLayer(
+                activeAd: viewModel.sponsorAd.activeAd,
+                canTrigger: viewModel.isManager,
+                ads: viewModel.sponsorAd.ads,
+                busy: viewModel.sponsorAd.busy,
+                onLoadAds: { viewModel.sponsorAd.loadAds() },
+                onPlay: { viewModel.sponsorAd.play(adVideoId: $0) },
+                onStop: { viewModel.sponsorAd.stop() },
+                showTriggerButton: false
+            )
         }
         .task { await viewModel.start() }
         .onDisappear { Task { await viewModel.stop() } }
@@ -102,6 +116,15 @@ public struct DuelRoomView: View {
         .sheet(isPresented: $showManagerSheet) { managerSheet }
         .sheet(isPresented: $showGiftSheet) { giftSheet }
         .sheet(isPresented: $showLeaderboardSheet) { leaderboardSheet }
+        .confirmationDialog(s.sponsorStartAd, isPresented: $showSponsorAdPicker, titleVisibility: .visible) {
+            if viewModel.sponsorAd.ads.isEmpty {
+                Button(s.sponsorNoAds) {}.disabled(true)
+            } else {
+                ForEach(viewModel.sponsorAd.ads) { ad in
+                    Button("\(ad.title) · \(ad.durationSeconds)s") { viewModel.sponsorAd.play(adVideoId: ad.id) }
+                }
+            }
+        }
         .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
             ForEach(ReportReason.allCases, id: \.self) { reason in
                 Button(reportLabel(reason)) {
@@ -486,6 +509,11 @@ public struct DuelRoomView: View {
                     }
                     controlButton("camera.filters") {
                         showFilterSheet = true
+                    }
+                    if viewModel.isManager && (viewModel.duel?.allowsSponsorAds ?? true) && viewModel.winnerInfo == nil {
+                        controlButton(viewModel.sponsorAd.activeAd != nil ? "megaphone.fill" : "megaphone") {
+                            if viewModel.sponsorAd.activeAd != nil { viewModel.sponsorAd.stop() } else { showSponsorAdPicker = true; viewModel.sponsorAd.loadAds() }
+                        }
                     }
                 }
             }

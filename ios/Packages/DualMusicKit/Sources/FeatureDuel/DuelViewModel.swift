@@ -140,6 +140,8 @@ public final class DuelViewModel {
 
     /// Pilotage de l'enregistrement (LiveKit Egress) de ce duel — bouton manager uniquement.
     public let recordingCtl: RecordingHolder
+    /// Diffusion de pub sponsor pendant ce duel — déclenchée par le manager.
+    public let sponsorAd: SponsorAdHolder
 
     // MARK: - Likes / réactions emoji
 
@@ -201,6 +203,7 @@ public final class DuelViewModel {
     ///   - wallet: opérations de débit (vote, cadeau, billet).
     ///   - giftShop: catalogue + inventaire de cadeaux (partagé avec la boutique).
     ///   - recording: accès REST du pilotage d'enregistrement (LiveKit Egress).
+    ///   - sponsorAds: accès REST de la diffusion de pub sponsor.
     ///   - callerId: id du caller — détermine ``isManager``/``isModerator`` une fois le duel
     ///     chargé.
     public init(
@@ -215,6 +218,7 @@ public final class DuelViewModel {
         wallet: WalletRepository,
         giftShop: GiftShopRepository,
         recording: RecordingRepository,
+        sponsorAds: SponsorAdRepository,
         callerId: String? = nil
     ) {
         self.duelId = duelId
@@ -228,6 +232,7 @@ public final class DuelViewModel {
         self.wallet = wallet
         self.giftShop = giftShop
         self.recordingCtl = RecordingHolder(sourceType: "duel", sourceId: duelId, repo: recording)
+        self.sponsorAd = SponsorAdHolder(eventType: "duel", eventId: duelId, repo: sponsorAds)
         self.callerId = callerId
     }
 
@@ -688,6 +693,10 @@ public final class DuelViewModel {
         // Modération : un modérateur a été désigné/révoqué par le manager → recharge pour tous.
         subscriptions.append(live.onEvent(Realtime.Event.moderatorAppointed, as: EventModeratorPayload.self) { [weak self] _ in
             Task { await self?.loadModerators() }
+        })
+        // Pub sponsor (start/stop) diffusée à toute la room.
+        subscriptions.append(live.onEvent(Realtime.Event.sponsorAd, as: SponsorAdPayload.self) { [weak self] payload in
+            self?.sponsorAd.onEvent(payload)
         })
         subscriptions.append(live.onEvent(Realtime.Event.moderatorRevoked, as: EventModeratorPayload.self) { [weak self] _ in
             Task { await self?.loadModerators() }
