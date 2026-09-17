@@ -648,6 +648,10 @@ public struct DMStrings: Sendable {
     public let spectators: String
     public let liveInProgress: String
     public let watchLive: String
+    // Écran "Suivis" dédié.
+    public let followedTitle: String
+    public let notFollowingAny: String
+    public let followedEmptyHint: String
 }
 
 // MARK: - Tables de traduction
@@ -1240,7 +1244,10 @@ public extension DMStrings {
         noLivesActive: "Aucun live en cours",
         spectators: "spectateurs",
         liveInProgress: "Live en cours",
-        watchLive: "Regarder"
+        watchLive: "Regarder",
+        followedTitle: "Artistes suivis",
+        notFollowingAny: "Vous ne suivez aucun artiste",
+        followedEmptyHint: "Découvrez des artistes depuis l'accueil pour les suivre."
     )
 
     /// Chaînes **anglaises**.
@@ -1829,7 +1836,10 @@ public extension DMStrings {
         noLivesActive: "No live streams active",
         spectators: "viewers",
         liveInProgress: "Live in progress",
-        watchLive: "Watch"
+        watchLive: "Watch",
+        followedTitle: "Followed artists",
+        notFollowingAny: "You don't follow any artist",
+        followedEmptyHint: "Discover artists from home to follow them."
     )
 
     /// Renvoie la table de chaînes d'une langue.

@@ -105,6 +105,68 @@ public struct ArtistsView: View {
     }
 }
 
+/// Écran « Suivis » — liste **uniquement** les artistes que le caller suit. Réutilise
+/// ``ArtistsViewModel`` (annuaire + set des suivis) et filtre sur les ids suivis, avec un
+/// bouton « Ne plus suivre ». Miroir de `FollowedArtistsScreen` (Android).
+@MainActor
+public struct FollowedArtistsView: View {
+    @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
+
+    private let viewModel: ArtistsViewModel
+
+    /// - Parameter viewModel: source d'état (annuaire + suivis).
+    public init(viewModel: ArtistsViewModel) {
+        self.viewModel = viewModel
+    }
+
+    /// `following` contient des ids UTILISATEUR (pas des ids de profil artiste) → filtre par
+    /// ``ArtistSummary/opponentUserId``, comme l'annuaire public.
+    private var followed: [ArtistSummary] {
+        viewModel.artists.filter { viewModel.following.contains($0.opponentUserId) }
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text("\(s.followedTitle) (\(followed.count))")
+                .font(DMFont.body).bold()
+                .foregroundStyle(theme.colors.foreground)
+
+            if viewModel.isLoading {
+                DMLoadingBox()
+            } else if followed.isEmpty {
+                DMEmptyState(title: s.notFollowingAny, subtitle: s.followedEmptyHint, systemImage: "heart")
+                Spacer()
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: theme.spacing.sm) {
+                        ForEach(followed) { artist in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("🎤  \(artist.displayName)").font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+                                    Text("\(artist.followersCount) \(s.followers)").font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                                }
+                                Spacer()
+                                DMButton(s.followed, style: .outline) {
+                                    Task { await viewModel.toggleFollow(artistId: artist.id) }
+                                }
+                                .frame(width: 120)
+                            }
+                            .padding(theme.spacing.md)
+                            .background(theme.colors.card, in: RoundedRectangle(cornerRadius: theme.radius.md, style: .continuous))
+                        }
+                    }
+                }
+            }
+        }
+        .padding(theme.spacing.lg)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .dmScreenBackground()
+        .task { await viewModel.load() }
+        .refreshable { await viewModel.load() }
+    }
+}
+
 /// Ligne d'un artiste : avatar, nom, nombre d'abonnés, bouton suivre.
 private struct ArtistRow: View {
     @Environment(\.dmTheme) private var theme

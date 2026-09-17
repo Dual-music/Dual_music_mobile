@@ -213,7 +213,7 @@ struct ProfileSectionView: View {
 
         case .following:
             SubScreen(title: s.menuFollowing, onBack: { route = .menu }) {
-                ArtistsView(viewModel: container.artists)
+                FollowedArtistsView(viewModel: container.artists)
             }
 
         case .admin:
