@@ -54,26 +54,37 @@ public final class SponsorViewModel {
         events = await loadEvents()
     }
 
-    /// Fusionne les catalogues (concerts d'artistes, compétitions, duels) en événements à venir.
+    /// Fusionne les catalogues (concerts d'artistes, compétitions, duels) en événements à venir,
+    /// filtrés sur l'éligibilité réelle au sponsoring : statut, autorisation
+    /// (`allowsSponsorAds`/`acceptsSponsors`), et date limite non dépassée.
     private func loadEvents() async -> [SponsorableEvent] {
         let query = ["limit": "50"]
 
         let concerts = ((try? await http.request(
             .get(ConcertEndpoints.artistList, query: query), as: [Concert].self
         )) ?? [])
-            .filter { $0.status == .upcoming || $0.status == .live }
+            .filter {
+                ($0.status == .upcoming || $0.status == .live) && $0.allowsSponsorAds
+                    && !Self.isSponsorDeadlinePassed($0.sponsorSubmissionDeadline)
+            }
             .map { SponsorableEvent(type: "artist_concert", eventId: $0.id, label: $0.title) }
 
         let competitions = ((try? await http.request(
             .get(CompetitionEndpoints.list, query: query), as: [Competition].self
         )) ?? [])
-            .filter { $0.status != "ended" && $0.status != "cancelled" }
+            .filter {
+                $0.status != "ended" && $0.status != "cancelled" && $0.acceptsSponsors
+                    && !Self.isSponsorDeadlinePassed($0.sponsorSubmissionDeadline)
+            }
             .map { SponsorableEvent(type: "competition", eventId: $0.id, label: "🏆 \($0.title)") }
 
         let duels = ((try? await http.request(
             .get(DuelEndpoints.list, query: query), as: [Duel].self
         )) ?? [])
-            .filter { $0.status == .upcoming || $0.status == .live }
+            .filter {
+                ($0.status == .upcoming || $0.status == .live) && $0.acceptsSponsors
+                    && !Self.isSponsorDeadlinePassed($0.sponsorSubmissionDeadline)
+            }
             .map { duel -> SponsorableEvent in
                 let a = duel.artist1?.displayName ?? "?"
                 let b = duel.artist2?.displayName ?? "?"
@@ -81,6 +92,15 @@ public final class SponsorViewModel {
             }
 
         return concerts + competitions + duels
+    }
+
+    /// `true` seulement si une date limite est fixée ET déjà dépassée (pas de date = jamais fermé).
+    private static func isSponsorDeadlinePassed(_ deadline: String?) -> Bool {
+        guard let deadline else { return false }
+        let date = ISO8601DateFormatter().date(from: deadline)
+            ?? { let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f.date(from: deadline) }()
+        guard let date else { return false }
+        return date < Date()
     }
 
     /// Paie une demande approuvée (débit idempotent), puis recharge.
@@ -376,6 +396,8 @@ private struct SponsorRequestRow: View {
     private var statusLabel: String {
         switch request.status {
         case "pending": return s.sponsorStatusPending
+        case "awaiting_payment": return s.sponsorStatusAwaitingPayment
+        case "paid": return s.sponsorStatusPaid
         case "approved": return s.sponsorStatusApproved
         case "rejected": return s.statusRejected
         default: return request.status

@@ -303,6 +303,8 @@ public struct DMStrings: Sendable {
     public let event: String
     public let pay: String
     public let sponsorStatusPending: String
+    public let sponsorStatusAwaitingPayment: String
+    public let sponsorStatusPaid: String
     public let sponsorStatusApproved: String
     public let coverReady: String
     public let mediaReady: String
@@ -929,6 +931,8 @@ public extension DMStrings {
         event: "Événement",
         pay: "Payer",
         sponsorStatusPending: "En attente de validation",
+        sponsorStatusAwaitingPayment: "Prix fixé — paiement requis",
+        sponsorStatusPaid: "Payée — en attente de validation finale",
         sponsorStatusApproved: "Approuvé — à payer",
         coverReady: "✅ Pochette prête.",
         mediaReady: "✅ Média prêt",
@@ -1521,6 +1525,8 @@ public extension DMStrings {
         event: "Event",
         pay: "Pay",
         sponsorStatusPending: "Pending review",
+        sponsorStatusAwaitingPayment: "Price set — payment required",
+        sponsorStatusPaid: "Paid — awaiting final approval",
         sponsorStatusApproved: "Approved — to pay",
         coverReady: "✅ Cover ready.",
         mediaReady: "✅ Media ready",
