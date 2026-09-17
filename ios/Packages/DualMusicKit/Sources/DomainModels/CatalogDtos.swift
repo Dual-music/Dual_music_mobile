@@ -522,9 +522,10 @@ public struct LeaderboardSeason: Codable, Sendable, Identifiable {
     public let endDate: String?
     public let isActive: Bool
     public let isMysteryReward: Bool
+    public let rewards: [SeasonReward]
 
     enum CodingKeys: String, CodingKey {
-        case id, name, type
+        case id, name, type, rewards
         case startDate = "start_date"
         case endDate = "end_date"
         case isActive = "is_active"
@@ -540,6 +541,30 @@ public struct LeaderboardSeason: Codable, Sendable, Identifiable {
         endDate = c.opt(String.self, .endDate)
         isActive = c.bool(.isActive)
         isMysteryReward = c.bool(.isMysteryReward)
+        rewards = c.val([SeasonReward].self, .rewards, [])
+    }
+}
+
+/// Récompense d'une saison, par rang.
+public struct SeasonReward: Codable, Sendable {
+    public let rankPosition: Int
+    public let rewardType: String?
+    public let creditsAmount: Double?
+    public let physicalDescription: String?
+
+    enum CodingKeys: String, CodingKey {
+        case rankPosition = "rank_position"
+        case rewardType = "reward_type"
+        case creditsAmount = "credits_amount"
+        case physicalDescription = "physical_description"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        rankPosition = c.val(Int.self, .rankPosition, 0)
+        rewardType = c.opt(String.self, .rewardType)
+        creditsAmount = c.opt(Double.self, .creditsAmount)
+        physicalDescription = c.opt(String.self, .physicalDescription)
     }
 }
 
