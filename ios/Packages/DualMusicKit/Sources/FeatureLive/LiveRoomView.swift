@@ -3,6 +3,7 @@ import LiveKit
 import CoreLiveMedia
 import CoreUI
 import DomainModels
+import FeatureSponsor
 
 /// Écran d'un live (viewer) : vidéo plein écran + overlays chat / cadeaux / présence.
 ///
@@ -31,6 +32,9 @@ public struct LiveRoomView: View {
     @State private var showGuestsSheet = false
     @State private var showModeratorsSheet = false
     @State private var showFilterSheet = false
+    @State private var showRecordingSheet = false
+    @State private var showCancelRecordingConfirm = false
+    @State private var recordingErrorMessage: String?
 
     /// - Parameters:
     ///   - viewModel: état + actions du live.
@@ -132,6 +136,9 @@ public struct LiveRoomView: View {
         // Hôte ET modérateurs (pour voir qui d'autre a ce pouvoir) : liste + désignation.
         .sheet(isPresented: $showModeratorsSheet) { moderatorsSheet }
         .sheet(isPresented: $showFilterSheet) { filterSheet }
+        // Hôte : enregistrement manuel de l'événement (LiveKit Egress) — démarrer/pause/
+        // reprendre/annuler/sauvegarder, pour pouvoir en publier un replay ensuite.
+        .sheet(isPresented: $showRecordingSheet) { recordingSheet }
         // Feuille de motifs (viewer uniquement — voir bouton drapeau de `viewerBadge`).
         .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
             ForEach(ReportReason.allCases, id: \.self) { reason in
@@ -364,6 +371,8 @@ public struct LiveRoomView: View {
                 showFilterSheet = true
             }
 
+            recordingControl
+
             Button {
                 showDedicationRequests = true
                 Task { await viewModel.loadDedications() }
@@ -439,6 +448,64 @@ public struct LiveRoomView: View {
                 .background(.white.opacity(0.15), in: Circle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// Enregistrement (hôte) : icône ronde ouvrant la feuille dédiée en mode `manual` (avec
+    /// pastille REC quand actif/pause) ; simple indicateur non-tapable en mode `auto`.
+    @ViewBuilder
+    private var recordingControl: some View {
+        if viewModel.recordingCtl.mode == "manual" {
+            Button { showRecordingSheet = true } label: {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "record.circle")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(.white.opacity(0.15), in: Circle())
+                    RecordingRailBadge(active: viewModel.recordingCtl.active, paused: viewModel.recordingCtl.paused)
+                        .offset(x: 2, y: -2)
+                }
+            }
+            .buttonStyle(.plain)
+        } else if viewModel.recordingCtl.mode == "auto" && viewModel.recordingCtl.active {
+            RecordingHostButton(mode: viewModel.recordingCtl.mode, active: true, busy: false, onToggle: {})
+        }
+    }
+
+    /// Feuille hôte : contrôles complets d'enregistrement (démarrer/pause/reprendre/annuler/
+    /// sauvegarder) — LiveKit Egress, mode `manual` uniquement.
+    private var recordingSheet: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text("🔴 \(s.recording)").font(DMFont.pageTitle).bold().foregroundStyle(theme.colors.foreground)
+            RecordingSessionControls(
+                mode: viewModel.recordingCtl.mode,
+                active: viewModel.recordingCtl.active,
+                paused: viewModel.recordingCtl.paused,
+                finalizing: viewModel.recordingCtl.finalizing,
+                accumulatedSeconds: viewModel.recordingCtl.accumulatedSeconds,
+                runStartedAt: viewModel.recordingCtl.runStartedAt,
+                busy: viewModel.recordingCtl.busy,
+                onStart: { viewModel.recordingCtl.start(onError: { recordingErrorMessage = $0 }) },
+                onPause: { viewModel.recordingCtl.pause(onError: { recordingErrorMessage = $0 }) },
+                onResume: { viewModel.recordingCtl.resume(onError: { recordingErrorMessage = $0 }) },
+                onCancel: { showCancelRecordingConfirm = true },
+                onSave: {
+                    viewModel.recordingCtl.save(onError: { recordingErrorMessage = $0 })
+                    showRecordingSheet = false
+                }
+            )
+            if let recordingErrorMessage {
+                Text(recordingErrorMessage).font(DMFont.caption).foregroundStyle(theme.colors.destructive)
+            }
+            Spacer()
+        }
+        .padding(theme.spacing.lg)
+        .confirmationDialog(s.cancel, isPresented: $showCancelRecordingConfirm, titleVisibility: .visible) {
+            Button(s.cancel, role: .destructive) {
+                viewModel.recordingCtl.cancel(onError: { recordingErrorMessage = $0 })
+                showCancelRecordingConfirm = false
+            }
+        }
     }
 
     /// Feuille hôte : grille des filtres couleur (voir ``VideoFilterPresets/all``).

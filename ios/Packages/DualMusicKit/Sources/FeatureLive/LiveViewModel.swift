@@ -5,6 +5,7 @@ import CoreNetwork
 import CoreRealtime
 import CoreUI
 import DomainModels
+import FeatureSponsor
 
 /// Cadeau reçu à animer dans le live.
 public struct LiveGift: Identifiable, Sendable, Equatable {
@@ -90,6 +91,9 @@ public final class LiveViewModel {
     /// Vrai si le caller peut bannir/masquer un message : l'hôte ou un modérateur désigné.
     public var canModerate: Bool { isHost || isModerator }
 
+    /// Pilotage de l'enregistrement (LiveKit Egress) de ce live — partagé duel/concert/compétition.
+    public let recordingCtl: RecordingHolder
+
     private let liveId: String
     private let roomName: String
     private let callerId: String?
@@ -112,6 +116,7 @@ public final class LiveViewModel {
     ///     (ma propre publication + le visionnage des autres invités actifs).
     ///   - realtime: client Socket.IO partagé.
     ///   - repository: lectures/actions REST du live.
+    ///   - recording: accès REST du pilotage d'enregistrement (LiveKit Egress).
     ///   - isHost: vrai pour l'artiste qui diffuse — autorise le bannissement.
     ///   - callerId: id du caller (fan) — sert à cibler la bannière de décision de dédicace
     ///     et à me reconnaître dans les événements d'invité.
@@ -122,6 +127,7 @@ public final class LiveViewModel {
         tokenService: LiveKitTokenService,
         realtime: RealtimeClient,
         repository: LiveRepository,
+        recording: RecordingRepository,
         isHost: Bool = false,
         callerId: String? = nil
     ) {
@@ -132,6 +138,7 @@ public final class LiveViewModel {
         self.guestMedia = LiveRoomClient(tokenService: tokenService)
         self.realtime = realtime
         self.repository = repository
+        self.recordingCtl = RecordingHolder(sourceType: "live", sourceId: liveId, repo: recording)
         self.isHost = isHost
         self.callerId = callerId
     }
@@ -154,6 +161,7 @@ public final class LiveViewModel {
         }
         Task { [weak self] in await self?.loadLiveSettings() }
         Task { [weak self] in await self?.loadModerators() }
+        recordingCtl.startPolling()
         Task { [weak self] in
             guard let self else { return }
             let banned = await self.repository.listStreamBans(liveId: self.liveId)

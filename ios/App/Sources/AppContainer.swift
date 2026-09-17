@@ -62,6 +62,7 @@ public final class AppContainer {
     let authRepository: AuthRepository
     private let feedRepository: FeedRepository
     private let liveRepository: LiveRepository
+    private let recordingRepository: RecordingRepository
     private let walletRepository: WalletRepository
     private let profileRepository: ProfileRepository
     private let notificationRepository: NotificationRepository
@@ -131,6 +132,7 @@ public final class AppContainer {
         authRepository = AuthRepository(http: http, tokenStore: tokenStore, baseURL: baseURL)
         feedRepository = FeedRepository(http: http)
         liveRepository = LiveRepository(http: http)
+        recordingRepository = RecordingRepository(http: http)
         walletRepository = WalletRepository(http: http)
         profileRepository = ProfileRepository(http: http)
         notificationRepository = NotificationRepository(http: http)
@@ -407,6 +409,7 @@ public final class AppContainer {
             tokenService: liveKitTokens,
             realtime: realtime,
             repository: liveRepository,
+            recording: recordingRepository,
             callerId: profile.me?.user.id
         )
         liveRooms[live.id] = viewModel
@@ -424,6 +427,7 @@ public final class AppContainer {
             tokenService: liveKitTokens,
             realtime: realtime,
             repository: liveRepository,
+            recording: recordingRepository,
             isHost: true,
             callerId: profile.me?.user.id
         )
