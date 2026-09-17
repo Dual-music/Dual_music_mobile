@@ -201,6 +201,21 @@ public struct LiveRepository: Sendable {
         try await http.send(.post(LiveEndpoints.messages(liveId), body: ChatMessageBody(content: content)))
     }
 
+    /// Nombre de likes courant (amorçage).
+    public func likesCount(liveId: String) async -> Int {
+        (try? await http.request(.get(LiveEndpoints.likes(liveId)), as: LiveLikesResponse.self))?.likes ?? 0
+    }
+
+    /// Ajoute un like au live (le backend diffuse le nouveau total via l'event `likes`).
+    public func likeLive(liveId: String) async {
+        try? await http.send(.post(LiveEndpoints.likes(liveId)))
+    }
+
+    /// Suit l'artiste hôte du live.
+    public func followArtist(_ artistId: String) async {
+        try? await http.send(.post(ArtistEndpoints.follow(artistId)))
+    }
+
     /// Envoie un cadeau au host dans le contexte du live.
     ///
     /// Débit atomique côté backend ; l'`Idempotency-Key` empêche tout double débit sur
@@ -401,4 +416,9 @@ public struct LiveRepository: Sendable {
     public func revokeModerator(liveId: String, userId: String) async throws {
         try await http.send(.delete(ModerationEndpoints.revokeModerator("live", liveId, userId)))
     }
+}
+
+/// Réponse de `GET /lives/:id/likes`, et payload de l'événement temps réel `likes` (même forme).
+struct LiveLikesResponse: Decodable, Sendable {
+    let likes: Int
 }

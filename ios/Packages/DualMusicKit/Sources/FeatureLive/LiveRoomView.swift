@@ -35,6 +35,7 @@ public struct LiveRoomView: View {
     @State private var showRecordingSheet = false
     @State private var showCancelRecordingConfirm = false
     @State private var recordingErrorMessage: String?
+    @State private var showReactionBar = false
 
     /// - Parameters:
     ///   - viewModel: état + actions du live.
@@ -92,6 +93,11 @@ public struct LiveRoomView: View {
                 }
                 .id(gift.id)
             }
+            // --- Réaction emoji flottante (une à la fois) ---
+            if let reaction = viewModel.emojiFeed.last {
+                GiftBurstView(symbol: reaction.emoji) { viewModel.consumeOldestEmoji() }
+                    .id(reaction.id)
+            }
 
             // --- Overlays ---
             VStack {
@@ -102,6 +108,7 @@ public struct LiveRoomView: View {
                 if let feedback = viewModel.dedicationFeedback {
                     dedicationFeedbackBanner(feedback)
                 }
+                if !viewModel.isHost && showReactionBar { reactionBar }
                 if viewModel.isHost {
                     hostControls
                     dedicationSettingsRow
@@ -176,6 +183,16 @@ public struct LiveRoomView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text(s.reportAction))
+
+                Button { viewModel.follow(hostUserId) } label: {
+                    Image(systemName: "person.badge.plus")
+                        .font(DMFont.caption)
+                        .foregroundStyle(.white)
+                        .padding(theme.spacing.xs)
+                        .background(theme.colors.accent, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(s.follow))
             }
             // Visible de l'hôte ET des modérateurs eux-mêmes (pour qu'ils voient qui d'autre a
             // ce pouvoir) — pas seulement l'hôte.
@@ -303,6 +320,34 @@ public struct LiveRoomView: View {
                 .accessibilityLabel(Text(s.dedication))
             }
 
+            Button { viewModel.sendLike() } label: {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(.white.opacity(0.15), in: Circle())
+                    if viewModel.likes > 0 {
+                        Text("\(viewModel.likes)")
+                            .font(.system(size: 10)).bold()
+                            .foregroundStyle(.white)
+                            .padding(4)
+                            .background(theme.colors.accent, in: Circle())
+                            .offset(x: 4, y: -4)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+
+            Button { showReactionBar.toggle() } label: {
+                Image(systemName: "face.smiling.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(.white.opacity(0.15), in: Circle())
+            }
+            .buttonStyle(.plain)
+
             Button {
                 Task { await viewModel.sendGift(giftId: quickGiftId, toUserId: hostUserId) }
             } label: {
@@ -317,6 +362,26 @@ public struct LiveRoomView: View {
             .opacity(quickGiftId.isEmpty ? 0.5 : 1)
             .dmGlow()
             .accessibilityLabel(Text(s.sendGift))
+        }
+    }
+
+    /// Réactions rapides proposées (parité `DuelReactionEmojis` Android, réutilisée telle
+    /// quelle par tous les types d'événement).
+    private static let reactionEmojis = ["🔥", "😍", "👏", "🎵", "💎", "🎶", "⚡", "🌟", "😂"]
+
+    /// Barre d'emojis réactions (togglée par le bouton emoji de ``actionBar``).
+    private var reactionBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: theme.spacing.sm) {
+                ForEach(Self.reactionEmojis, id: \.self) { emoji in
+                    Button { viewModel.sendReaction(emoji) } label: {
+                        Text(emoji)
+                            .padding(theme.spacing.sm)
+                            .background(.black.opacity(0.35), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
     }
 

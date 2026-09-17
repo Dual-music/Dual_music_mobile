@@ -109,6 +109,10 @@ public enum Realtime {
         /// `/live` · room event (live/duel/concert/compétition) — début/fin de diffusion d'une
         /// pub sponsor, synchronisée pour tous les spectateurs. Payload ``SponsorAdPayload``.
         public static let sponsorAd = "sponsor:ad"
+        /// `/live` · room live — total de likes courant, PROPRE (pas via l'enveloppe
+        /// `broadcast` générique, contrairement au like duel/compétition/concert). Payload
+        /// `{ likes: Int }`.
+        public static let likes = "likes"
     }
 }
 

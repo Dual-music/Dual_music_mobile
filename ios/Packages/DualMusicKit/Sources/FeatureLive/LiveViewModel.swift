@@ -16,6 +16,12 @@ public struct LiveGift: Identifiable, Sendable, Equatable {
     public let value: Double
 }
 
+/// Réaction emoji flottante à animer (like ou emoji libre) dans le live.
+public struct LiveFloatingReaction: Identifiable, Sendable, Equatable {
+    public let id: Int
+    public let emoji: String
+}
+
 /// Orchestre l'expérience d'un live (viewer) : vidéo LiveKit + chat/cadeaux/présence temps
 /// réel (Socket.IO) + actions (message, cadeau).
 ///
@@ -31,6 +37,10 @@ public final class LiveViewModel {
     public private(set) var messages: [LiveChatMessage] = []
     public private(set) var giftFeed: [LiveGift] = []
     public private(set) var viewerCount: Int = 0
+    /// Compteur de j'aime PERSISTÉ, amorcé au démarrage puis synchronisé par l'event `likes`.
+    public private(set) var likes = 0
+    public private(set) var emojiFeed: [LiveFloatingReaction] = []
+    private var emojiCounter = 0
 
     /// Spectateurs bannis de ce live (ids) — leurs messages restent en mémoire mais sont
     /// masqués de l'affichage (``visibleMessages``), pas supprimés.
@@ -161,6 +171,10 @@ public final class LiveViewModel {
         }
         Task { [weak self] in await self?.loadLiveSettings() }
         Task { [weak self] in await self?.loadModerators() }
+        Task { [weak self] in
+            guard let self else { return }
+            self.likes = await self.repository.likesCount(liveId: self.liveId)
+        }
         recordingCtl.startPolling()
         Task { [weak self] in
             guard let self else { return }
@@ -286,6 +300,36 @@ public final class LiveViewModel {
     /// Retire le cadeau le plus ancien après son animation.
     public func consumeOldestGift() {
         if !giftFeed.isEmpty { giftFeed.removeFirst() }
+    }
+
+    /// Envoie un like : incrément local + cœur flottant visible par tous (relayé comme une
+    /// réaction emoji ❤️) + persistance du total (le serveur diffuse le total réel via `likes`,
+    /// qui prévaut si supérieur — voir ``connectRealtime()``).
+    public func sendLike() {
+        likes += 1
+        sendReaction("❤️")
+        Task { await repository.likeLive(liveId: liveId) }
+    }
+
+    /// Envoie une réaction emoji : effet local + relais aux autres membres de la room.
+    public func sendReaction(_ emoji: String) {
+        pushEmoji(emoji)
+        liveSession?.broadcast(channel: "live-emojis-\(liveId)", event: "emoji_reaction", payload: ["emoji": emoji])
+    }
+
+    private func pushEmoji(_ emoji: String) {
+        emojiCounter += 1
+        emojiFeed = (emojiFeed + [LiveFloatingReaction(id: emojiCounter, emoji: emoji)]).suffix(12).map { $0 }
+    }
+
+    /// Retire la réaction la plus ancienne après son animation.
+    public func consumeOldestEmoji() {
+        if !emojiFeed.isEmpty { emojiFeed.removeFirst() }
+    }
+
+    /// Suit l'artiste hôte du live.
+    public func follow(_ artistId: String) {
+        Task { await repository.followArtist(artistId) }
     }
 
     // MARK: - Dédicaces
@@ -538,6 +582,16 @@ public final class LiveViewModel {
         })
         subscriptions.append(live.onEvent(Realtime.Event.presence, as: PresencePayload.self) { [weak self] payload in
             self?.viewerCount = payload.count
+        })
+        // Total de likes diffusé par le backend (event dédié, pas l'enveloppe broadcast).
+        subscriptions.append(live.onEvent(Realtime.Event.likes, as: LiveLikesResponse.self) { [weak self] payload in
+            guard let self, payload.likes > self.likes else { return }
+            self.likes = payload.likes
+        })
+        // Réactions emoji relayées aux autres membres de la room (voir sendReaction).
+        subscriptions.append(live.onEvent(Realtime.Event.broadcast, as: BroadcastEnvelope.self) { [weak self] envelope in
+            guard let self, envelope.event == "emoji_reaction" else { return }
+            if let emoji = envelope.payload?.emoji { self.pushEmoji(emoji) }
         })
         // Bannissement poussé par le serveur — y compris quand ce n'est pas MOI qui ai banni
         // (un autre modérateur, ou moi depuis un autre appareil) : sans cet écouteur, seul
