@@ -5,7 +5,9 @@ import CoreNetwork
 import CoreRealtime
 import CoreUI
 import DomainModels
+import FeatureGiftShop
 import FeatureSponsor
+import FeatureWallet
 
 /// Cadeau reçu à animer dans le live.
 public struct LiveGift: Identifiable, Sendable, Equatable {
@@ -43,6 +45,9 @@ public final class LiveViewModel {
     private var emojiCounter = 0
     public private(set) var topDonor: LiveDonorEntry?
     public private(set) var leaderboard: [LiveDonorEntry] = []
+    public private(set) var giftCatalog: [VirtualGift] = []
+    public private(set) var inventory: [InventoryItem] = []
+    public private(set) var errorMessage: String?
 
     /// Spectateurs bannis de ce live (ids) — leurs messages restent en mémoire mais sont
     /// masqués de l'affichage (``visibleMessages``), pas supprimés.
@@ -112,6 +117,8 @@ public final class LiveViewModel {
     private let tokenService: LiveKitTokenService
     private let realtime: RealtimeClient
     private let repository: LiveRepository
+    private let wallet: WalletRepository
+    private let giftShop: GiftShopRepository
 
     private var giftCounter = 0
     private var subscriptions: [Subscription] = []
@@ -128,6 +135,8 @@ public final class LiveViewModel {
     ///     (ma propre publication + le visionnage des autres invités actifs).
     ///   - realtime: client Socket.IO partagé.
     ///   - repository: lectures/actions REST du live.
+    ///   - wallet: achat de cadeaux (boutique).
+    ///   - giftShop: catalogue + inventaire des cadeaux.
     ///   - recording: accès REST du pilotage d'enregistrement (LiveKit Egress).
     ///   - isHost: vrai pour l'artiste qui diffuse — autorise le bannissement.
     ///   - callerId: id du caller (fan) — sert à cibler la bannière de décision de dédicace
@@ -139,6 +148,8 @@ public final class LiveViewModel {
         tokenService: LiveKitTokenService,
         realtime: RealtimeClient,
         repository: LiveRepository,
+        wallet: WalletRepository,
+        giftShop: GiftShopRepository,
         recording: RecordingRepository,
         isHost: Bool = false,
         callerId: String? = nil
@@ -150,6 +161,8 @@ public final class LiveViewModel {
         self.guestMedia = LiveRoomClient(tokenService: tokenService)
         self.realtime = realtime
         self.repository = repository
+        self.wallet = wallet
+        self.giftShop = giftShop
         self.recordingCtl = RecordingHolder(sourceType: "live", sourceId: liveId, repo: recording)
         self.isHost = isHost
         self.callerId = callerId
@@ -178,6 +191,8 @@ public final class LiveViewModel {
             self.likes = await self.repository.likesCount(liveId: self.liveId)
         }
         Task { [weak self] in await self?.loadTopDonor() }
+        Task { [weak self] in await self?.loadGiftCatalog() }
+        Task { [weak self] in await self?.loadInventory() }
         recordingCtl.startPolling()
         Task { [weak self] in
             guard let self else { return }
@@ -246,6 +261,27 @@ public final class LiveViewModel {
     public func sendGift(giftId: String, toUserId: String) async {
         guard !giftId.isEmpty else { return }
         try? await repository.sendGift(liveId: liveId, giftId: giftId, toUserId: toUserId)
+        await loadInventory()
+    }
+
+    /// Recharge le catalogue des cadeaux virtuels (boutique).
+    public func loadGiftCatalog() async {
+        giftCatalog = (try? await giftShop.catalog()) ?? giftCatalog
+    }
+
+    /// Recharge l'inventaire (cadeaux possédés — après achat/envoi).
+    public func loadInventory() async {
+        inventory = (try? await giftShop.inventory()) ?? inventory
+    }
+
+    /// Achète un cadeau (boutique) puis recharge l'inventaire.
+    public func purchaseGift(giftId: String) async {
+        do {
+            try await wallet.purchaseGift(giftId: giftId)
+            await loadInventory()
+        } catch {
+            errorMessage = (error as? APIError)?.message ?? AppStrings.current.sendFailed
+        }
     }
 
     /// Signale ce live avec un motif (modération).

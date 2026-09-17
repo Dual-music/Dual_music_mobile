@@ -96,7 +96,7 @@ let package = Package(
         // MARK: - Features
 
         .target(name: "FeatureAuth", dependencies: ["CoreNetwork", "CoreUI", "DomainModels"]),
-        .target(name: "FeatureLive", dependencies: ["CoreNetwork", "CoreUI", "CoreLiveMedia", "CoreRealtime", "DomainModels", "FeatureSponsor"]),
+        .target(name: "FeatureLive", dependencies: ["CoreNetwork", "CoreUI", "CoreLiveMedia", "CoreRealtime", "DomainModels", "FeatureSponsor", "FeatureWallet", "FeatureGiftShop"]),
         .target(name: "FeatureFeed", dependencies: ["CoreNetwork", "CoreUI", "CoreLiveMedia", "DomainModels", "FeatureLive"]),
         .target(name: "FeatureWallet", dependencies: ["CoreNetwork", "CoreUI", "DomainModels"]),
         .target(name: "FeatureDuel", dependencies: ["CoreNetwork", "CoreUI", "CoreLiveMedia", "CoreRealtime", "DomainModels", "FeatureWallet", "FeatureGiftShop", "FeatureSponsor"]),

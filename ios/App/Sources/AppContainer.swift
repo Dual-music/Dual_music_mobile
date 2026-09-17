@@ -425,6 +425,8 @@ public final class AppContainer {
             tokenService: liveKitTokens,
             realtime: realtime,
             repository: liveRepository,
+            wallet: walletRepository,
+            giftShop: giftShopRepository,
             recording: recordingRepository,
             callerId: profile.me?.user.id
         )
@@ -443,6 +445,8 @@ public final class AppContainer {
             tokenService: liveKitTokens,
             realtime: realtime,
             repository: liveRepository,
+            wallet: walletRepository,
+            giftShop: giftShopRepository,
             recording: recordingRepository,
             isHost: true,
             callerId: profile.me?.user.id

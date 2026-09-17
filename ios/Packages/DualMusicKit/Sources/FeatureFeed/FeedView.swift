@@ -82,7 +82,6 @@ public struct FeedView: View {
             LiveRoomView(
                 viewModel: makeLiveViewModel(item),
                 hostUserId: item.artistId,
-                quickGiftId: "", // sélection réelle depuis la boutique de cadeaux
                 prewarmedToken: viewModel.prewarmedToken(for: item.id)
             )
         } else {

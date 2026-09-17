@@ -17,7 +17,6 @@ public struct LiveRoomView: View {
 
     private let viewModel: LiveViewModel
     private let hostUserId: String
-    private let quickGiftId: String
     private let prewarmedToken: LiveKitToken?
     private let onEnded: () -> Void
 
@@ -37,23 +36,21 @@ public struct LiveRoomView: View {
     @State private var recordingErrorMessage: String?
     @State private var showReactionBar = false
     @State private var showLeaderboardSheet = false
+    @State private var showGiftSheet = false
 
     /// - Parameters:
     ///   - viewModel: état + actions du live.
     ///   - hostUserId: destinataire des cadeaux.
-    ///   - quickGiftId: cadeau rapide (vide → bouton inactif tant qu'aucun cadeau choisi).
     ///   - prewarmedToken: jeton LiveKit pré-chauffé par le feed.
     ///   - onEnded: hôte uniquement — appelé une fois le live terminé (retour à « Mes lives »).
     public init(
         viewModel: LiveViewModel,
         hostUserId: String,
-        quickGiftId: String = "",
         prewarmedToken: LiveKitToken? = nil,
         onEnded: @escaping () -> Void = {}
     ) {
         self.viewModel = viewModel
         self.hostUserId = hostUserId
-        self.quickGiftId = quickGiftId
         self.prewarmedToken = prewarmedToken
         self.onEnded = onEnded
     }
@@ -109,6 +106,7 @@ public struct LiveRoomView: View {
                 if let feedback = viewModel.dedicationFeedback {
                     dedicationFeedbackBanner(feedback)
                 }
+                if let error = viewModel.errorMessage { DMMessage(error, kind: .error) }
                 if !viewModel.isHost && showReactionBar { reactionBar }
                 if viewModel.isHost {
                     hostControls
@@ -145,6 +143,7 @@ public struct LiveRoomView: View {
         .sheet(isPresented: $showModeratorsSheet) { moderatorsSheet }
         .sheet(isPresented: $showFilterSheet) { filterSheet }
         .sheet(isPresented: $showLeaderboardSheet) { leaderboardSheet }
+        .sheet(isPresented: $showGiftSheet) { giftSheet }
         // Hôte : enregistrement manuel de l'événement (LiveKit Egress) — démarrer/pause/
         // reprendre/annuler/sauvegarder, pour pouvoir en publier un replay ensuite.
         .sheet(isPresented: $showRecordingSheet) { recordingSheet }
@@ -363,7 +362,8 @@ public struct LiveRoomView: View {
             .buttonStyle(.plain)
 
             Button {
-                Task { await viewModel.sendGift(giftId: quickGiftId, toUserId: hostUserId) }
+                showGiftSheet = true
+                Task { await viewModel.loadGiftCatalog(); await viewModel.loadInventory() }
             } label: {
                 Image(systemName: "gift.fill")
                     .font(.system(size: 20, weight: .semibold))
@@ -372,8 +372,6 @@ public struct LiveRoomView: View {
                     .background(theme.gradients.primary, in: Circle())
             }
             .buttonStyle(.plain)
-            .disabled(quickGiftId.isEmpty)
-            .opacity(quickGiftId.isEmpty ? 0.5 : 1)
             .dmGlow()
             .accessibilityLabel(Text(s.sendGift))
         }
@@ -431,6 +429,18 @@ public struct LiveRoomView: View {
         case 2: return "🥉"
         default: return "#\(index + 1)"
         }
+    }
+
+    /// Feuille : envoyer un cadeau possédé (ou en acheter un) à l'hôte du live.
+    private var giftSheet: some View {
+        LiveGiftSendSheet(
+            inventory: viewModel.inventory,
+            catalog: viewModel.giftCatalog,
+            onSend: { giftId in
+                Task { await viewModel.sendGift(giftId: giftId, toUserId: hostUserId); showGiftSheet = false }
+            },
+            onPurchase: { giftId in Task { await viewModel.purchaseGift(giftId: giftId) } }
+        )
     }
 
     /// Envoie le message saisi puis vide le champ.
@@ -1100,5 +1110,77 @@ public struct LiveRoomView: View {
                 .frame(maxHeight: 180)
             }
         }
+    }
+}
+
+/// Feuille d'envoi de cadeau — un seul destinataire possible (l'hôte du live), donc pas de
+/// sélecteur de cible contrairement à `GiftSendSheet` (Duel) qui doit choisir entre plusieurs
+/// artistes/manager.
+private struct LiveGiftSendSheet: View {
+    @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
+
+    let inventory: [InventoryItem]
+    let catalog: [VirtualGift]
+    let onSend: (String) -> Void
+    let onPurchase: (String) -> Void
+
+    @State private var showShop = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text("🎁 \(s.sendGift)").font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+
+            HStack(spacing: theme.spacing.sm) {
+                pill(s.myGifts, selected: !showShop) { showShop = false }
+                pill(s.giftShopLabel, selected: showShop) { showShop = true }
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: theme.spacing.sm) {
+                    if !showShop {
+                        if inventory.isEmpty {
+                            Text(s.noGiftsBuyInShop).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                        }
+                        ForEach(inventory) { item in
+                            Button { onSend(item.giftId) } label: {
+                                HStack {
+                                    Text("\(item.imageURL ?? "🎁")  \(item.name ?? "")").foregroundStyle(theme.colors.foreground)
+                                    Spacer()
+                                    Text("×\(item.quantity)").bold().foregroundStyle(theme.colors.accent)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    } else {
+                        ForEach(catalog) { gift in
+                            Button { onPurchase(gift.id) } label: {
+                                HStack {
+                                    Text("\(gift.emoji ?? "🎁")  \(gift.name)").foregroundStyle(theme.colors.foreground)
+                                    Spacer()
+                                    Text("\(Int(gift.price)) \(s.credits)").bold().foregroundStyle(theme.colors.accent)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(theme.spacing.lg)
+        .presentationDetents([.large])
+        .dmScreenBackground()
+    }
+
+    private func pill(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
+                .font(DMFont.caption).bold()
+                .foregroundStyle(selected ? theme.colors.primaryForeground : theme.colors.foreground)
+                .padding(.horizontal, theme.spacing.md)
+                .padding(.vertical, theme.spacing.sm)
+                .background(selected ? theme.colors.accent : Color.black.opacity(0.15), in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
