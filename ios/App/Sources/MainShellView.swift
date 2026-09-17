@@ -79,6 +79,10 @@ struct MainShellView: View {
     @State private var openCompetition: Competition?
     @State private var openConcert: Concert?
     @State private var openConcertReplay: ReplayVideo?
+    /// Live ouvert depuis la liste (``LivesListView``) — lecteur plein écran, spectateur.
+    @State private var openLive: Live?
+    /// Mon propre live ouvert depuis la liste — j'y entre comme HÔTE, pas spectateur.
+    @State private var hostLive: Live?
     /// Profil public d'un artiste (tap sur son nom), superposé au-dessus du direct/duel/
     /// concert/compétition en cours — celui-ci reste en composition, pas de reconnexion.
     @State private var openArtist: IdentifiableID?
@@ -105,12 +109,17 @@ struct MainShellView: View {
                 if selected == .duels { openDuel = nil }
                 if selected == .competitions { openCompetition = nil }
                 if selected == .concerts { openConcert = nil }
+                if selected == .lives { openLive = nil }
             }
         }
         .background(DMScreenBackground())
         .fullScreenCover(item: $openArtist) { artist in
             ArtistPublicProfileView(viewModel: container.artistPublicProfile(userId: artist.id))
         }
+        .fullScreenCover(item: $hostLive) { live in
+            LiveRoomView(viewModel: container.hostLiveRoom(for: live), hostUserId: live.artistId, onEnded: { hostLive = nil })
+        }
+        .task { await container.profile.load() }
     }
 
     // MARK: - Contenu
@@ -126,7 +135,7 @@ struct MainShellView: View {
         } else {
             switch tab {
             case .home: homeTab
-            case .lives: FeedView(viewModel: container.feed, makeLiveViewModel: { container.liveRoom(for: $0) }, onOpenArtist: { openArtist = IdentifiableID($0) })
+            case .lives: livesTab
             case .duels: duelsTab
             case .concerts: concertsTab
             case .competitions: competitionsTab
@@ -156,6 +165,28 @@ struct MainShellView: View {
                 onOpenRanking: { homeDestination = .ranking },
                 onOpenArtists: { homeDestination = .artists }
             )
+        }
+    }
+
+    /// Liste des lives (grille + recherche) → pager plein écran (spectateur) ou, si c'est mon
+    /// propre live, entrée en tant qu'HÔTE — parité `tab == 1` de `MainActivity.kt`.
+    @ViewBuilder
+    private var livesTab: some View {
+        if let live = openLive {
+            FeedView(
+                viewModel: container.feed,
+                makeLiveViewModel: { container.liveRoom(for: $0) },
+                initialLiveId: live.id,
+                onOpenArtist: { openArtist = IdentifiableID($0) }
+            )
+        } else {
+            LivesListView(viewModel: container.feed) { live in
+                if let myId = container.profile.me?.user.id, live.artistId == myId {
+                    hostLive = live
+                } else {
+                    openLive = live
+                }
+            }
         }
     }
 

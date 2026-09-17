@@ -170,7 +170,7 @@ public final class AppContainer {
 
     var feed: FeedViewModel {
         if let cachedFeed { return cachedFeed }
-        let viewModel = FeedViewModel(repository: feedRepository, tokenService: liveKitTokens)
+        let viewModel = FeedViewModel(repository: feedRepository, tokenService: liveKitTokens, realtime: realtime)
         cachedFeed = viewModel
         return viewModel
     }

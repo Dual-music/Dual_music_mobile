@@ -18,20 +18,25 @@ public struct FeedView: View {
     /// Fabrique un ViewModel de live pour un item (injection par la coque applicative).
     private let makeLiveViewModel: (Live) -> LiveViewModel
     private let onOpenArtist: (String) -> Void
+    /// Live à afficher en premier (ouverture depuis ``LivesListView``) — `nil` = premier de la liste.
+    private let initialLiveId: String?
 
     @State private var currentId: String?
 
     /// - Parameters:
     ///   - viewModel: source du feed.
     ///   - makeLiveViewModel: fabrique (mémoïsée) d'un ViewModel de live.
+    ///   - initialLiveId: live sur lequel démarrer le pager (ouverture depuis une carte de la liste).
     ///   - onOpenArtist: ouvre le profil public de l'artiste (tap sur son nom dans le live actif).
     public init(
         viewModel: FeedViewModel,
         makeLiveViewModel: @escaping (Live) -> LiveViewModel,
+        initialLiveId: String? = nil,
         onOpenArtist: @escaping (String) -> Void = { _ in }
     ) {
         self.viewModel = viewModel
         self.makeLiveViewModel = makeLiveViewModel
+        self.initialLiveId = initialLiveId
         self.onOpenArtist = onOpenArtist
     }
 
@@ -75,7 +80,7 @@ public struct FeedView: View {
         .scrollIndicators(.hidden)
         .ignoresSafeArea()
         .background(Color.black)
-        .onAppear { currentId = viewModel.items.first?.id }
+        .onAppear { currentId = initialLiveId ?? viewModel.items.first?.id }
         .onChange(of: currentId) { _, newValue in
             guard let newValue, let index = viewModel.items.firstIndex(where: { $0.id == newValue }) else { return }
             viewModel.onPageChanged(index: index)

@@ -259,16 +259,20 @@ public struct TimerPayload: Decodable, Sendable {
 /// `presence` — compteur de spectateurs d'un live.
 public struct PresencePayload: Decodable, Sendable {
     public let liveId: String?
+    /// Nom de room (`live:<id>`) — sert à identifier le live en écoute multi-room.
+    public let room: String?
     public let count: Int
 
     enum CodingKeys: String, CodingKey {
         case liveId = "live_id"
+        case room
         case count
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         liveId = c.opt(String.self, .liveId)
+        room = c.opt(String.self, .room)
         count = c.int(.count)
     }
 }

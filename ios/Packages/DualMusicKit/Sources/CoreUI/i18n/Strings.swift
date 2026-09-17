@@ -642,6 +642,12 @@ public struct DMStrings: Sendable {
     public let seasonTypeArtist: String
     public let seasonTypeDonor: String
     public let creditsWord: String
+    // Vue liste/recherche des lives.
+    public let livesSubtitle: String
+    public let noLivesActive: String
+    public let spectators: String
+    public let liveInProgress: String
+    public let watchLive: String
 }
 
 // MARK: - Tables de traduction
@@ -1229,7 +1235,12 @@ public extension DMStrings {
         noParticipants: "Aucun participant trouvé pour cette saison",
         seasonTypeArtist: "🎤 Artistes",
         seasonTypeDonor: "💝 Donateurs",
-        creditsWord: "crédits"
+        creditsWord: "crédits",
+        livesSubtitle: "Regardez vos artistes préférés en direct",
+        noLivesActive: "Aucun live en cours",
+        spectators: "spectateurs",
+        liveInProgress: "Live en cours",
+        watchLive: "Regarder"
     )
 
     /// Chaînes **anglaises**.
@@ -1813,7 +1824,12 @@ public extension DMStrings {
         noParticipants: "No participants found for this season",
         seasonTypeArtist: "🎤 Artists",
         seasonTypeDonor: "💝 Donors",
-        creditsWord: "credits"
+        creditsWord: "credits",
+        livesSubtitle: "Watch your favorite artists live",
+        noLivesActive: "No live streams active",
+        spectators: "viewers",
+        liveInProgress: "Live in progress",
+        watchLive: "Watch"
     )
 
     /// Renvoie la table de chaînes d'une langue.

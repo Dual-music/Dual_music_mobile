@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import CoreNetwork
 import CoreLiveMedia
+import CoreRealtime
 import DomainModels
 
 /// Charge le feed des lives (`GET /lives`).
@@ -38,20 +39,29 @@ public final class FeedViewModel {
 
     public private(set) var items: [Live] = []
     public private(set) var isLoading = false
+    /// Nombre de spectateurs en temps réel par live (via présence Socket.IO `/live`) — utilisé
+    /// par la vue LISTE (``LivesListView``), pas par le pager vertical.
+    public private(set) var presence: [String: Int] = [:]
 
     private let repository: FeedRepository
     private let tokenService: LiveKitTokenService
+    private let realtime: RealtimeClient
 
     private var page = 1
     private var hasMore = true
     private var prewarmed: [String: LiveKitToken] = [:]
+    private var liveSession: NamespaceSession?
+    private var presenceSubscriptions: [Subscription] = []
+    private var presenceConnected = false
 
     /// - Parameters:
     ///   - repository: lecture du catalogue de lives.
     ///   - tokenService: émission des jetons LiveKit (prefetch).
-    public init(repository: FeedRepository, tokenService: LiveKitTokenService) {
+    ///   - realtime: client Socket.IO partagé (présence temps réel de la vue liste).
+    public init(repository: FeedRepository, tokenService: LiveKitTokenService, realtime: RealtimeClient) {
         self.repository = repository
         self.tokenService = tokenService
+        self.realtime = realtime
     }
 
     /// Charge la première page (idempotent).
@@ -80,6 +90,40 @@ public final class FeedViewModel {
     /// - Parameter liveId: identifiant du live.
     public func prewarmedToken(for liveId: String) -> LiveKitToken? {
         prewarmed[liveId]
+    }
+
+    /// Utilisé par la vue LISTE (``LivesListView``) : charge si besoin puis connecte la
+    /// présence temps réel. Sûr car sur la liste aucun live n'est actif — se connecter au
+    /// socket `/live` ne casse rien (contrairement au pager vertical qui l'utilise déjà
+    /// pour le live actif).
+    public func refreshPresence() async {
+        if items.isEmpty { await load() }
+        guard !presenceConnected else { return }
+        presenceConnected = true
+        connectPresence()
+    }
+
+    /// Rejoint les rooms `/live` de tous les lives affichés (un seul socket partagé) et écoute
+    /// l'event `presence` → compteur de spectateurs temps réel par carte, comme le web.
+    private func connectPresence() {
+        let live = realtime.session(.live)
+        liveSession = live
+        presenceSubscriptions.append(live.onConnect { [weak self] in
+            guard let self else { return }
+            for item in self.items { live.join(.live, id: item.id) }
+        })
+        presenceSubscriptions.append(live.onEvent(Realtime.Event.presence, as: PresencePayload.self) { [weak self] payload in
+            guard let self else { return }
+            let id: String?
+            if let room = payload.room, room.hasPrefix("live:") {
+                id = String(room.dropFirst("live:".count))
+            } else {
+                id = payload.liveId
+            }
+            guard let id, !id.isEmpty else { return }
+            self.presence[id] = payload.count
+        })
+        Task { await live.connect() }
     }
 
     // MARK: - Interne
