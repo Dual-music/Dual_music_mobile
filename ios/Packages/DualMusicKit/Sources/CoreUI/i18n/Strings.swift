@@ -360,6 +360,11 @@ public struct DMStrings: Sendable {
     public let recordFinalizing: String
     public let recordPausedSuffix: String
     public let recordingNotStartedHint: String
+    // Pub sponsor diffusée pendant un événement.
+    public let sponsorStartAd: String
+    public let sponsorStopAd: String
+    public let sponsorNoAds: String
+    public let sponsorAdBadge: String
     public let noCandidatesHint: String
     public let timerRunning: String
     public let artistSingular: String
@@ -836,6 +841,10 @@ public extension DMStrings {
         recordFinalizing: "Finalisation…",
         recordPausedSuffix: "en pause",
         recordingNotStartedHint: "Le direct n'est pas encore enregistré. Démarre l'enregistrement pour pouvoir en publier le replay ensuite.",
+        sponsorStartAd: "Démarrer pub",
+        sponsorStopAd: "Arrêter",
+        sponsorNoAds: "Aucune pub disponible",
+        sponsorAdBadge: "PUBLICITÉ",
         noCandidatesHint: "Le classement s'affichera dès les premières candidatures.",
         timerRunning: "⏱ Minuteur en cours",
         artistSingular: "Artiste",
@@ -1297,6 +1306,10 @@ public extension DMStrings {
         recordFinalizing: "Finalizing…",
         recordPausedSuffix: "paused",
         recordingNotStartedHint: "This stream isn't being recorded yet. Start recording to publish a replay afterwards.",
+        sponsorStartAd: "Start ad",
+        sponsorStopAd: "Stop",
+        sponsorNoAds: "No ad available",
+        sponsorAdBadge: "ADVERTISEMENT",
         noCandidatesHint: "The ranking will appear once candidacies start.",
         timerRunning: "⏱ Timer running",
         artistSingular: "Artist",

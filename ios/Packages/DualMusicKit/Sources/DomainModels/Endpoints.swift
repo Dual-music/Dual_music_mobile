@@ -271,6 +271,10 @@ public enum SponsorEndpoints {
     public static let myRequests = "/sponsors/requests/me"
     public static let create = "/sponsors/requests"
     public static func pay(_ id: String) -> String { "/sponsors/requests/\(id)/pay" }
+    /// Diffusion de pubs sponsor pendant un événement (live/duel/concert/compétition).
+    public static let ads = "/sponsors/ads"
+    public static let adsPlay = "/sponsors/ads/play"
+    public static func adsStop(_ playId: String) -> String { "/sponsors/ads/plays/\(playId)/stop" }
 }
 
 /// Chemins des outils créateur.

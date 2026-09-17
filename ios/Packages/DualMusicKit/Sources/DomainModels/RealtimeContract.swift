@@ -106,6 +106,9 @@ public enum Realtime {
         /// `/live` · room compétition — le manager impose (ou libère) la caméra épinglée pour
         /// tous. Payload ``FocusPayload``.
         public static let focus = "focus"
+        /// `/live` · room event (live/duel/concert/compétition) — début/fin de diffusion d'une
+        /// pub sponsor, synchronisée pour tous les spectateurs. Payload ``SponsorAdPayload``.
+        public static let sponsorAd = "sponsor:ad"
     }
 }
 
@@ -546,4 +549,56 @@ public struct BroadcastPayload: Decodable, Sendable {
     enum CodingKeys: String, CodingKey {
         case emoji, count, slot, name, avatar, votes, percent, artistId, identity, isMicOn, isCameraOn, isStreaming
     }
+}
+
+/// Vidéo publicitaire sponsor diffusable dans un événement.
+public struct SponsorAdVideo: Decodable, Sendable, Equatable, Identifiable {
+    public let id: String
+    public let videoUrl: String
+    public let title: String
+    public let durationSeconds: Int
+    public let playCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case videoUrl = "video_url"
+        case title
+        case durationSeconds = "duration_seconds"
+        case playCount = "play_count"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.val(String.self, .id, "")
+        videoUrl = c.val(String.self, .videoUrl, "")
+        title = c.val(String.self, .title, "")
+        durationSeconds = c.val(Int.self, .durationSeconds, 0)
+        playCount = c.val(Int.self, .playCount, 0)
+    }
+}
+
+/// `sponsor:ad` — début/fin de diffusion d'une pub dans la room (start/stop).
+public struct SponsorAdPayload: Decodable, Sendable {
+    /// `"start"` | `"stop"`.
+    public let action: String
+    public let playId: String?
+    public let ad: SponsorAdVideo?
+
+    enum CodingKeys: String, CodingKey {
+        case action
+        case playId = "play_id"
+        case ad
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        action = c.val(String.self, .action, "stop")
+        playId = c.opt(String.self, .playId)
+        ad = c.opt(SponsorAdVideo.self, .ad)
+    }
+}
+
+/// Réponse de `POST /sponsors/ads/play` : l'enregistrement de diffusion créé.
+public struct SponsorAdPlay: Decodable, Sendable {
+    public let id: String
 }

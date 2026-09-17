@@ -13,7 +13,7 @@ Règle : chaque étape = lire le code Android réel → implémenter iOS → com
 
 ## 1. Transversal (touche Live + Duel + Compétition + Concert)
 
-- [ ] **1.1 Enregistrement manuel → replay** — `android/feature/sponsor/.../RecordingRepository.kt`, `RecordingHolder.kt`, `RecordingUi.kt`. L'hôte peut démarrer/pause/reprendre/sauvegarder un enregistrement de son événement. Absent d'iOS (0 résultat).
+- [x] **1.1 Enregistrement manuel → replay** — `android/feature/sponsor/.../RecordingRepository.kt`, `RecordingHolder.kt`, `RecordingUi.kt`. L'hôte peut démarrer/pause/reprendre/sauvegarder un enregistrement de son événement. Fait : infra partagée (`FeatureSponsor/RecordingFeature.swift`) + câblage Live/Duel/Compétition/Concert, CI verte (8ac5e28, 63e6c7f, 4e95148, 8d931d6, eccc1e1).
 - [ ] **1.2 Overlay pub sponsor pendant l'événement** — `android/feature/sponsor/.../SponsorAdHolder.kt`, `SponsorAdUi.kt`. Affichage réel de la pub (overlay vidéo + start/skip hôte) pendant Live/Duel/Compétition/Concert. iOS ne gère que la demande/paiement, jamais l'affichage.
 
 ## 2. Withdrawal (critique)
