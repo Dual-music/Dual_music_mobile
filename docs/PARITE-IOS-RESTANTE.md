@@ -37,7 +37,9 @@ Règle : chaque étape = lire le code Android réel → implémenter iOS → com
 - [x] **4.2 Suivre l'artiste depuis le live** — `LiveViewModel.kt` L337 (`followArtist`). Fait, CI verte (60f2ccb) : réutilise `ArtistEndpoints.follow` existant.
 - [x] **4.3 Boutique de cadeaux complète** — `LiveViewModel.kt` L183-192/789-819, `LiveRoomScreen.kt` L884-936. Fait, CI verte (190bea0) : `giftCatalog`/`inventory`/`loadGiftCatalog`/`loadInventory`/`purchaseGift` (réutilise `GiftShopRepository`/`WalletRepository`) + `LiveGiftSendSheet` (Mes cadeaux/Boutique), remplace le `quickGiftId` fixe (toujours vide en pratique — bouton mort) supprimé du `LiveRoomView.init`.
 - [x] **4.4 Classement des donateurs** — `giftLeaderboard`, `LiveRoomScreen.kt` L1126-1133. Fait, CI verte (60f2ccb) : `LiveDonorEntry` + trophée dans `actionBar` ouvrant une feuille de classement (même simplification qu'ailleurs : feuille plutôt que la bulle top-donateur flottante d'Android).
-- [x] **4.5 Mute à distance d'un invité par l'hôte** — `LiveViewModel.kt` L548-549 (`toggleGuestMic`, event `toggle_mic`), `LiveRoomScreen.kt` L1072-1089. Fait (à confirmer CI, a858628) : `BroadcastPayload.action/targetUserId/value` + `toggleGuestMic`/`onGuestAction` (canal `live-controls-<id>`, event `guest_action`) + bouton micro par invité dans `guestsSheet`. `kick`/`start_timer` non repris : le retrait d'invité passe déjà côté iOS par un mécanisme REST équivalent (`joinUpdate` → statut `ended`), et le chrono de parole n'était pas dans le périmètre audité.
+- [x] **4.5 Mute à distance d'un invité par l'hôte** — `LiveViewModel.kt` L548-549 (`toggleGuestMic`, event `toggle_mic`), `LiveRoomScreen.kt` L1072-1089. Fait, CI verte (a858628) : `BroadcastPayload.action/targetUserId/value` + `toggleGuestMic`/`onGuestAction` (canal `live-controls-<id>`, event `guest_action`) + bouton micro par invité dans `guestsSheet`. `kick`/`start_timer` non repris : le retrait d'invité passe déjà côté iOS par un mécanisme REST équivalent (`joinUpdate` → statut `ended`), et le chrono de parole n'était pas dans le périmètre audité.
+
+**Section 4 (Live) : terminée, tout CI vert.**
 
 ## 5. Majeur
 
