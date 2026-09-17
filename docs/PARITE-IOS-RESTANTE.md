@@ -48,9 +48,11 @@ Règle : chaque étape = lire le code Android réel → implémenter iOS → com
 - [x] **5.3 Écran de préférences de notifications** — `android/feature/notifications/.../NotificationPrefsScreen.kt` + endpoints `PREFERENCES`/`PREFERENCES_EMAIL`. Fait (à confirmer CI, 061f9c9) : `NotificationPreferences` + `NotificationPrefsViewModel`/`NotificationPrefsView`, la ligne de menu "Notifications" ouvre désormais ces préférences (la cloche reste l'accès à la liste in-app).
 - [x] **5.4 CGU / Politique de confidentialité à l'inscription** — `android/feature/auth/.../LegalDocScreen.kt` + `TermsAcceptance`. Case à cocher obligatoire + consultation in-app. Fait, CI verte (e49f7a3) : `LegalKind`/`LegalDocView`, `AuthViewModel.acceptTerms` (gate `canSubmit`).
 - [x] **5.5 Espace "Mon contenu" créateur** — `android/feature/content/.../MyContentScreen.kt` (fichier entier). Publier une vidéo lifestyle, "Mes vidéos", `ReplayManageDialog` (public/privé, prix, téléchargement, remplacement fichier). Fait (à confirmer CI, fcb3c10) : `MyContentViewModel`/`MyContentView`/`ReplayManageSheet` (FeatureContent), nouvelle route menu "Lifestyle" (artiste + manager — écart assumé : Android affiche un libellé différent pour le manager sur la même destination).
-- [ ] **5.6 Invitation de duel peer-to-peer entre artistes** — `CreatorScreen.kt` (`createDuel` L131-151, UI "Demander un Duel" L293-375) + reproposer une date (`changeDuelDate` L169-181, `SentDuelRow`).
-- [ ] **5.7 Suppression d'un concert planifié** — `CreatorScreen.kt` (`deleteConcert` L260-264, `DELETE /artist-concerts/:id`).
-- [ ] **5.8 Dates limites sponsor/dédicace à la création d'un concert** — `CreatorScreen.kt` L200-243/519-538 (`sponsorSubmissionDeadline`/`dedicationSubmissionDeadline`). Champs absents de `CreateArtistConcert` iOS.
+- [x] **5.6 Invitation de duel peer-to-peer entre artistes** — `CreatorScreen.kt` (`createDuel` L131-151, UI "Demander un Duel" L293-375) + reproposer une date (`changeDuelDate` L169-181, `SentDuelRow`). Fait, CI verte (23ac0da/5149ca3) : UI recherche/sélection d'artiste + envoi, séparation envoyées/reçues, `SentDuelRow` (reproposer une date).
+- [x] **5.7 Suppression d'un concert planifié** — `CreatorScreen.kt` (`deleteConcert` L260-264, `DELETE /artist-concerts/:id`). Fait, CI verte (5149ca3) : bouton "Supprimer" par concert + confirmation (ajoutée par prudence, absente côté Android).
+- [x] **5.8 Dates limites sponsor/dédicace à la création d'un concert** — `CreatorScreen.kt` L200-243/519-538 (`sponsorSubmissionDeadline`/`dedicationSubmissionDeadline`). Champs absents de `CreateArtistConcert` iOS. Fait (à confirmer CI, a69c880) : champs ajoutés au DTO + formulaire (conditionnels sous chaque toggle).
+
+**Section 5 (Majeur) : terminée.**
 
 ## 6. Mineur
 
