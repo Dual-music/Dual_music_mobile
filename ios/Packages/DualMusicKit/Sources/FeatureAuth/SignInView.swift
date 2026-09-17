@@ -16,6 +16,9 @@ public struct SignInView: View {
 
     @Bindable private var viewModel: AuthViewModel
 
+    /// Superposition plein écran d'un document légal (ouvert depuis la case d'inscription).
+    @State private var legalDoc: LegalKind?
+
     /// - Parameter viewModel: source d'état partagée avec les autres écrans d'auth.
     public init(viewModel: AuthViewModel) {
         self._viewModel = Bindable(viewModel)
@@ -80,6 +83,9 @@ public struct SignInView: View {
         .scrollDismissesKeyboard(.interactively)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .dmScreenBackground()
+        .fullScreenCover(item: $legalDoc) { kind in
+            LegalDocView(kind: kind, onBack: { legalDoc = nil })
+        }
     }
 
     // MARK: - Champs par mode
@@ -100,6 +106,7 @@ public struct SignInView: View {
                 help: mismatchHelp,
                 isSecure: true
             )
+            termsAcceptance
 
         case .forgot:
             Text(s.forgotHint)
@@ -121,6 +128,38 @@ public struct SignInView: View {
                 if digits != newValue { viewModel.resetCode = digits }
             }
             DMTextField(s.newPassword, text: $viewModel.newPassword, help: s.atLeast8, isSecure: true)
+        }
+    }
+
+    /// Case d'acceptation **obligatoire** des documents légaux : la case coche l'acceptation,
+    /// et les noms des documents sont **cliquables** pour les lire avant d'accepter (comme sur
+    /// le web).
+    private var termsAcceptance: some View {
+        HStack(alignment: .top, spacing: theme.spacing.sm) {
+            Button { viewModel.acceptTerms.toggle() } label: {
+                Image(systemName: viewModel.acceptTerms ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 20))
+                    .foregroundStyle(viewModel.acceptTerms ? theme.colors.primary : theme.colors.mutedForeground)
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(s.iAcceptThe) :")
+                    .font(DMFont.caption)
+                    .foregroundStyle(theme.colors.mutedForeground)
+                HStack(spacing: 4) {
+                    Button { legalDoc = .terms } label: {
+                        Text(s.termsOfUse).font(DMFont.caption).foregroundStyle(theme.colors.primaryGlow)
+                    }
+                    .buttonStyle(.plain)
+                    Text("·").font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                    Button { legalDoc = .privacy } label: {
+                        Text(s.privacyPolicy).font(DMFont.caption).foregroundStyle(theme.colors.primaryGlow)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Spacer(minLength: 0)
         }
     }
 

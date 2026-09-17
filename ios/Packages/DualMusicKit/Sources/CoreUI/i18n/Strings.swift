@@ -597,6 +597,10 @@ public struct DMStrings: Sendable {
     public let notifAssignments: String
     public let notifSystem: String
     public let notifRequired: String
+    // Acceptation des documents légaux à l'inscription.
+    public let iAcceptThe: String
+    public let termsOfUse: String
+    public let privacyPolicy: String
 }
 
 // MARK: - Tables de traduction
@@ -1145,7 +1149,10 @@ public extension DMStrings {
         notifRequests: "Demandes & validations",
         notifAssignments: "Assignations",
         notifSystem: "Emails système",
-        notifRequired: "Requis"
+        notifRequired: "Requis",
+        iAcceptThe: "J'accepte les",
+        termsOfUse: "Conditions d'utilisation",
+        privacyPolicy: "Politique de confidentialité"
     )
 
     /// Chaînes **anglaises**.
@@ -1690,7 +1697,10 @@ public extension DMStrings {
         notifRequests: "Requests & approvals",
         notifAssignments: "Assignments",
         notifSystem: "System emails",
-        notifRequired: "Required"
+        notifRequired: "Required",
+        iAcceptThe: "I accept the",
+        termsOfUse: "Terms of Use",
+        privacyPolicy: "Privacy Policy"
     )
 
     /// Renvoie la table de chaînes d'une langue.

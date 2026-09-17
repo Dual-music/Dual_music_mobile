@@ -60,6 +60,8 @@ public final class AuthViewModel {
     public var phone: String = ""
     public var country: Country = Countries.default
     public var referralCode: String = ""
+    /// Acceptation obligatoire des CGU/confidentialité (inscription uniquement).
+    public var acceptTerms: Bool = false
     /// Code de réinitialisation reçu par email (normalisé en chiffres par la vue).
     public var resetCode: String = ""
     public var newPassword: String = ""
@@ -95,7 +97,7 @@ public final class AuthViewModel {
         case .register:
             // Étape 1 : email + mot de passe + confirmation uniquement. Les autres infos
             // (nom, pays, numéro) sont demandées APRÈS validation du code email.
-            return email.contains("@") && password.count >= 8 && password == confirmPassword
+            return email.contains("@") && password.count >= 8 && password == confirmPassword && acceptTerms
         case .forgot:
             return email.contains("@")
         case .reset:
