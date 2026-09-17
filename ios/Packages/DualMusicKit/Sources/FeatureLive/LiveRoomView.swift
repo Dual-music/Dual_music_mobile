@@ -1013,23 +1013,36 @@ public struct LiveRoomView: View {
         }
     }
 
-    /// Ligne d'un invité actif : retirer (met fin à sa publication chez tout le monde).
+    /// Ligne d'un invité actif : couper/rétablir son micro à distance, ou le retirer (met fin
+    /// à sa publication chez tout le monde).
     private func activeGuestRow(_ guest: LiveJoinRequest) -> some View {
-        DMCard {
+        let muted = viewModel.mutedGuests.contains(guest.userId)
+        return DMCard {
             HStack {
                 Text("🎤 \(guest.displayName)")
                     .font(DMFont.body)
                     .foregroundStyle(theme.colors.foreground)
                 Spacer()
-                Button { Task { await viewModel.kickGuest(requestId: guest.id) } } label: {
-                    Image(systemName: "person.fill.xmark")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 36, height: 36)
-                        .background(theme.colors.destructive, in: Circle())
+                HStack(spacing: theme.spacing.sm) {
+                    Button { viewModel.toggleGuestMic(userId: guest.userId, mute: !muted) } label: {
+                        Image(systemName: muted ? "mic.slash.fill" : "mic.fill")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(muted ? theme.colors.destructive : Color.black.opacity(0.4), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(muted ? s.unmuteGuestAction : s.muteGuestAction))
+                    Button { Task { await viewModel.kickGuest(requestId: guest.id) } } label: {
+                        Image(systemName: "person.fill.xmark")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(theme.colors.destructive, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(s.removeGuestAction))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(s.removeGuestAction))
             }
         }
     }

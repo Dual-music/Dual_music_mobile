@@ -517,9 +517,11 @@ public struct BroadcastEnvelope: Decodable, Sendable {
 /// Champs optionnels selon l'événement : `emoji_reaction` → ``emoji`` ; `like` → ``count``
 /// (compteur ABSOLU, pas un delta) ; `focus` → ``slot`` (`nil` = focus libéré) ;
 /// `FORCE_MUTE`/`FORCE_UNMUTE` → ``artistId`` ; `winner_announced` → ``name``/``avatar``/
-/// ``votes``/``percent``. Le reste (`identity`/`isMicOn`/`isCameraOn`/`isStreaming`, diffusé
-/// pour le web) n'est consommé par aucun client mobile — repris pour fidélité au modèle
-/// partagé, sans utilisation côté iOS pour l'instant.
+/// ``votes``/``percent`` ; `guest_action` (canal `live-controls-<id>`, Live uniquement) →
+/// ``action`` (`toggle_mic`/`start_timer`/`timer_ended`/`kick`)/``targetUserId``/``value``
+/// (booléen pour `toggle_mic` — seul cas géré côté iOS pour l'instant). Le reste
+/// (`identity`/`isMicOn`/`isCameraOn`/`isStreaming`, diffusé pour le web) n'est consommé par
+/// aucun client mobile — repris pour fidélité au modèle partagé, sans utilisation côté iOS.
 public struct BroadcastPayload: Decodable, Sendable {
     public let emoji: String?
     public let count: Int?
@@ -533,6 +535,9 @@ public struct BroadcastPayload: Decodable, Sendable {
     public let isMicOn: Bool?
     public let isCameraOn: Bool?
     public let isStreaming: Bool?
+    public let action: String?
+    public let targetUserId: String?
+    public let value: Bool?
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -548,10 +553,14 @@ public struct BroadcastPayload: Decodable, Sendable {
         isMicOn = c.opt(Bool.self, .isMicOn)
         isCameraOn = c.opt(Bool.self, .isCameraOn)
         isStreaming = c.opt(Bool.self, .isStreaming)
+        action = c.opt(String.self, .action)
+        targetUserId = c.opt(String.self, .targetUserId)
+        value = c.opt(Bool.self, .value)
     }
 
     enum CodingKeys: String, CodingKey {
         case emoji, count, slot, name, avatar, votes, percent, artistId, identity, isMicOn, isCameraOn, isStreaming
+        case action, targetUserId, value
     }
 }
 

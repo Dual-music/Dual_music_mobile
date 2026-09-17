@@ -86,6 +86,9 @@ public final class LiveViewModel {
     /// TOUT LE MONDE : invités actuellement acceptés (sur scène) — pilote les abonnements
     /// de visionnage (``guestClients``), pas seulement affiché à l'hôte.
     public private(set) var acceptedGuests: [LiveJoinRequest] = []
+    /// Hôte : ids des invités actuellement coupés (mise à jour optimiste locale, cf.
+    /// `mutedGuests` de `LiveRoomScreen.kt`) — pilote l'icône micro dans ``guestsSheet``.
+    public private(set) var mutedGuests: Set<String> = []
     /// Spectateur : id de MA demande en cours, `nil` si aucune.
     public private(set) var myJoinRequestId: String?
     /// Spectateur : vrai une fois ma demande acceptée (je publie alors dans ``guestMedia``).
@@ -522,6 +525,19 @@ public final class LiveViewModel {
         await loadJoinRequests()
     }
 
+    /// Hôte : coupe/rétablit le micro d'un invité — diffusé via `guest_action`/`toggle_mic`
+    /// sur le canal `live-controls-<liveId>` ; l'invité ciblé applique la coupure à SA propre
+    /// piste (voir le gestionnaire `guest_action` dans ``connectRealtime()``). Mise à jour
+    /// locale immédiate de ``mutedGuests`` pour l'icône, avant même le retour de l'invité.
+    public func toggleGuestMic(userId: String, mute: Bool) {
+        if mute { mutedGuests.insert(userId) } else { mutedGuests.remove(userId) }
+        liveSession?.broadcast(
+            channel: "live-controls-\(liveId)",
+            event: "guest_action",
+            payload: ["action": "toggle_mic", "targetUserId": userId, "value": mute]
+        )
+    }
+
     /// Invité accepté : monte sur scène — publie caméra/micro dans MA PROPRE room d'invité
     /// (``guestMedia``), **sans jamais toucher** ``media`` (je reste connecté à la room
     /// principale comme spectateur, je continue donc de voir/entendre l'artiste pendant que
@@ -558,6 +574,16 @@ public final class LiveViewModel {
     /// Coupe/rétablit MA caméra (invité, sa room dédiée).
     public func toggleGuestCamera() async {
         await guestMedia.setCamera(enabled: !guestMedia.isCameraEnabled)
+    }
+
+    /// Applique une action `guest_action` reçue (émetteur exclu côté serveur). Seul `toggle_mic`
+    /// est géré (portée de la parité) : si JE suis la cible, coupe/rétablit MA propre piste dans
+    /// ``guestMedia``. Miroir de `onGuestAction` (`LiveViewModel.kt`).
+    private func onGuestAction(_ payload: BroadcastPayload) {
+        guard payload.action == "toggle_mic",
+              let target = payload.targetUserId, target == callerId,
+              let mute = payload.value else { return }
+        Task { await guestMedia.setMicrophone(enabled: !mute) }
     }
 
     /// Hôte : active/désactive le chat pour ce live, en direct — pouvoir EXCLUSIF de l'hôte,
@@ -640,8 +666,15 @@ public final class LiveViewModel {
         })
         // Réactions emoji relayées aux autres membres de la room (voir sendReaction).
         subscriptions.append(live.onEvent(Realtime.Event.broadcast, as: BroadcastEnvelope.self) { [weak self] envelope in
-            guard let self, envelope.event == "emoji_reaction" else { return }
-            if let emoji = envelope.payload?.emoji { self.pushEmoji(emoji) }
+            guard let self else { return }
+            switch envelope.event {
+            case "emoji_reaction":
+                if let emoji = envelope.payload?.emoji { self.pushEmoji(emoji) }
+            case "guest_action":
+                if let payload = envelope.payload { self.onGuestAction(payload) }
+            default:
+                break
+            }
         })
         // Bannissement poussé par le serveur — y compris quand ce n'est pas MOI qui ai banni
         // (un autre modérateur, ou moi depuis un autre appareil) : sans cet écouteur, seul

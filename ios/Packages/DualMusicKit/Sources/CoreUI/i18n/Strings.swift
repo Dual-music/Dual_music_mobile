@@ -537,6 +537,8 @@ public struct DMStrings: Sendable {
     public let viewerFallback: String
     public let raiseHand: String
     public let removeGuestAction: String
+    public let muteGuestAction: String
+    public let unmuteGuestAction: String
     public let leaveStageAction: String
     public let guestsEnabledOn: String
     public let guestsEnabledOff: String
@@ -1070,6 +1072,8 @@ public extension DMStrings {
         viewerFallback: "Spectateur",
         raiseHand: "Lever la main",
         removeGuestAction: "Retirer l'invité",
+        muteGuestAction: "Couper le micro",
+        unmuteGuestAction: "Rétablir le micro",
         leaveStageAction: "Descendre de scène",
         guestsEnabledOn: "Invités activés",
         guestsEnabledOff: "Invités coupés",
@@ -1595,6 +1599,8 @@ public extension DMStrings {
         viewerFallback: "Viewer",
         raiseHand: "Raise hand",
         removeGuestAction: "Remove guest",
+        muteGuestAction: "Mute microphone",
+        unmuteGuestAction: "Unmute microphone",
         leaveStageAction: "Leave stage",
         guestsEnabledOn: "Guests on",
         guestsEnabledOff: "Guests off",
