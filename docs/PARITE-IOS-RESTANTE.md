@@ -65,8 +65,19 @@ Règle : chaque étape = lire le code Android réel → implémenter iOS → com
 - [x] **6.7 Filtrage des événements éligibles au sponsoring côté UI** — `SponsorScreen.kt` (`loadEvents` L133-168, filtre `allowsSponsorAds`/deadline). Fait, CI verte (e279234, après correctif du modèle `Duel`).
 - [x] **6.8 Bouton contextuel "Sponsoriser" depuis un écran d'événement** — `SponsorScreen.kt` (`preselectedTarget`) + point d'entrée dans `MainActivity.kt`. Fait, CI verte (e279234).
 - [x] **6.9 Libellés de statut sponsor manquants** — `SponsorScreen.kt` (`statusLabel`, 5 statuts dont `awaiting_payment`/`paid` non traduits sur iOS). Fait, CI verte (cda6af7).
-- [ ] **6.10 Champs date de naissance / sexe** — `android/feature/auth/.../ProfileCompletionScreen.kt`.
-- [ ] **6.11 Bascule admin "création de duels par les managers"** — `android/feature/profile/.../AdminScreen.kt` (`duelCreationEnabled`/`toggleDuelCreation()`). iOS lit le réglage mais aucun admin ne peut le modifier.
+- [x] **6.10 Champs date de naissance / sexe** — `android/feature/auth/.../ProfileCompletionScreen.kt`. Fait, CI verte (bfded86/9f6ecd7) : `UpdateProfileRequest.birthDate/gender` + champ date + pilules Homme/Femme/Autre dans `ProfileCompletionView`.
+- [x] **6.11 Bascule admin "création de duels par les managers"** — `android/feature/profile/.../AdminScreen.kt` (`duelCreationEnabled`/`toggleDuelCreation()`). iOS lit le réglage mais aucun admin ne peut le modifier. Fait, CI verte (9f6ecd7) : `ProfileRepository.settingEnabled` + bascule dans `AdminView`.
+
+**Section 6 (Mineur) : terminée.**
+
+---
+
+## Bilan
+
+Toutes les sections (1 à 6) sont terminées et vérifiées en CI ("Tests DualMusicKit" vert sur
+chaque commit). Les deux seuls écarts assumés et définitifs restent 3.1/3.2 (Mobile Money /
+Stripe montant libre — contrainte Apple 3.1.1, décision utilisateur du 2026-09-17) : StoreKit
+reste l'unique voie de recharge sur iOS.
 
 ---
 
