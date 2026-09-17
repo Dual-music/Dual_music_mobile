@@ -56,15 +56,15 @@ Règle : chaque étape = lire le code Android réel → implémenter iOS → com
 
 ## 6. Mineur
 
-- [ ] **6.1 Filtre saisons en cours/terminées** — `LeaderboardScreen.kt` (`SeasonsTab` L231-253).
-- [ ] **6.2 Détail des récompenses par rang de saison** — `LeaderboardScreen.kt` (`SeasonCard` L276-285, modèle `SeasonReward`). Modèle iOS `LeaderboardSeason` ne décode pas ce champ.
-- [ ] **6.3 Vue liste/recherche des lives** — `android/feature/feed/.../LivesListScreen.kt` (fichier entier), en alternative au pager plein écran.
-- [ ] **6.4 Compteur de spectateurs temps réel sur les cartes du feed** — `FeedViewModel.kt` (`refreshPresence`/`connectPresence` L58-90).
-- [ ] **6.5 Recherche dans l'annuaire des artistes** — `ArtistsScreen.kt` L113-133.
-- [ ] **6.6 Écran "Suivis" dédié** — `android/feature/artists/.../FollowedArtistsScreen.kt` (fichier entier, compteur + "Ne plus suivre").
-- [ ] **6.7 Filtrage des événements éligibles au sponsoring côté UI** — `SponsorScreen.kt` (`loadEvents` L133-168, filtre `allowsSponsorAds`/deadline).
-- [ ] **6.8 Bouton contextuel "Sponsoriser" depuis un écran d'événement** — `SponsorScreen.kt` (`preselectedTarget`) + point d'entrée dans `MainActivity.kt`.
-- [ ] **6.9 Libellés de statut sponsor manquants** — `SponsorScreen.kt` (`statusLabel`, 5 statuts dont `awaiting_payment`/`paid` non traduits sur iOS).
+- [x] **6.1 Filtre saisons en cours/terminées** — `LeaderboardScreen.kt` (`SeasonsTab` L231-253). Fait, CI verte (a1f469c) : pastilles En cours/Terminées avec compteurs.
+- [x] **6.2 Détail des récompenses par rang de saison** — `LeaderboardScreen.kt` (`SeasonCard` L276-285, modèle `SeasonReward`). Modèle iOS `LeaderboardSeason` ne décode pas ce champ. Fait, CI verte (a1f469c) : `SeasonReward` + liste par rang.
+- [x] **6.3 Vue liste/recherche des lives** — `android/feature/feed/.../LivesListScreen.kt` (fichier entier), en alternative au pager plein écran. Fait, CI verte (d987b4e) : `LivesListView`, devenue la vue par défaut de l'onglet Lives (miroir MainActivity.kt tab==1).
+- [x] **6.4 Compteur de spectateurs temps réel sur les cartes du feed** — `FeedViewModel.kt` (`refreshPresence`/`connectPresence` L58-90). Fait, CI verte (d987b4e) : présence Socket.IO multi-room sur `LivesListView`.
+- [x] **6.5 Recherche dans l'annuaire des artistes** — `ArtistsScreen.kt` L113-133. Fait, CI verte (375267f).
+- [x] **6.6 Écran "Suivis" dédié** — `android/feature/artists/.../FollowedArtistsScreen.kt` (fichier entier, compteur + "Ne plus suivre"). Fait, CI verte (f881b17) : `FollowedArtistsView`.
+- [x] **6.7 Filtrage des événements éligibles au sponsoring côté UI** — `SponsorScreen.kt` (`loadEvents` L133-168, filtre `allowsSponsorAds`/deadline). Fait, CI verte (e279234, après correctif du modèle `Duel`).
+- [x] **6.8 Bouton contextuel "Sponsoriser" depuis un écran d'événement** — `SponsorScreen.kt` (`preselectedTarget`) + point d'entrée dans `MainActivity.kt`. Fait, CI verte (e279234).
+- [x] **6.9 Libellés de statut sponsor manquants** — `SponsorScreen.kt` (`statusLabel`, 5 statuts dont `awaiting_payment`/`paid` non traduits sur iOS). Fait, CI verte (cda6af7).
 - [ ] **6.10 Champs date de naissance / sexe** — `android/feature/auth/.../ProfileCompletionScreen.kt`.
 - [ ] **6.11 Bascule admin "création de duels par les managers"** — `android/feature/profile/.../AdminScreen.kt` (`duelCreationEnabled`/`toggleDuelCreation()`). iOS lit le réglage mais aucun admin ne peut le modifier.
 
