@@ -110,6 +110,11 @@ public final class RevenueViewModel {
 ///
 /// Export CSV/PDF (Android) simplifié en partage texte natif (`ShareLink`) — écart assumé,
 /// documenté dans `docs/PARITE-IOS-RESTANTE.md` (item 2.6).
+///
+/// `@MainActor` explicite : seul `body` hérite de l'isolation via le protocole `View` — les
+/// propriétés/méthodes calculées annexes qui lisent ``RevenueViewModel`` de façon synchrone
+/// ont besoin de l'annotation sur le type entier (même remarque que ``WithdrawalView``).
+@MainActor
 public struct RevenueView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
