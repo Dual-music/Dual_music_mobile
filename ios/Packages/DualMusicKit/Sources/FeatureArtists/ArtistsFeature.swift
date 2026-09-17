@@ -59,23 +59,33 @@ public struct ArtistsView: View {
     @Environment(\.dmStrings) private var s
 
     private let viewModel: ArtistsViewModel
+    @State private var search = ""
 
     /// - Parameter viewModel: source d'état.
     public init(viewModel: ArtistsViewModel) {
         self.viewModel = viewModel
     }
 
+    /// Artistes filtrés par la recherche (nom, insensible à la casse).
+    private var filtered: [ArtistSummary] {
+        let q = search.trimmed.lowercased()
+        guard !q.isEmpty else { return viewModel.artists }
+        return viewModel.artists.filter { $0.displayName.lowercased().contains(q) }
+    }
+
     public var body: some View {
         VStack(spacing: theme.spacing.md) {
+            DMTextField(s.searchArtist, text: $search)
+
             if viewModel.isLoading {
                 DMLoadingBox()
-            } else if viewModel.artists.isEmpty {
+            } else if filtered.isEmpty {
                 DMEmptyState(title: s.noArtists, subtitle: s.noArtistsHint, systemImage: "person")
                 Spacer()
             } else {
                 ScrollView {
                     LazyVStack(spacing: theme.spacing.sm) {
-                        ForEach(viewModel.artists) { artist in
+                        ForEach(filtered) { artist in
                             ArtistRow(
                                 artist: artist,
                                 isFollowing: viewModel.following.contains(artist.id)
