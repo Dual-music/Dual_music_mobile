@@ -22,7 +22,7 @@ import FeatureWithdrawal
 /// Reprend **exactement** le découpage d'Android (`ProfileSection`), en remplaçant les
 /// entiers magiques par un `enum` : même arborescence, même ordre, mêmes titres.
 enum ProfileRoute: Hashable {
-    /// Profil racine (identité + statistiques).
+    /// Profil racine (fiche identité éditable) — miroir de `ProfileScreen` Android.
     case root
     /// Liste de menu « Mon espace » en pleine page.
     case menu
@@ -38,7 +38,8 @@ enum ProfileRoute: Hashable {
     case subscription
     case sponsor
     case creator
-    case editProfile
+    /// Tableau de bord (statistiques) — miroir de `DashboardScreen` Android.
+    case dashboard
     case becomeArtist
     case becomeManager
     case preferences
@@ -123,7 +124,7 @@ struct ProfileSectionView: View {
     private var content: some View {
         switch route {
         case .root:
-            ProfileView(viewModel: container.profile) { route = .menu }
+            EditProfileView(viewModel: container.editProfile, onOpenMenu: { route = .menu }) {}
 
         case .menu:
             SubScreen(title: s.menuMySpace, onBack: { route = .root }) {
@@ -180,10 +181,10 @@ struct ProfileSectionView: View {
 
         case .myContent:
             // Espace « Mon contenu » créateur (publier une vidéo lifestyle + gérer ses
-            // replays). Simplification assumée : même écran/route pour artiste ET manager
-            // (comme Android, `isArtist` masque juste la partie lifestyle), avec un unique
-            // libellé de menu (« Lifestyle ») — Android affiche « Replays » pour le manager.
-            SubScreen(title: s.menuContent, onBack: { route = .menu }) {
+            // replays) : même écran/route pour artiste ET manager (`isArtist` masque juste la
+            // partie lifestyle), mais libellé qui suit le rôle — miroir exact de MainActivity.kt
+            // sub=26 (« menuContent » artiste / « menuReplays » manager).
+            SubScreen(title: container.profile.isArtist ? s.menuContent : s.menuReplays, onBack: { route = .menu }) {
                 MyContentView(viewModel: container.myContent, isArtist: container.profile.isArtist)
             }
 
@@ -215,9 +216,9 @@ struct ProfileSectionView: View {
                 CreatorView(viewModel: container.creator)
             }
 
-        case .editProfile:
-            SubScreen(title: s.menuEditProfile, onBack: { route = .menu }) {
-                EditProfileView(viewModel: container.editProfile) { route = .root }
+        case .dashboard:
+            SubScreen(title: s.menuDashboard, onBack: { route = .menu }) {
+                ProfileView(viewModel: container.profile)
             }
 
         case .becomeArtist:
@@ -302,9 +303,13 @@ struct ProfileMenuView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                row("square.grid.2x2.fill", s.menuDashboard) { onNavigate(.root) }
+                row("square.grid.2x2.fill", s.menuDashboard) { onNavigate(.dashboard) }
                 row("heart.fill", s.menuFollowing) { onNavigate(.following) }
-                row("creditcard.circle.fill", s.menuSubscription) { onNavigate(.subscription) }
+                // Abonnements : réservé aux fans, comme la branche `else` (non-créateur) de
+                // ProfileMenuSheet.kt — un artiste/manager ne le voit jamais.
+                if !isArtist && !isManager {
+                    row("creditcard.circle.fill", s.menuSubscription) { onNavigate(.subscription) }
+                }
                 row("creditcard.fill", s.menuTransactions) { onNavigate(.wallet) }
                 row("gift.fill", s.menuReferral) { onNavigate(.referral) }
                 row("megaphone.fill", s.menuSponsor) { onNavigate(.sponsor) }
@@ -333,9 +338,16 @@ struct ProfileMenuView: View {
                     }
                     row("mic.fill", s.menuArtistProfile) { onNavigate(.publicProfile) }
                     row("star.fill", s.menuCreatorSpace) { onNavigate(.creator) }
-                    row("film.fill", s.menuContent) { onNavigate(.myContent) }
+                    // Une seule entrée, libellée selon le rôle (artiste : « Mon contenu »,
+                    // manager : « Replays ») — miroir de MainActivity.kt sub=26, qui pointe
+                    // toujours vers le même écran (`MyContentScreen`). Un fan ne voit ni l'une
+                    // ni l'autre.
+                    if isArtist {
+                        row("film.fill", s.menuContent) { onNavigate(.myContent) }
+                    } else if isManager {
+                        row("film.fill", s.menuReplays) { onNavigate(.myContent) }
+                    }
                     row("wallet.pass.fill", s.managerSpace) { onNavigate(.withdrawal) }
-                    row("play.rectangle.fill", s.menuReplays) { onNavigate(.replays) }
                     row("giftcard.fill", s.menuGiftShop) { onNavigate(.giftShop) }
                 }
 
@@ -344,7 +356,6 @@ struct ProfileMenuView: View {
                     row("lock.fill", s.menuAdminSpace) { onNavigate(.admin) }
                 }
 
-                row("square.and.pencil", s.menuEditProfile) { onNavigate(.editProfile) }
                 row("slider.horizontal.3", s.preferences) { onNavigate(.preferences) }
                 row("bell.fill", s.notifications) { onNavigate(.notifications) }
 

@@ -63,6 +63,8 @@ public struct DMStrings: Sendable {
     public let emptyGeneric: String
     // Menu profil.
     public let menuMySpace: String
+    /// Titre de l'écran racine du profil (fiche identité) — miroir de `profileTitle` Android.
+    public let profileTitle: String
     public let menuDashboard: String
     public let menuFollowing: String
     public let menuSubscription: String
@@ -338,6 +340,10 @@ public struct DMStrings: Sendable {
     public let speakingTime: String
     public let announceWinner: String
     public let winnerTitle: String
+    /// Miroir de `strings.winnerGeneric` (Android) — repli quand le vainqueur n'a pas de nom.
+    public let winnerGeneric: String
+    /// Miroir de `strings.winnerCongrats` (Android) — sous-titre de la célébration finale.
+    public let winnerCongrats: String
     public let endDuelBtn: String
     public let myGifts: String
     public let giftShopLabel: String
@@ -714,6 +720,7 @@ public extension DMStrings {
         save: "Enregistrer",
         emptyGeneric: "Rien à afficher pour le moment.",
         menuMySpace: "Mon espace",
+        profileTitle: "Mon profil",
         menuDashboard: "Tableau de bord",
         menuFollowing: "Suivis",
         menuSubscription: "Abonnement",
@@ -979,6 +986,8 @@ public extension DMStrings {
         speakingTime: "Temps de parole",
         announceWinner: "Annoncer le vainqueur",
         winnerTitle: "🏆 Vainqueur",
+        winnerGeneric: "Vainqueur",
+        winnerCongrats: "Félicitations !",
         endDuelBtn: "Terminer le duel",
         myGifts: "Mes cadeaux",
         giftShopLabel: "Boutique",
@@ -1320,6 +1329,7 @@ public extension DMStrings {
         save: "Save",
         emptyGeneric: "Nothing to show yet.",
         menuMySpace: "My space",
+        profileTitle: "My profile",
         menuDashboard: "Dashboard",
         menuFollowing: "Following",
         menuSubscription: "Subscription",
@@ -1585,6 +1595,8 @@ public extension DMStrings {
         speakingTime: "Speaking time",
         announceWinner: "Announce the winner",
         winnerTitle: "🏆 Winner",
+        winnerGeneric: "Winner",
+        winnerCongrats: "Congratulations!",
         endDuelBtn: "End the duel",
         myGifts: "My gifts",
         giftShopLabel: "Shop",

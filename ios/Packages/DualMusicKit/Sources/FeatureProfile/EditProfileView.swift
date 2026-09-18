@@ -113,27 +113,34 @@ public final class EditProfileViewModel {
 }
 
 /// Écran d'édition du profil : avatar, nom, bio, pays, numéro et mot de passe.
+///
+/// Écran **racine** du profil (comme `ProfileScreen` Android) — porte donc son propre
+/// titre + bouton menu, ouvrant « Mon espace ».
 @MainActor
 public struct EditProfileView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
 
     @Bindable private var viewModel: EditProfileViewModel
+    private let onOpenMenu: () -> Void
     private let onSaved: () -> Void
 
     @State private var pickedItem: PhotosPickerItem?
 
     /// - Parameters:
     ///   - viewModel: source d'état.
-    ///   - onSaved: appelé après un enregistrement réussi (retour au profil).
-    public init(viewModel: EditProfileViewModel, onSaved: @escaping () -> Void) {
+    ///   - onOpenMenu: ouvre la page de menu « Mon espace ».
+    ///   - onSaved: appelé après un enregistrement réussi.
+    public init(viewModel: EditProfileViewModel, onOpenMenu: @escaping () -> Void, onSaved: @escaping () -> Void) {
         self._viewModel = Bindable(viewModel)
+        self.onOpenMenu = onOpenMenu
         self.onSaved = onSaved
     }
 
     public var body: some View {
         ScrollView {
             VStack(spacing: theme.spacing.md) {
+                header
                 avatarSection
                 infoCard
                 passwordCard
@@ -147,6 +154,25 @@ public struct EditProfileView: View {
         .onChange(of: pickedItem) { _, item in
             guard let item else { return }
             Task { await viewModel.uploadAvatar(item) }
+        }
+    }
+
+    /// Titre « Mon profil » + bouton menu (racine du profil, miroir de `ProfileScreen.kt:110-130`).
+    private var header: some View {
+        HStack {
+            Text(s.profileTitle)
+                .font(DMFont.pageTitle)
+                .foregroundStyle(theme.colors.foreground)
+            Spacer()
+            Button(action: onOpenMenu) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(theme.colors.foreground)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Menu"))
         }
     }
 

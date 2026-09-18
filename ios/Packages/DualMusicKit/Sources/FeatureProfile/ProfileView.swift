@@ -51,46 +51,27 @@ public final class ProfileViewModel {
     }
 }
 
-/// Écran profil : identité (photo, nom, email, rôle) + statistiques filtrées par rôle,
-/// avec un bouton menu qui ouvre « Mon espace ».
+/// Écran statistiques (tableau de bord) : identité (photo, nom, email, rôle) + statistiques
+/// filtrées par rôle. Reste au profil via l'item de menu « Tableau de bord » — miroir de
+/// `DashboardScreen` Android — pas au profil racine (voir `EditProfileView`, racine).
 ///
 /// Comme sur le web, chaque profil ne voit **que** ses propres récapitulatifs : un fan ne
-/// voit pas les stats artiste/manager, et inversement. Miroir de `ProfileScreen` Android.
+/// voit pas les stats artiste/manager, et inversement.
 @MainActor
 public struct ProfileView: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
 
     private let viewModel: ProfileViewModel
-    private let onOpenMenu: () -> Void
 
-    /// - Parameters:
-    ///   - viewModel: source d'état.
-    ///   - onOpenMenu: ouvre la page de menu « Mon espace ».
-    public init(viewModel: ProfileViewModel, onOpenMenu: @escaping () -> Void) {
+    /// - Parameter viewModel: source d'état.
+    public init(viewModel: ProfileViewModel) {
         self.viewModel = viewModel
-        self.onOpenMenu = onOpenMenu
     }
 
     public var body: some View {
         ScrollView {
             VStack(spacing: theme.spacing.lg) {
-                HStack {
-                    Text(s.menuMySpace)
-                        .font(DMFont.pageTitle)
-                        .foregroundStyle(theme.colors.foreground)
-                    Spacer()
-                    Button(action: onOpenMenu) {
-                        Image(systemName: "line.3.horizontal")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(theme.colors.foreground)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Text("Menu"))
-                }
-
                 hero
 
                 if viewModel.roles.contains(.artist) {
