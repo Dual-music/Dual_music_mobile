@@ -138,6 +138,8 @@ public enum CompetitionEndpoints {
     public static let ticketsMine = "/competitions/tickets/mine"
     /// Compétitions gérées par le caller (manager).
     public static let mine = "/competitions/mine"
+    /// Compte cumulé des candidats en attente, toutes compétitions gérées — badge menu.
+    public static let pendingCandidatesMine = "/competitions/candidates/pending-count/mine"
     public static func detail(_ id: String) -> String { "/competitions/\(id)" }
     public static func candidates(_ id: String) -> String { "/competitions/\(id)/candidates" }
     public static func messages(_ id: String) -> String { "/competitions/\(id)/messages" }

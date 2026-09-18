@@ -132,6 +132,16 @@ private struct CompetitionWinnerSoundUrlSetting: Decodable, Sendable {
     let value: String?
 }
 
+/// Réponse de `GET /competitions/candidates/pending-count/mine`.
+private struct CompetitionPendingCandidatesCount: Decodable, Sendable {
+    let count: Int
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        count = c.int(.count)
+    }
+    enum CodingKeys: String, CodingKey { case count }
+}
+
 /// Corps de `POST /competitions/:id/candidates/manual`.
 struct AddCandidateManuallyBody: Encodable, Sendable {
     let artistId: String
@@ -358,6 +368,12 @@ public struct CompetitionRepository: Sendable {
     /// configuré ou en cas d'échec.
     public func winnerSoundUrl() async -> String? {
         (try? await http.request(.get("/settings/public/winner_sound_url"), as: CompetitionWinnerSoundUrlSetting.self))?.value
+    }
+
+    /// Compte cumulé des candidats en attente, toutes compétitions gérées par le caller (manager)
+    /// — badge du menu « Compétitions ». `GET /competitions/candidates/pending-count/mine`.
+    public func pendingCandidatesCount() async -> Int {
+        (try? await http.request(.get(CompetitionEndpoints.pendingCandidatesMine), as: CompetitionPendingCandidatesCount.self))?.count ?? 0
     }
 
     // MARK: - J'aime persistés

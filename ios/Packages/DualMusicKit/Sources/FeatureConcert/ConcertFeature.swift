@@ -397,12 +397,19 @@ public final class ConcertsViewModel {
     /// Concerts artiste en attente d'approbation admin — vide si le caller n'est pas admin.
     public private(set) var pending: [Concert] = []
     public private(set) var isAdmin = false
+    /// Contre-valeur € d'UN crédit (solde courant / sa contre-valeur €) — miroir de
+    /// `ConcertsViewModel.perCreditEur` Android, affichée à côté du prix des cartes.
+    public private(set) var perCreditEur: Double = 0
 
     private let repository: ConcertRepository
+    private let wallet: WalletRepository
 
-    /// - Parameter repository: lectures REST des concerts d'artistes.
-    public init(repository: ConcertRepository) {
+    /// - Parameters:
+    ///   - repository: lectures REST des concerts d'artistes.
+    ///   - wallet: solde courant, pour calculer la contre-valeur € affichée sur les prix.
+    public init(repository: ConcertRepository, wallet: WalletRepository) {
         self.repository = repository
+        self.wallet = wallet
     }
 
     /// Charge le catalogue (fusion admin + artiste, répartie par statut) + replays + file admin.
@@ -417,6 +424,10 @@ public final class ConcertsViewModel {
         upcoming = all.filter { $0.status == .upcoming }
         replays = await repository.concertReplays()
         isLoading = false
+
+        if let balance = try? await wallet.balance(), balance.balance > 0 {
+            perCreditEur = balance.eurValue / balance.balance
+        }
 
         isAdmin = await repository.amIAdmin()
         if isAdmin { await loadPending() }
@@ -534,7 +545,7 @@ public struct ConcertsListView: View {
             } else {
                 LazyVStack(spacing: theme.spacing.sm) {
                     ForEach(filtered) { concert in
-                        ConcertRow(concert: concert, onOpen: { onOpen(concert) }, onRequestSponsor: { onRequestSponsor("artist_concert", concert.id) })
+                        ConcertRow(concert: concert, perCreditEur: viewModel.perCreditEur, onOpen: { onOpen(concert) }, onRequestSponsor: { onRequestSponsor("artist_concert", concert.id) })
                     }
                 }
             }
@@ -545,7 +556,7 @@ public struct ConcertsListView: View {
             } else {
                 LazyVStack(spacing: theme.spacing.sm) {
                     ForEach(filtered) { concert in
-                        ConcertRow(concert: concert, onOpen: { onOpen(concert) }, onRequestSponsor: { onRequestSponsor("artist_concert", concert.id) })
+                        ConcertRow(concert: concert, perCreditEur: viewModel.perCreditEur, onOpen: { onOpen(concert) }, onRequestSponsor: { onRequestSponsor("artist_concert", concert.id) })
                     }
                 }
             }
@@ -630,13 +641,15 @@ private struct ConcertReplayRow: View {
     }
 }
 
-/// Carte d'un concert : couverture (badge « en direct » si live), badge prix/gratuit, titre,
-/// date, dédicaces, bouton « Sponsoriser » contextuel. Miroir de `ConcertCard`
-/// (`ConcertsScreen.kt:253-333`) — sans l'équivalent fiat (`perCreditEur`), non câblé côté iOS.
+/// Carte d'un concert : couverture (badge « en direct » si live), badge prix (+ contre-valeur
+/// €) /gratuit, titre, date, dédicaces, bouton « Sponsoriser » contextuel. Miroir de
+/// `ConcertCard` (`ConcertsScreen.kt:253-333`).
 private struct ConcertRow: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
     let concert: Concert
+    /// Contre-valeur € d'UN crédit (0 = inconnue → pastille sans équivalent €).
+    let perCreditEur: Double
     let onOpen: () -> Void
     let onRequestSponsor: () -> Void
 
@@ -661,7 +674,8 @@ private struct ConcertRow: View {
                     Button(action: onOpen) {
                         VStack(alignment: .leading, spacing: theme.spacing.sm) {
                             if concert.ticketPrice > 0 {
-                                DMBadgePill("🪙 \(formatCredits(concert.ticketPrice))", foreground: theme.colors.foreground, background: Color.black.opacity(0.4))
+                                let eur = perCreditEur > 0 ? " \(formatEuro(concert.ticketPrice * perCreditEur))" : ""
+                                DMBadgePill("🪙 \(formatCredits(concert.ticketPrice))\(eur)", foreground: theme.colors.foreground, background: Color.black.opacity(0.4))
                             } else {
                                 DMBadgePill("🎁 \(s.freeLabel)", foreground: Color(hex: 0x10B981), background: Color(hex: 0x10B981, alpha: 0.2))
                             }

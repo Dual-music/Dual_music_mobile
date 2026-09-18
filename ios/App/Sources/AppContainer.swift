@@ -358,7 +358,7 @@ public final class AppContainer {
 
     var concerts: ConcertsViewModel {
         if let cachedConcerts { return cachedConcerts }
-        let viewModel = ConcertsViewModel(repository: concertRepository)
+        let viewModel = ConcertsViewModel(repository: concertRepository, wallet: walletRepository)
         cachedConcerts = viewModel
         return viewModel
     }
@@ -517,6 +517,20 @@ public final class AppContainer {
     /// Nombre de notifications non lues (badge de la cloche, barre du haut).
     func unreadNotifications() async -> Int {
         (try? await notificationRepository.unreadCount()) ?? 0
+    }
+
+    /// Nombre d'invitations de duel reçues encore en attente — badge du menu « Espace créateur »
+    /// (artiste) — miroir de `MainActivity.kt:271` (`pendingDuelInvitesCount`).
+    func pendingDuelInvitesCount() async -> Int {
+        guard let myId = try? await profileRepository.me().user.id else { return 0 }
+        let requests = (try? await http.request(.get(CreatorEndpoints.duelRequestsMine), as: [DuelRequestItem].self)) ?? []
+        return requests.filter { $0.opponentId == myId && $0.status == "pending" }.count
+    }
+
+    /// Compte cumulé des candidats en attente, toutes compétitions gérées — badge du menu
+    /// « Compétitions » (manager) — miroir de `MainActivity.kt:285` (`pendingCandidatesCount`).
+    func pendingCandidatesCount() async -> Int {
+        await competitionRepository.pendingCandidatesCount()
     }
 
     /// Date (ISO) de suppression programmée du compte, ou `nil` si le compte est actif.

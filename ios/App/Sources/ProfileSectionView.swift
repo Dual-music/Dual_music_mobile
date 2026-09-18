@@ -71,6 +71,12 @@ struct ProfileSectionView: View {
 
     @State private var route: ProfileRoute
     @State private var managerEnabled = false
+    /// Invitations de duel reçues en attente — badge menu « Espace créateur » (artiste), miroir
+    /// de `pendingDuelInvites` (`MainActivity.kt:960-962`).
+    @State private var pendingDuelInvites = 0
+    /// Candidats en attente de revue, toutes compétitions gérées — badge menu « Compétitions »
+    /// (manager), miroir de `pendingCandidates` (`MainActivity.kt:967-969`).
+    @State private var pendingCandidates = 0
     @State private var openedReplay: ReplayVideo?
     /// Live en cours de diffusion (hôte) — plein écran, hors de la sous-navigation profil.
     @State private var broadcastingLive: Live?
@@ -102,6 +108,10 @@ struct ProfileSectionView: View {
             .task {
                 managerEnabled = await container.managerRequestsEnabled()
                 await container.profile.load()
+                // Chargés dès le montage du profil (pas seulement à l'ouverture du menu ou de
+                // l'écran ciblé), pour être visibles immédiatement — miroir Android.
+                if container.profile.isArtist { pendingDuelInvites = await container.pendingDuelInvitesCount() }
+                if container.profile.isManager { pendingCandidates = await container.pendingCandidatesCount() }
             }
             // Plein écran, hors de la pile de sous-navigation : quitter la diffusion ne doit
             // pas ramener à un sous-écran profil intermédiaire.
@@ -135,6 +145,8 @@ struct ProfileSectionView: View {
                     isAdmin: container.profile.isAdmin,
                     isArtist: container.profile.isArtist,
                     isManager: container.profile.isManager,
+                    pendingDuelInvites: pendingDuelInvites,
+                    pendingCandidates: pendingCandidates,
                     onNavigate: { onClearSponsorTarget(); route = $0 },
                     onSignOut: {
                         Task {
@@ -297,6 +309,12 @@ struct ProfileMenuView: View {
     let isAdmin: Bool
     let isArtist: Bool
     let isManager: Bool
+    /// Badge de l'item « Espace créateur » (invitations de duel reçues, artiste) — miroir de
+    /// `pendingDuelInvites` (`ProfileMenuSheet.kt:90`).
+    var pendingDuelInvites: Int = 0
+    /// Badge de l'item « Compétitions » (candidats en attente, manager) — miroir de
+    /// `pendingCandidates` (`ProfileMenuSheet.kt:97,109`).
+    var pendingCandidates: Int = 0
     let onNavigate: (ProfileRoute) -> Void
     let onSignOut: () -> Void
 
@@ -334,10 +352,13 @@ struct ProfileMenuView: View {
                     }
                     // Réservé manager : crée/gère des compétitions.
                     if isManager {
-                        row("trophy.fill", s.managedCompetitions) { onNavigate(.managerCompetitions) }
+                        row("trophy.fill", s.managedCompetitions, badge: pendingCandidates) { onNavigate(.managerCompetitions) }
                     }
                     row("mic.fill", s.menuArtistProfile) { onNavigate(.publicProfile) }
-                    row("star.fill", s.menuCreatorSpace) { onNavigate(.creator) }
+                    // Badge des invitations de duel reçues (artiste) : même destination que
+                    // l'item "Duels" du menu Android (sub=12 → `CreatorScreen`), rebaptisée ici
+                    // « Espace créateur » puisque « Duels » désigne l'onglet catalogue côté iOS.
+                    row("star.fill", s.menuCreatorSpace, badge: pendingDuelInvites) { onNavigate(.creator) }
                     // Une seule entrée, libellée selon le rôle (artiste : « Mon contenu »,
                     // manager : « Replays ») — miroir de MainActivity.kt sub=26, qui pointe
                     // toujours vers le même écran (`MyContentScreen`). Un fan ne voit ni l'une
@@ -374,10 +395,13 @@ struct ProfileMenuView: View {
     }
 
     /// Ligne d'item du menu : icône + libellé, cliquable sur toute la largeur.
+    /// - Parameter badge: compte affiché en pastille à droite (masqué si ≤ 0) — miroir de
+    ///   `MenuRow`'s `badge` (`ProfileMenuSheet.kt:147-181`).
     private func row(
         _ systemImage: String,
         _ label: String,
         tint: Color? = nil,
+        badge: Int = 0,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -387,6 +411,14 @@ struct ProfileMenuView: View {
                     .frame(width: 26)
                 Text(label).font(DMFont.body)
                 Spacer()
+                if badge > 0 {
+                    Text(badge > 99 ? "99+" : "\(badge)")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(theme.colors.destructive, in: Capsule())
+                }
             }
             .foregroundStyle(tint ?? theme.colors.foreground)
             .padding(.horizontal, theme.spacing.lg)

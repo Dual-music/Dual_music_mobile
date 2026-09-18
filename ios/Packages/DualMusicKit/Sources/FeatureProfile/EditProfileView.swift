@@ -126,6 +126,8 @@ public struct EditProfileView: View {
     private let onSaved: () -> Void
 
     @State private var pickedItem: PhotosPickerItem?
+    /// Formulaire verrouillé par défaut, déverrouillé par le crayon — miroir de `editing` (ProfileScreen.kt:83).
+    @State private var isEditing = false
 
     /// - Parameters:
     ///   - viewModel: source d'état.
@@ -157,13 +159,30 @@ public struct EditProfileView: View {
         }
     }
 
-    /// Titre « Mon profil » + bouton menu (racine du profil, miroir de `ProfileScreen.kt:110-130`).
+    /// Titre « Mon profil » + crayon (édition) + bouton menu, miroir de `ProfileScreen.kt:110-130`.
     private var header: some View {
         HStack {
             Text(s.profileTitle)
                 .font(DMFont.pageTitle)
                 .foregroundStyle(theme.colors.foreground)
             Spacer()
+            Button {
+                if isEditing {
+                    isEditing = false
+                    Task { await viewModel.load() }
+                } else {
+                    isEditing = true
+                }
+            } label: {
+                Image(systemName: isEditing ? "xmark" : "pencil")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(isEditing ? theme.colors.mutedForeground : theme.colors.accent)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(s.edit))
+
             Button(action: onOpenMenu) {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 20, weight: .semibold))
@@ -191,24 +210,31 @@ public struct EditProfileView: View {
                         .foregroundStyle(theme.colors.primaryForeground)
                 }
             }
-            PhotosPicker(selection: $pickedItem, matching: .images) {
-                Text(viewModel.isUploading ? s.uploading : s.changePhoto)
-                    .font(DMFont.button)
-                    .foregroundStyle(theme.colors.secondaryForeground)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(theme.colors.secondary)
-                    .clipShape(RoundedRectangle(cornerRadius: theme.radius.md, style: .continuous))
+            // Bouton de changement de photo réservé au mode édition — miroir de `if (editing)` (ProfileScreen.kt:147-154).
+            if isEditing {
+                PhotosPicker(selection: $pickedItem, matching: .images) {
+                    Text(viewModel.isUploading ? s.uploading : s.changePhoto)
+                        .font(DMFont.button)
+                        .foregroundStyle(theme.colors.secondaryForeground)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(theme.colors.secondary)
+                        .clipShape(RoundedRectangle(cornerRadius: theme.radius.md, style: .continuous))
+                }
+                .disabled(viewModel.isUploading)
             }
-            .disabled(viewModel.isUploading)
         }
     }
 
-    /// Informations de profil.
+    /// Informations de profil — grisées hors édition, miroir de `enabled = editing` (ProfileScreen.kt:159-211).
     private var infoCard: some View {
         DMCard {
             VStack(spacing: theme.spacing.md) {
                 DMTextField(s.fullName, text: $viewModel.fullName)
+                    .disabled(!isEditing)
+                    .opacity(isEditing ? 1 : 0.5)
                 DMTextField(s.bio, text: $viewModel.bio, axis: .vertical)
+                    .disabled(!isEditing)
+                    .opacity(isEditing ? 1 : 0.5)
 
                 DMPicker(
                     label: s.country,
@@ -219,6 +245,8 @@ public struct EditProfileView: View {
                 } onSelect: { country in
                     viewModel.country = country
                 }
+                .disabled(!isEditing)
+                .opacity(isEditing ? 1 : 0.5)
 
                 DMTextField(
                     s.phoneNumber,
@@ -231,15 +259,26 @@ public struct EditProfileView: View {
                     let digits = newValue.digitsOnly
                     if digits != newValue { viewModel.phone = digits }
                 }
+                .disabled(!isEditing)
+                .opacity(isEditing ? 1 : 0.5)
 
                 if let message = viewModel.message { DMMessage(message) }
 
-                DMButton(
-                    viewModel.isSaving ? s.saving : s.save,
-                    isLoading: viewModel.isSaving,
-                    isEnabled: !viewModel.isSaving && !viewModel.isUploading
-                ) {
-                    Task { await viewModel.save(onDone: onSaved) }
+                // Enregistrer/Annuler réservés au mode édition — miroir de `if (editing)` (ProfileScreen.kt:191-208).
+                if isEditing {
+                    HStack(spacing: theme.spacing.sm) {
+                        DMButton(s.cancel, style: .outline) {
+                            isEditing = false
+                            Task { await viewModel.load() }
+                        }
+                        DMButton(
+                            viewModel.isSaving ? s.saving : s.save,
+                            isLoading: viewModel.isSaving,
+                            isEnabled: !viewModel.isSaving && !viewModel.isUploading
+                        ) {
+                            Task { await viewModel.save(onDone: { isEditing = false; onSaved() }) }
+                        }
+                    }
                 }
             }
         }

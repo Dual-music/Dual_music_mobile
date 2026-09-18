@@ -61,6 +61,8 @@ public struct DMStrings: Sendable {
     public let retry: String
     public let save: String
     public let emptyGeneric: String
+    /// Bascule le formulaire de profil en mode édition (icône crayon) — miroir de `edit` Android.
+    public let edit: String
     // Menu profil.
     public let menuMySpace: String
     /// Titre de l'écran racine du profil (fiche identité) — miroir de `profileTitle` Android.
@@ -759,6 +761,7 @@ public extension DMStrings {
         retry: "Réessayer",
         save: "Enregistrer",
         emptyGeneric: "Rien à afficher pour le moment.",
+        edit: "Modifier",
         menuMySpace: "Mon espace",
         profileTitle: "Mon profil",
         menuDashboard: "Tableau de bord",
@@ -1405,6 +1408,7 @@ public extension DMStrings {
         retry: "Retry",
         save: "Save",
         emptyGeneric: "Nothing to show yet.",
+        edit: "Edit",
         menuMySpace: "My space",
         profileTitle: "My profile",
         menuDashboard: "Dashboard",
