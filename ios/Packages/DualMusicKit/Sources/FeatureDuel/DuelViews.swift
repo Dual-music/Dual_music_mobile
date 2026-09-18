@@ -67,17 +67,30 @@ public struct DuelRoomView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
-            // --- Cadeau animé ---
+            // --- Cadeau reçu : carte glissante bas-gauche (Android a retiré le burst centré,
+            // même traitement que Live/Concert) ---
             if let gift = viewModel.giftFeed.last {
-                GiftBurstView(symbol: "🎁", label: gift.name) { viewModel.consumeOldestGift() }
-                    .id(gift.id)
+                VStack {
+                    Spacer()
+                    HStack {
+                        GiftReceivedCard(imageURL: gift.image, name: gift.name ?? s.sendGift, valueCredits: gift.value)
+                        Spacer()
+                    }
+                    .padding(.leading, 10)
+                    .padding(.bottom, 300)
+                }
+                .id(gift.id)
+                .allowsHitTesting(false)
+                .task(id: gift.id) {
+                    try? await Task.sleep(nanoseconds: 3_200_000_000)
+                    viewModel.consumeOldestGift()
+                }
             }
-            // --- Réaction emoji flottante (une à la fois — simplification assumée vs l'essaim
-            // multiple d'Android) ---
-            if let reaction = viewModel.emojiFeed.last {
-                GiftBurstView(symbol: reaction.emoji) { viewModel.consumeOldestEmoji() }
-                    .id(reaction.id)
-            }
+            // --- Réactions emoji flottantes : essaim bas-droite (miroir Android) ---
+            FloatingReactionsLayer(
+                reactions: viewModel.emojiFeed.map { FloatingReactionItem(id: "\($0.id)", emoji: $0.emoji) },
+                onFinished: { _ in viewModel.consumeOldestEmoji() }
+            )
 
             VStack {
                 header
