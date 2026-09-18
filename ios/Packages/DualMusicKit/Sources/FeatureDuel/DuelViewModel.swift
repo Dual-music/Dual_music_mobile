@@ -173,6 +173,9 @@ public final class DuelViewModel {
     public private(set) var forcedFocus: String?
     /// Vainqueur annoncé (broadcast) → célébration plein écran persistante ; `nil` = arrêtée.
     public private(set) var winnerInfo: DuelWinner?
+    /// Son de célébration téléversé par l'admin, chargé à l'annonce (``loadWinnerSound()``) —
+    /// `nil` → ``WinnerCelebration`` utilise son repli.
+    public private(set) var winnerSoundUrl: String?
     private var shownWinnerId: String?
 
     private let duelId: String
@@ -540,6 +543,7 @@ public final class DuelViewModel {
         guard let w = winnerFromId(winnerId) else { return }
         shownWinnerId = winnerId
         winnerInfo = w
+        loadWinnerSound()
         Task { try? await repository.announceWinner(id: duelId, artistId: winnerId) }
         liveSession?.broadcast(
             channel: "duel-winner-\(duelId)",
@@ -551,7 +555,16 @@ public final class DuelViewModel {
     /// Manager : arrête la célébration du vainqueur pour TOUS (ne termine PAS le direct).
     public func stopWinnerAnnouncement() {
         winnerInfo = nil
+        winnerSoundUrl = nil
         liveSession?.broadcast(channel: "duel-winner-\(duelId)", event: "winner_stopped", payload: [:])
+    }
+
+    /// Charge le son de célébration téléversé par l'admin, à chaque nouvelle annonce de
+    /// vainqueur (appelé par l'émetteur ET les récepteurs de l'annonce, pour que le son joue
+    /// aussi chez les spectateurs — `nil` en cas d'échec, ``WinnerCelebration`` utilise alors
+    /// son repli).
+    private func loadWinnerSound() {
+        Task { winnerSoundUrl = await repository.winnerSoundUrl() }
     }
 
     /// Termine le duel puis notifie l'appelant (sortie d'écran).
@@ -627,7 +640,7 @@ public final class DuelViewModel {
                     self.shownWinnerId = nil
                 } else if wid != self.shownWinnerId {
                     self.shownWinnerId = wid
-                    if let w = self.winnerFromId(wid) { self.winnerInfo = w }
+                    if let w = self.winnerFromId(wid) { self.winnerInfo = w; self.loadWinnerSound() }
                 }
             }
         })
@@ -667,9 +680,11 @@ public final class DuelViewModel {
             case "winner_announced":
                 if let p = envelope.payload {
                     self.winnerInfo = DuelWinner(name: p.name ?? "Vainqueur", avatar: p.avatar, votes: p.votes ?? 0, percent: p.percent ?? 0)
+                    self.loadWinnerSound()
                 }
             case "winner_stopped":
                 self.winnerInfo = nil
+                self.winnerSoundUrl = nil
             case "FORCE_MUTE":
                 if let artistId = envelope.payload?.artistId { self.applyMuteState(artistId, muted: true) }
             case "FORCE_UNMUTE":

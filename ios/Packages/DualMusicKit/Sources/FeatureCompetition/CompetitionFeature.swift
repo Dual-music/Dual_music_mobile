@@ -127,6 +127,11 @@ private struct ManualCandidatesConfigSettingValue: Decodable, Sendable {
     let enabled: Bool?
 }
 
+/// Réglage public `winner_sound_url` : son personnalisé de célébration téléversé par l'admin.
+private struct CompetitionWinnerSoundUrlSetting: Decodable, Sendable {
+    let value: String?
+}
+
 /// Corps de `POST /competitions/:id/candidates/manual`.
 struct AddCandidateManuallyBody: Encodable, Sendable {
     let artistId: String
@@ -347,6 +352,12 @@ public struct CompetitionRepository: Sendable {
     /// Prix d'UN vote en crédits — configuré par l'admin (défaut 1).
     public func votePricePerVote() async -> Double {
         (try? await http.request(.get("/settings/public/vote_config"), as: CompetitionVoteConfigSetting.self))?.value?.pricePerVote ?? 1.0
+    }
+
+    /// Son personnalisé de célébration du vainqueur, téléversé par l'admin — `nil` si non
+    /// configuré ou en cas d'échec.
+    public func winnerSoundUrl() async -> String? {
+        (try? await http.request(.get("/settings/public/winner_sound_url"), as: CompetitionWinnerSoundUrlSetting.self))?.value
     }
 
     // MARK: - J'aime persistés
@@ -662,6 +673,9 @@ public final class CompetitionRoomViewModel {
     public private(set) var forcedHideOthers = false
     /// Vainqueur annoncé (broadcast) → célébration plein écran ; `nil` = arrêtée.
     public private(set) var winnerInfo: CompetitionWinner?
+    /// Son de célébration téléversé par l'admin, chargé à l'annonce (``loadWinnerSound()``) —
+    /// `nil` → ``WinnerCelebration`` utilise son repli.
+    public private(set) var winnerSoundUrl: String?
     /// Candidat actuellement mis en avant par le manager (id + fin du créneau, pour un chrono).
     public private(set) var performer = CompetitionPerformer(performerId: nil, endsAt: nil)
 
@@ -777,6 +791,9 @@ public final class CompetitionRoomViewModel {
         subscriptions.append(live.onEvent(Realtime.Event.status, as: StatusPayload.self) { [weak self] payload in
             guard let self else { return }
             self.status = payload.status
+            // La compétition clôturée déclenche la célébration finale (voir le body de la vue) —
+            // charge le son de célébration comme pour une annonce de vainqueur classique.
+            if payload.status == "finished" { self.loadWinnerSound() }
             // Un changement d'état peut clore les votes → on resynchronise le classement.
             Task { await self.refresh() }
         })
@@ -831,9 +848,11 @@ public final class CompetitionRoomViewModel {
             case "winner_announced":
                 if let p = envelope.payload {
                     self.winnerInfo = CompetitionWinner(name: p.name ?? "Vainqueur", avatar: p.avatar, votes: p.votes ?? 0, percent: p.percent ?? 0)
+                    self.loadWinnerSound()
                 }
             case "winner_stopped":
                 self.winnerInfo = nil
+                self.winnerSoundUrl = nil
             default:
                 break
             }
@@ -1148,6 +1167,7 @@ public final class CompetitionRoomViewModel {
         let percent = total > 0 ? Int((top.score / total) * 100) : 100
         let w = CompetitionWinner(name: top.artist?.displayName ?? "Vainqueur", avatar: top.artist?.avatarURL, votes: Int(top.score), percent: percent)
         winnerInfo = w
+        loadWinnerSound()
         liveSession?.broadcast(
             channel: "competition-winner-\(competitionId)",
             event: "winner_announced",
@@ -1158,7 +1178,15 @@ public final class CompetitionRoomViewModel {
     /// Manager : arrête la célébration du vainqueur pour tous (ne clôture PAS le direct).
     public func stopWinnerAnnouncement() {
         winnerInfo = nil
+        winnerSoundUrl = nil
         liveSession?.broadcast(channel: "competition-winner-\(competitionId)", event: "winner_stopped", payload: [:])
+    }
+
+    /// Charge le son de célébration téléversé par l'admin, à chaque nouvelle annonce de
+    /// vainqueur (appelé par l'émetteur ET les récepteurs, pour que le son joue aussi chez les
+    /// spectateurs) — `nil` en cas d'échec, ``WinnerCelebration`` utilise alors son repli.
+    private func loadWinnerSound() {
+        Task { winnerSoundUrl = await repository.winnerSoundUrl() }
     }
 
     /// Valide/rejette une candidature puis recharge la liste.
@@ -2483,7 +2511,8 @@ public struct CompetitionRoomView: View {
                 winnerName: winner.name,
                 title: s.winnerTitle,
                 avatarURL: winner.avatar,
-                subtitle: "\(winner.votes) · \(winner.percent)%"
+                subtitle: "\(winner.votes) · \(winner.percent)%",
+                soundURL: viewModel.winnerSoundUrl
             )
             if showStopButton, viewModel.isManager {
                 VStack {

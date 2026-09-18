@@ -791,7 +791,8 @@ public struct DuelRoomView: View {
                 winnerName: winner.name,
                 title: s.winnerTitle,
                 avatarURL: winner.avatar,
-                subtitle: "\(winner.votes) · \(winner.percent)%"
+                subtitle: "\(winner.votes) · \(winner.percent)%",
+                soundURL: viewModel.winnerSoundUrl
             )
             if viewModel.isManager {
                 VStack {

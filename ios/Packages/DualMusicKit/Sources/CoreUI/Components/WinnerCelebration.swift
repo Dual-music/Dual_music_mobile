@@ -1,34 +1,54 @@
 import SwiftUI
+import AVFoundation
+import DomainModels
+
+/// Repli quand aucun son n'est configuré côté admin — même piste que Android
+/// (`WinnerCelebration.kt` : `"https://assets.mixkit.co/active_storage/sfx/2010/2010-preview.mp3"`).
+private let defaultWinnerSoundURL = "https://assets.mixkit.co/active_storage/sfx/2010/2010-preview.mp3"
 
 /// Overlay de **célébration du vainqueur** — lueur radiale pulsante en fond, confettis qui
-/// tombent, et carte centrale avec couronne rebondissante, avatar en bague dorée (+ pastille
-/// trophée), « 🎉 Titre 🎉 », nom en doré et sous-titre optionnel en pastille.
+/// tombent, carte centrale avec couronne rebondissante, avatar en bague dorée (+ pastille
+/// trophée), « 🎉 Titre 🎉 », nom en doré et sous-titre optionnel en pastille — le tout sur un
+/// son en boucle (téléversé par l'admin, réglage public `winner_sound_url` ; repli sur un son
+/// par défaut si non configuré).
 ///
 /// Miroir de `WinnerCelebration`/`ConfettiLayer`/`WinnerCard` (Compose,
-/// `core/ui/celebration/WinnerCelebration.kt`). Le son (applaudissements en boucle sur
-/// Android) n'est PAS repris ici — écart assumé, purement sonore, sans impact visuel.
+/// `core/ui/celebration/WinnerCelebration.kt`).
 ///
 /// ```swift
-/// WinnerCelebration(winnerName: winner.name, title: s.winnerTitle, avatarURL: winner.avatar, subtitle: s.winnerCongrats)
+/// WinnerCelebration(winnerName: winner.name, title: s.winnerTitle, avatarURL: winner.avatar, subtitle: s.winnerCongrats, soundURL: viewModel.winnerSoundUrl)
 /// ```
 public struct WinnerCelebration: View {
     private let winnerName: String
     private let title: String
     private let avatarURL: String?
     private let subtitle: String?
+    private let soundURL: String?
     private let reduceAnimations: Bool
+
+    @State private var queuePlayer: AVQueuePlayer?
+    @State private var looper: AVPlayerLooper?
 
     /// - Parameters:
     ///   - winnerName: nom affiché du vainqueur.
     ///   - title: libellé (ex. « 🏆 Vainqueur »).
     ///   - avatarURL: URL de l'avatar (repli sur l'initiale si absente).
     ///   - subtitle: sous-titre optionnel (ex. « Félicitations ! »).
+    ///   - soundURL: son personnalisé téléversé par l'admin (`nil`/vide → son par défaut).
     ///   - reduceAnimations: masque lueur + confettis + le rebond (préférence accessibilité).
-    public init(winnerName: String, title: String, avatarURL: String? = nil, subtitle: String? = nil, reduceAnimations: Bool = false) {
+    public init(
+        winnerName: String,
+        title: String,
+        avatarURL: String? = nil,
+        subtitle: String? = nil,
+        soundURL: String? = nil,
+        reduceAnimations: Bool = false
+    ) {
         self.winnerName = winnerName
         self.title = title
         self.avatarURL = avatarURL
         self.subtitle = subtitle
+        self.soundURL = soundURL
         self.reduceAnimations = reduceAnimations
     }
 
@@ -42,6 +62,28 @@ public struct WinnerCelebration: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .allowsHitTesting(false)
+        .onAppear { playSound() }
+        .onDisappear { stopSound() }
+    }
+
+    /// Joue le son en boucle native (`AVPlayerLooper`, pas de bricolage à base de notification)
+    /// tant que cette vue reste affichée — le manager qui arrête l'annonce, ou la sortie de la
+    /// room, démonte cette vue et coupe le son via ``stopSound()``.
+    private func playSound() {
+        let urlString = soundURL?.nilIfBlank ?? defaultWinnerSoundURL
+        guard let url = URL(string: urlString) else { return }
+        let item = AVPlayerItem(url: url)
+        let player = AVQueuePlayer()
+        looper = AVPlayerLooper(player: player, templateItem: item)
+        queuePlayer = player
+        player.play()
+    }
+
+    private func stopSound() {
+        looper?.disableLooping()
+        queuePlayer?.pause()
+        looper = nil
+        queuePlayer = nil
     }
 }
 

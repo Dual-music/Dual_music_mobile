@@ -218,6 +218,13 @@ private struct VoteConfigSettingValue: Decodable, Sendable {
 }
 private typealias VoteConfigValue = VoteConfigSettingValue
 
+/// Réglage public `winner_sound_url` : `GET /settings/public/winner_sound_url` — son personnalisé
+/// téléversé par l'admin, joué sous l'animation de célébration du vainqueur (`nil`/vide → repli
+/// sur le son par défaut, voir ``WinnerCelebration``).
+private struct WinnerSoundUrlSetting: Decodable, Sendable {
+    let value: String?
+}
+
 /// Corps de `POST /moderation/reports/live` (live/duel/concert, distingués par `streamType`).
 struct ReportStreamBody: Encodable, Sendable {
     let liveId: String
@@ -370,6 +377,12 @@ public struct DuelRepository: Sendable {
     /// Prix d'UN vote en crédits — configuré par l'admin, lu via l'endpoint PUBLIC (défaut 1).
     public func votePricePerVote() async -> Double {
         (try? await http.request(.get("/settings/public/vote_config"), as: VoteConfigSetting.self))?.value?.pricePerVote ?? 1.0
+    }
+
+    /// Son personnalisé de célébration du vainqueur, téléversé par l'admin (réglage public
+    /// `winner_sound_url`) — `nil` si non configuré ou en cas d'échec.
+    public func winnerSoundUrl() async -> String? {
+        (try? await http.request(.get("/settings/public/winner_sound_url"), as: WinnerSoundUrlSetting.self))?.value
     }
 
     // MARK: - J'aime persistés
