@@ -137,23 +137,13 @@ private struct ConfettiLayer: View {
         )
     }
 
-    @State private var fall: CGFloat = 0
     @State private var visible = true
 
     var body: some View {
         TimelineView(.animation) { timeline in
             GeometryReader { proxy in
-                let elapsed = timeline.date.timeIntervalSinceReferenceDate
-                let t = CGFloat((elapsed.truncatingRemainder(dividingBy: 2.2)) / 2.2)
                 ForEach(confetti) { c in
-                    let p = (t + c.phase).truncatingRemainder(dividingBy: 1)
-                    let y = p * (proxy.size.height + 40) - 20
-                    let x = c.x * proxy.size.width + sin((p + c.phase) * 2 * .pi * 2) * c.drift * 36
-                    Rectangle()
-                        .fill(c.color)
-                        .frame(width: c.size, height: c.size * 1.6)
-                        .rotationEffect(.degrees(c.rotation + p * 540))
-                        .position(x: x, y: y)
+                    ConfettiPiece(confetto: c, referenceDate: timeline.date, canvasSize: proxy.size)
                 }
             }
         }
@@ -163,6 +153,37 @@ private struct ConfettiLayer: View {
             try? await Task.sleep(nanoseconds: 4_800_000_000)
             visible = false
         }
+    }
+}
+
+/// Un confetti positionné pour l'instant courant — extrait en vue distincte pour que le
+/// vérificateur de types n'ait plus à résoudre une seule énorme expression combinée
+/// (`TimelineView` + `GeometryReader` + `ForEach` + calculs trigonométriques inline avait
+/// dépassé le délai de vérification de types de Swift en CI).
+private struct ConfettiPiece: View {
+    let confetto: Confetto
+    let referenceDate: Date
+    let canvasSize: CGSize
+
+    var body: some View {
+        // Tout en `Double` (même type que `Confetto.phase`/`.rotation`) — pas de conversion
+        // implicite CGFloat/Double en Swift, mélanger les deux ici avait provoqué le délai de
+        // vérification de types dépassé en CI. Conversion vers `CGFloat` uniquement en sortie,
+        // aux points d'appel SwiftUI qui l'exigent.
+        let elapsed: Double = referenceDate.timeIntervalSinceReferenceDate
+        let t: Double = elapsed.truncatingRemainder(dividingBy: 2.2) / 2.2
+        let p: Double = (t + confetto.phase).truncatingRemainder(dividingBy: 1)
+        let canvasWidth: Double = Double(canvasSize.width)
+        let canvasHeight: Double = Double(canvasSize.height)
+        let y: Double = p * (canvasHeight + 40) - 20
+        let driftPhase: Double = (p + confetto.phase) * 2 * Double.pi * 2
+        let x: Double = Double(confetto.x) * canvasWidth + sin(driftPhase) * Double(confetto.drift) * 36
+        let rotationDegrees: Double = confetto.rotation + p * 540
+        Rectangle()
+            .fill(confetto.color)
+            .frame(width: confetto.size, height: confetto.size * 1.6)
+            .rotationEffect(.degrees(rotationDegrees))
+            .position(x: CGFloat(x), y: CGFloat(y))
     }
 }
 
