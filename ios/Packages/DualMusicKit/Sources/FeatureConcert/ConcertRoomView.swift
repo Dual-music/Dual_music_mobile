@@ -648,6 +648,7 @@ public struct ConcertRoomView: View {
     private let hostUserId: String
     private let artistName: String?
     private let onEnded: () -> Void
+    private let onLeave: () -> Void
     private let onOpenArtist: (String) -> Void
 
     @State private var draft = ""
@@ -673,6 +674,7 @@ public struct ConcertRoomView: View {
     ///   - hostUserId: id de l'artiste — jamais bannissable, même par lui-même.
     ///   - artistName: nom affiché dans la puce artiste (spectateur), tappable → ``onOpenArtist``.
     ///   - onEnded: artiste uniquement — appelé une fois le concert terminé.
+    ///   - onLeave: spectateur — bouton « Quitter » rouge de l'en-tête (retour à la liste).
     ///   - onOpenArtist: ouvre le profil public de l'artiste (tap sur son nom).
     public init(
         viewModel: ConcertRoomViewModel,
@@ -680,6 +682,7 @@ public struct ConcertRoomView: View {
         hostUserId: String,
         artistName: String? = nil,
         onEnded: @escaping () -> Void = {},
+        onLeave: @escaping () -> Void = {},
         onOpenArtist: @escaping (String) -> Void = { _ in }
     ) {
         self.viewModel = viewModel
@@ -687,6 +690,7 @@ public struct ConcertRoomView: View {
         self.hostUserId = hostUserId
         self.artistName = artistName
         self.onEnded = onEnded
+        self.onLeave = onLeave
         self.onOpenArtist = onOpenArtist
     }
 
@@ -821,58 +825,53 @@ public struct ConcertRoomView: View {
     }
 
     /// Compteur de spectateurs + bouton signaler.
+    /// Miroir de `ConcertRoomScreen.kt:285-297` (`LiveHeader(badgeText = "CONCERT", onShare,
+    /// onReport, onQuit)`) + une 2ᵉ ligne compacte pour le nom de l'artiste (spectateur) et les
+    /// modérateurs, absents de `LiveHeader` mais déjà présents côté iOS.
     private var viewerBadge: some View {
-        HStack {
-            if !viewModel.isHost {
-                // Nom de l'artiste (spectateur) → profil public (parité duel « tap nom »).
-                Button { onOpenArtist(hostUserId) } label: {
-                    Text("🎤 \(artistName?.nilIfBlank ?? s.artists)")
-                        .font(DMFont.caption).bold()
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .frame(maxWidth: 110, alignment: .leading)
-                        .padding(.horizontal, theme.spacing.sm)
-                        .padding(.vertical, theme.spacing.xs)
-                        .background(.black.opacity(0.4), in: Capsule())
+        VStack(spacing: theme.spacing.xs) {
+            LiveHeader(
+                eventLabel: "",
+                viewerCount: viewModel.viewerCount,
+                likes: viewModel.likes,
+                shareText: s.shareLiveText,
+                onReport: { showReport = true },
+                onQuit: viewModel.isHost ? nil : { onLeave() },
+                badgeText: "CONCERT"
+            )
+            HStack {
+                if !viewModel.isHost {
+                    // Nom de l'artiste (spectateur) → profil public (parité duel « tap nom »).
+                    Button { onOpenArtist(hostUserId) } label: {
+                        Text("🎤 \(artistName?.nilIfBlank ?? s.artists)")
+                            .font(DMFont.caption).bold()
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .frame(maxWidth: 110, alignment: .leading)
+                            .padding(.horizontal, theme.spacing.sm)
+                            .padding(.vertical, theme.spacing.xs)
+                            .background(.black.opacity(0.4), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-
-                Button { showReport = true } label: {
-                    Image(systemName: "flag.fill")
-                        .font(DMFont.caption)
-                        .foregroundStyle(.white)
-                        .padding(theme.spacing.xs)
-                        .background(.black.opacity(0.4), in: Circle())
+                // Visible de l'artiste ET des modérateurs eux-mêmes (pour qu'ils voient qui
+                // d'autre a ce pouvoir) — pas seulement l'artiste.
+                if viewModel.canModerate {
+                    Button {
+                        showModeratorsSheet = true
+                        if viewModel.isHost { Task { await viewModel.loadViewers() } }
+                    } label: {
+                        Image(systemName: "person.2.fill")
+                            .font(DMFont.caption)
+                            .foregroundStyle(.white)
+                            .padding(theme.spacing.xs)
+                            .background(.black.opacity(0.4), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(s.moderators))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(s.reportAction))
+                Spacer()
             }
-            // Visible de l'artiste ET des modérateurs eux-mêmes (pour qu'ils voient qui
-            // d'autre a ce pouvoir) — pas seulement l'artiste.
-            if viewModel.canModerate {
-                Button {
-                    showModeratorsSheet = true
-                    if viewModel.isHost { Task { await viewModel.loadViewers() } }
-                } label: {
-                    Image(systemName: "person.2.fill")
-                        .font(DMFont.caption)
-                        .foregroundStyle(.white)
-                        .padding(theme.spacing.xs)
-                        .background(.black.opacity(0.4), in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(s.moderators))
-            }
-            Spacer()
-            HStack(spacing: 4) {
-                Image(systemName: "eye.fill")
-                Text("\(viewModel.viewerCount)")
-            }
-            .font(DMFont.caption)
-            .foregroundStyle(.white)
-            .padding(.horizontal, theme.spacing.md)
-            .padding(.vertical, theme.spacing.xs)
-            .background(.black.opacity(0.4), in: Capsule())
         }
     }
 

@@ -266,6 +266,7 @@ struct MainShellView: View {
                     hostUserId: concert.artistId,
                     artistName: concert.artist?.displayName ?? concert.artistName,
                     onEnded: { openConcert = nil },
+                    onLeave: { openConcert = nil },
                     onOpenArtist: { openArtist = IdentifiableID($0) }
                 )
             }

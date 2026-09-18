@@ -293,16 +293,54 @@ public struct DuelRoomView: View {
     /// Haut : bouton signaler + barre de répartition des votes + minuteur.
     private var header: some View {
         VStack(spacing: theme.spacing.sm) {
-            HStack {
-                Button { showReport = true } label: {
-                    Image(systemName: "flag.fill")
-                        .font(DMFont.caption)
+            // Ligne 1 (allégée) : badge DUEL + likes + signaler + QUITTER rouge (tout le monde).
+            // Miroir de `DuelRoomScreen.kt:367-376` (`LiveHeader(badgeText = "DUEL", showViewers = false)`).
+            HStack(spacing: 6) {
+                HStack(spacing: 5) {
+                    Circle().fill(.white).frame(width: 7, height: 7)
+                    Text("DUEL")
+                        .font(.system(size: 11, weight: .black))
                         .foregroundStyle(.white)
-                        .padding(theme.spacing.xs)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(theme.colors.destructive, in: Capsule())
+
+                if viewModel.likes > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color(hex: 0xFF4D6D))
+                        Text("\(viewModel.likes)").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.black.opacity(0.4), in: Capsule())
+                }
+
+                Spacer()
+
+                Button { showReport = true } label: {
+                    Image(systemName: "flag")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
                         .background(.black.opacity(0.4), in: Circle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text(s.reportAction))
+
+                Button { onLeave() } label: {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(theme.colors.destructive, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(s.quitLiveAction))
+            }
+            HStack {
                 // Visible du manager ET des modérateurs eux-mêmes (pour qu'ils voient qui
                 // d'autre a ce pouvoir) — pas seulement le manager.
                 if viewModel.canModerate {
