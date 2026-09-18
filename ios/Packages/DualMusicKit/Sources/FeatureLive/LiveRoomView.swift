@@ -92,22 +92,42 @@ public struct LiveRoomView: View {
             .ignoresSafeArea()
             .allowsHitTesting(false)
 
-            // --- Cadeau animé (dernier reçu, centré) ---
+            // --- Cadeau reçu : carte glissante bas-gauche (Android a retiré le burst centré,
+            // voir `LiveRoomScreen.kt:396-397`) ---
             if let gift = viewModel.giftFeed.last {
-                GiftBurstView(symbol: "🎁", label: gift.giftName) {
-                    viewModel.consumeOldestGift()
+                VStack {
+                    Spacer()
+                    HStack {
+                        GiftReceivedCard(imageURL: gift.giftImage, name: gift.giftName ?? s.sendGift, valueCredits: gift.value)
+                        Spacer()
+                    }
+                    .padding(.leading, 10)
+                    .padding(.bottom, 300)
                 }
                 .id(gift.id)
+                .allowsHitTesting(false)
+                .task(id: gift.id) {
+                    try? await Task.sleep(nanoseconds: 3_200_000_000)
+                    viewModel.consumeOldestGift()
+                }
             }
-            // --- Réaction emoji flottante (une à la fois) ---
-            if let reaction = viewModel.emojiFeed.last {
-                GiftBurstView(symbol: reaction.emoji) { viewModel.consumeOldestEmoji() }
-                    .id(reaction.id)
-            }
+            // --- Réactions emoji flottantes : essaim bas-droite (miroir Android) ---
+            FloatingReactionsLayer(
+                reactions: viewModel.emojiFeed.map { FloatingReactionItem(id: "\($0.id)", emoji: $0.emoji) },
+                onFinished: { _ in viewModel.consumeOldestEmoji() }
+            )
 
             // --- Overlays ---
             VStack {
                 viewerBadge
+                // Nom du meilleur donateur qui défile (parité duel/concert) — miroir de
+                // `LiveRoomScreen.kt:496-508`.
+                if let donor = viewModel.topDonor {
+                    HStack { ScrollingLabel("👑  \(donor.displayName)  ·  \(Int(donor.total)) 🎁") }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 3)
+                        .background(Color.white.opacity(0.2), in: Capsule())
+                }
                 guestTilesStrip
                 Spacer()
                 chatOverlay

@@ -397,6 +397,13 @@ public struct DuelRoomView: View {
                 onLeftTap: { if let id = viewModel.duel?.artist1Id { onOpenArtist(id) } },
                 onRightTap: { if let id = viewModel.duel?.artist2Id { onOpenArtist(id) } }
             )
+            // Nom du meilleur donateur qui défile — miroir de `DuelRoomScreen.kt:422-432`.
+            if let donor = viewModel.topDonor {
+                HStack { ScrollingLabel("👑  \(donor.displayName)  ·  \(Int(donor.total)) 🎁") }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 3)
+                    .background(Color.white.opacity(0.2), in: Capsule())
+            }
             if viewModel.timer.isRunning {
                 Text(s.timerRunning)
                     .font(DMFont.caption).bold()

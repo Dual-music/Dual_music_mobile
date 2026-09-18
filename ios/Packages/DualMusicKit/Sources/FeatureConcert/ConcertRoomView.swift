@@ -713,18 +713,41 @@ public struct ConcertRoomView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
+            // Cadeau reçu : carte glissante bas-gauche (Android a retiré le burst centré, voir
+            // `ConcertRoomScreen.kt:268-269`).
             if let gift = viewModel.giftFeed.last {
-                GiftBurstView(symbol: "🎁", label: gift.giftName) { viewModel.consumeOldestGift() }
-                    .id(gift.id)
+                VStack {
+                    Spacer()
+                    HStack {
+                        GiftReceivedCard(imageURL: gift.giftImage, name: gift.giftName ?? s.sendGift, valueCredits: gift.value)
+                        Spacer()
+                    }
+                    .padding(.leading, 10)
+                    .padding(.bottom, 300)
+                }
+                .id(gift.id)
+                .allowsHitTesting(false)
+                .task(id: gift.id) {
+                    try? await Task.sleep(nanoseconds: 3_200_000_000)
+                    viewModel.consumeOldestGift()
+                }
             }
 
-            if let reaction = viewModel.emojiFeed.last {
-                GiftBurstView(symbol: reaction.emoji) { viewModel.consumeOldestEmoji() }
-                    .id(reaction.id)
-            }
+            // Réactions emoji flottantes : essaim bas-droite (miroir Android).
+            FloatingReactionsLayer(
+                reactions: viewModel.emojiFeed.map { FloatingReactionItem(id: "\($0.id)", emoji: $0.emoji) },
+                onFinished: { _ in viewModel.consumeOldestEmoji() }
+            )
 
             VStack {
                 viewerBadge
+                // Nom du meilleur donateur qui défile — miroir de `ConcertRoomScreen.kt:299-310`.
+                if let donor = viewModel.topDonor {
+                    HStack { ScrollingLabel("👑  \(donor.displayName)  ·  \(Int(donor.total)) 🎁") }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 3)
+                        .background(Color.white.opacity(0.2), in: Capsule())
+                }
                 Spacer()
                 chatOverlay
                 if showReactionBar { reactionBar }
