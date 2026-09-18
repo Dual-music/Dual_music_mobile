@@ -248,6 +248,7 @@ public struct DMStrings: Sendable {
     public let noReplays: String
     public let noReplaysHint: String
     public let replay: String
+    public let replayAvailable: String
     public let free: String
     public let replayPremium: String
     public let unlocking: String
@@ -447,6 +448,12 @@ public struct DMStrings: Sendable {
     public let noConcertsScheduledHint: String
     public let noCompetitions: String
     public let noCompetitionsHint: String
+    // Onglets catalogue Duels/Concerts/Compétitions (en direct/à venir/replays).
+    public let noDuelsLive: String
+    public let noDuelsUpcoming: String
+    public let noDuelReplays: String
+    public let noCompetitionsLive: String
+    public let noCompetitionsUpcoming: String
     public let statusLiveNow: String
     public let statusUpcoming: String
     public let statusEnded: String
@@ -676,6 +683,39 @@ public struct DMStrings: Sendable {
     public let genderOther: String
     // Bascule admin "création de duels par les managers".
     public let adminDuelCreation: String
+    // Catalogue Duels (titre, onglets, badges, cartes).
+    public let duelsPageTitle: String
+    public let duelsSubtitle: String
+    public let duelTabUpcoming: String
+    public let duelTabReplays: String
+    public let liveBadge: String
+    public let upcomingBadge: String
+    public let duelPaid: String
+    public let votesWord: String
+    public let voteBtn: String
+    public let viewDuelBtn: String
+    // Catalogue Compétitions (badges, détail, candidature).
+    public let compOnline: String
+    public let compOnsite: String
+    public let compViewDetails: String
+    public let compApplicationOpensAt: String
+    public let compApplicationDeadline: String
+    public let compStartAtLabel: String
+    public let compEndAtLabel: String
+    public let maxCandidatesLabel: String
+    public let compRewardDesc: String
+    public let compEntryFeeAmount: String
+    public let compApplied: String
+    public let compDeadlinePassed: String
+    public let compApply: String
+    public let compApplicationsNotOpenYet: String
+    public let compViewJoin: String
+    public let compCancel: String
+    public let compApplyTitle: String
+    public let compApplyPitch: String
+    public let compApplyVideo: String
+    public let compApplyRequiredFields: String
+    public let compAlreadyApplied: String
 }
 
 // MARK: - Tables de traduction
@@ -898,6 +938,7 @@ public extension DMStrings {
         noReplays: "Aucune rediffusion disponible",
         noReplaysHint: "Les rediffusions débloquées apparaîtront ici.",
         replay: "Rediffusion",
+        replayAvailable: "Replay disponible",
         free: "Gratuit",
         replayPremium: "Cette rediffusion est premium.",
         unlocking: "Déblocage…",
@@ -1086,6 +1127,11 @@ public extension DMStrings {
         noConcertsScheduledHint: "Les concerts à venir apparaîtront ici.",
         noCompetitions: "Aucune compétition pour le moment",
         noCompetitionsHint: "Les compétitions ouvertes apparaîtront ici.",
+        noDuelsLive: "Aucun duel en direct pour le moment",
+        noDuelsUpcoming: "Aucun duel à venir pour le moment",
+        noDuelReplays: "Aucun replay de duel disponible",
+        noCompetitionsLive: "Aucune compétition en direct",
+        noCompetitionsUpcoming: "Aucune compétition à venir",
         statusLiveNow: "🔴 EN DIRECT",
         statusUpcoming: "À venir",
         statusEnded: "Terminé",
@@ -1288,7 +1334,38 @@ public extension DMStrings {
         genderMale: "Homme",
         genderFemale: "Femme",
         genderOther: "Autre",
-        adminDuelCreation: "Création de duels par les managers"
+        adminDuelCreation: "Création de duels par les managers",
+        duelsPageTitle: "Duels Musicaux",
+        duelsSubtitle: "Affrontements en direct et à venir",
+        duelTabUpcoming: "À venir",
+        duelTabReplays: "Replays",
+        liveBadge: "EN DIRECT",
+        upcomingBadge: "À VENIR",
+        duelPaid: "Payant",
+        votesWord: "votes",
+        voteBtn: "Voter",
+        viewDuelBtn: "Voir le Duel",
+        compOnline: "En ligne",
+        compOnsite: "En présentiel",
+        compViewDetails: "Voir les détails",
+        compApplicationOpensAt: "Ouverture des candidatures",
+        compApplicationDeadline: "Date limite des candidatures",
+        compStartAtLabel: "Début de la compétition",
+        compEndAtLabel: "Fin de la compétition",
+        maxCandidatesLabel: "Candidats max",
+        compRewardDesc: "Récompense prévue",
+        compEntryFeeAmount: "Montant des frais (crédits)",
+        compApplied: "Candidature envoyée",
+        compDeadlinePassed: "Date limite dépassée",
+        compApply: "Candidater",
+        compApplicationsNotOpenYet: "Candidatures pas encore ouvertes",
+        compViewJoin: "Voir / Rejoindre",
+        compCancel: "Annuler",
+        compApplyTitle: "Déposer ma candidature",
+        compApplyPitch: "Présentation",
+        compApplyVideo: "Lien vidéo démo",
+        compApplyRequiredFields: "Tous les champs sont obligatoires",
+        compAlreadyApplied: "Vous avez déjà candidaté"
     )
 
     /// Chaînes **anglaises**.
@@ -1507,6 +1584,7 @@ public extension DMStrings {
         noReplays: "No replays available",
         noReplaysHint: "Unlocked replays will appear here.",
         replay: "Replay",
+        replayAvailable: "Replay available",
         free: "Free",
         replayPremium: "This replay is premium.",
         unlocking: "Unlocking…",
@@ -1695,6 +1773,11 @@ public extension DMStrings {
         noConcertsScheduledHint: "Upcoming concerts will appear here.",
         noCompetitions: "No competition yet",
         noCompetitionsHint: "Open competitions will appear here.",
+        noDuelsLive: "No live duel at the moment",
+        noDuelsUpcoming: "No upcoming duel at the moment",
+        noDuelReplays: "No duel replay available",
+        noCompetitionsLive: "No live competitions",
+        noCompetitionsUpcoming: "No upcoming competitions",
         statusLiveNow: "🔴 LIVE",
         statusUpcoming: "Upcoming",
         statusEnded: "Ended",
@@ -1897,7 +1980,38 @@ public extension DMStrings {
         genderMale: "Male",
         genderFemale: "Female",
         genderOther: "Other",
-        adminDuelCreation: "Duel creation by managers"
+        adminDuelCreation: "Duel creation by managers",
+        duelsPageTitle: "Musical Duels",
+        duelsSubtitle: "Live and upcoming battles",
+        duelTabUpcoming: "Upcoming",
+        duelTabReplays: "Replays",
+        liveBadge: "LIVE",
+        upcomingBadge: "UPCOMING",
+        duelPaid: "Paid",
+        votesWord: "votes",
+        voteBtn: "Vote",
+        viewDuelBtn: "View Duel",
+        compOnline: "Online",
+        compOnsite: "On-site",
+        compViewDetails: "View details",
+        compApplicationOpensAt: "Applications open at",
+        compApplicationDeadline: "Application deadline",
+        compStartAtLabel: "Competition start",
+        compEndAtLabel: "Competition end",
+        maxCandidatesLabel: "Max candidates",
+        compRewardDesc: "Planned reward",
+        compEntryFeeAmount: "Fee amount (credits)",
+        compApplied: "Application submitted",
+        compDeadlinePassed: "Deadline passed",
+        compApply: "Apply",
+        compApplicationsNotOpenYet: "Applications not open yet",
+        compViewJoin: "View / Join",
+        compCancel: "Cancel",
+        compApplyTitle: "Submit my application",
+        compApplyPitch: "Pitch",
+        compApplyVideo: "Demo video link",
+        compApplyRequiredFields: "All fields are required",
+        compAlreadyApplied: "You already applied"
     )
 
     /// Renvoie la table de chaînes d'une langue.

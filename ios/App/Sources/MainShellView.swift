@@ -82,7 +82,9 @@ struct MainShellView: View {
     @State private var notifUnread = 0
     @State private var homeDestination: HomeDestination?
     @State private var openDuel: Duel?
+    @State private var openDuelReplay: ReplayVideo?
     @State private var openCompetition: Competition?
+    @State private var openCompetitionReplay: ReplayVideo?
     @State private var openConcert: Concert?
     @State private var openConcertReplay: ReplayVideo?
     /// Live ouvert depuis la liste (``LivesListView``) — lecteur plein écran, spectateur.
@@ -226,10 +228,15 @@ struct MainShellView: View {
                     onOpenArtist: { openArtist = IdentifiableID($0) }
                 )
             }
+        } else if let replay = openDuelReplay {
+            SubScreen(title: replay.title ?? s.replay, onBack: { openDuelReplay = nil }) {
+                ReplayPlayerView(viewModel: container.replayPlayer(for: replay))
+            }
         } else {
             DuelsListView(
                 viewModel: container.duelsList,
                 onOpen: { openDuel = $0 },
+                onOpenReplay: { openDuelReplay = $0 },
                 onRequestSponsor: { type, id in sponsorPreselect = (type, id); showProfile = true }
             )
         }
@@ -246,10 +253,15 @@ struct MainShellView: View {
                     onOpenArtist: { openArtist = IdentifiableID($0) }
                 )
             }
+        } else if let replay = openCompetitionReplay {
+            SubScreen(title: replay.title ?? s.replay, onBack: { openCompetitionReplay = nil }) {
+                ReplayPlayerView(viewModel: container.replayPlayer(for: replay))
+            }
         } else {
             CompetitionsListView(
                 viewModel: container.competitions,
                 onOpen: { openCompetition = $0 },
+                onOpenReplay: { openCompetitionReplay = $0 },
                 onRequestSponsor: { type, id in sponsorPreselect = (type, id); showProfile = true }
             )
         }

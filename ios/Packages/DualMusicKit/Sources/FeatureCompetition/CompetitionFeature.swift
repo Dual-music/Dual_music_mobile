@@ -191,11 +191,19 @@ public struct CompetitionRepository: Sendable {
     }
 
     /// Catalogue public des compétitions.
-    public func competitions(limit: Int = 50) async throws -> [Competition] {
-        try await http.request(
-            .get(CompetitionEndpoints.list, query: ["limit": String(limit)]),
-            as: [Competition].self
-        )
+    /// - Parameter status: filtre optionnel (`published` | `live` | `draft` | `ended`…).
+    public func competitions(status: String? = nil, limit: Int = 50) async throws -> [Competition] {
+        var query = ["limit": String(limit)]
+        if let status { query["status"] = status }
+        return try await http.request(.get(CompetitionEndpoints.list, query: query), as: [Competition].self)
+    }
+
+    /// Replays publics de compétitions (`GET /replays?sourceType=competition&isPublic=true`).
+    public func competitionReplays() async -> [ReplayVideo] {
+        (try? await http.request(
+            .get(ReplayEndpoints.list, query: ["sourceType": "competition", "isPublic": "true", "limit": "100"]),
+            as: [ReplayVideo].self
+        )) ?? []
     }
 
     /// Détail d'une compétition.
@@ -468,13 +476,24 @@ struct CompetitionBanBody: Encodable, Sendable {
     let reason: String?
 }
 
-/// ViewModel du catalogue de compétitions.
+/// ViewModel du catalogue de compétitions (3 onglets) — parité `CompetitionsViewModel` Android :
+///  - En direct : `status == "live"` OU (`published` ET début ≤ maintenant < fin).
+///  - À venir : le reste des `published`.
+///  - Replays : `GET /replays?sourceType=competition&isPublic=true`.
 @Observable
 @MainActor
 public final class CompetitionsViewModel {
 
-    public private(set) var competitions: [Competition] = []
+    public private(set) var live: [Competition] = []
+    public private(set) var upcoming: [Competition] = []
+    public private(set) var replays: [ReplayVideo] = []
     public private(set) var isLoading = false
+    /// Le caller a-t-il le rôle artiste ? (éligibilité au bouton Candidater).
+    public private(set) var isArtist = false
+    /// Ids des compétitions où le caller (artiste) a déjà une candidature.
+    public private(set) var appliedCompetitionIds: Set<String> = []
+    /// Résultat transitoire de la dernière candidature (dialogue de détails).
+    public private(set) var applying = false
 
     private let repository: CompetitionRepository
 
@@ -482,12 +501,58 @@ public final class CompetitionsViewModel {
         self.repository = repository
     }
 
-    /// Charge le catalogue.
+    /// Charge le catalogue (en direct / à venir / replays) + éligibilité à candidater.
     public func load() async {
         guard !isLoading else { return }
         isLoading = true
-        competitions = (try? await repository.competitions()) ?? []
+        let published = (try? await repository.competitions(status: "published", limit: 100)) ?? []
+        let liveStatus = (try? await repository.competitions(status: "live", limit: 100)) ?? []
+        var seen = Set<String>()
+        let all = (published + liveStatus).filter { seen.insert($0.id).inserted }
+        let now = Date()
+        live = all.filter { isLiveNow($0, now) }
+        upcoming = all.filter { !isLiveNow($0, now) }
+        replays = await repository.competitionReplays()
         isLoading = false
+
+        isArtist = await repository.amIArtist()
+        if isArtist {
+            let mine = (try? await repository.myCandidacies()) ?? []
+            appliedCompetitionIds = Set(mine.map(\.competitionId))
+        } else {
+            appliedCompetitionIds = []
+        }
+    }
+
+    /// Auto-candidature de l'artiste à une compétition à venir (parité web
+    /// `CompetitionApplyDialog`). Met à jour ``appliedCompetitionIds`` en cas de succès.
+    /// - Returns: `nil` en cas de succès, sinon l'erreur survenue.
+    public func apply(competitionId: String, pitch: String?, videoDemoUrl: String?) async -> Error? {
+        applying = true
+        defer { applying = false }
+        do {
+            try await repository.apply(competitionId: competitionId, pitch: pitch, videoDemoUrl: videoDemoUrl)
+            appliedCompetitionIds.insert(competitionId)
+            return nil
+        } catch {
+            return error
+        }
+    }
+
+    /// En direct = statut `live`, ou `published` dont la fenêtre (début inclus, fin exclue)
+    /// contient maintenant.
+    private func isLiveNow(_ c: Competition, _ now: Date) -> Bool {
+        if c.status == "live" { return true }
+        guard c.status == "published", let startAtIso = c.startAt, let start = parseISO(startAtIso) else { return false }
+        guard start <= now else { return false }
+        guard let endAtIso = c.endAt, let end = parseISO(endAtIso) else { return true }
+        return end > now
+    }
+
+    /// Parse ISO 8601 avec repli fractionnaire — même tolérance que ``isDeadlinePassed``.
+    private func parseISO(_ iso: String) -> Date? {
+        ISO8601DateFormatter().date(from: iso)
+            ?? { let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f.date(from: iso) }()
     }
 }
 
@@ -1148,7 +1213,8 @@ public final class CompetitionRoomViewModel {
     }
 }
 
-/// Catalogue des compétitions.
+/// Catalogue des compétitions (3 onglets : En direct / À venir / Replays — pas de recherche ni
+/// de sous-titre, parité web). Miroir de `CompetitionsListScreen` (`CompetitionsScreen.kt`).
 @MainActor
 public struct CompetitionsListView: View {
     @Environment(\.dmTheme) private var theme
@@ -1156,97 +1222,361 @@ public struct CompetitionsListView: View {
 
     private let viewModel: CompetitionsViewModel
     private let onOpen: (Competition) -> Void
+    private let onOpenReplay: (ReplayVideo) -> Void
     private let onRequestSponsor: (String, String) -> Void
+
+    @State private var tab = 0
+    /// Compétition « à venir » dont on affiche le détail — ouvert depuis la carte au lieu
+    /// d'aller directement dans la room (miroir `detailsFor`, `CompetitionsScreen.kt:161`).
+    @State private var detailsFor: Competition?
 
     /// - Parameters:
     ///   - viewModel: source du catalogue.
     ///   - onOpen: callback à l'ouverture d'une compétition (room + classement).
+    ///   - onOpenReplay: callback à l'ouverture d'un replay de compétition.
     ///   - onRequestSponsor: ouvre le sponsoring présélectionné sur cette compétition (`"competition"`, id).
     public init(
         viewModel: CompetitionsViewModel,
         onOpen: @escaping (Competition) -> Void,
+        onOpenReplay: @escaping (ReplayVideo) -> Void = { _ in },
         onRequestSponsor: @escaping (String, String) -> Void = { _, _ in }
     ) {
         self.viewModel = viewModel
         self.onOpen = onOpen
+        self.onOpenReplay = onOpenReplay
         self.onRequestSponsor = onRequestSponsor
     }
 
     public var body: some View {
-        VStack(spacing: theme.spacing.md) {
-            Text(s.screenCompetitions)
-                .font(DMFont.pageTitle)
-                .foregroundStyle(theme.colors.foreground)
-                .frame(maxWidth: .infinity)
+        ScrollView {
+            VStack(spacing: theme.spacing.md) {
+                Text("🏆 \(s.screenCompetitions)")
+                    .font(DMFont.pageTitle)
+                    .foregroundStyle(theme.colors.primary)
+                    .frame(maxWidth: .infinity)
 
-            if viewModel.isLoading {
-                DMLoadingBox()
-            } else if viewModel.competitions.isEmpty {
-                DMEmptyState(title: s.noCompetitions, subtitle: s.noCompetitionsHint, systemImage: "star")
-                Spacer()
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: theme.spacing.xs) {
+                        DMTabPill("\(s.duelTabLive) (\(viewModel.live.count))", selected: tab == 0) { tab = 0 }
+                        DMTabPill("\(s.duelTabUpcoming) (\(viewModel.upcoming.count))", selected: tab == 1) { tab = 1 }
+                        DMTabPill("\(s.duelTabReplays) (\(viewModel.replays.count))", selected: tab == 2) { tab = 2 }
+                    }
+                }
+
+                if viewModel.isLoading {
+                    DMLoadingBox()
+                } else {
+                    tabContent
+                }
+            }
+            .padding(theme.spacing.lg)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .dmScreenBackground()
+        .task { await viewModel.load() }
+        .refreshable { await viewModel.load() }
+        .sheet(item: $detailsFor) { competition in
+            CompetitionDetailsSheet(
+                competition: competition,
+                isArtist: viewModel.isArtist,
+                hasApplied: viewModel.appliedCompetitionIds.contains(competition.id),
+                applying: viewModel.applying,
+                onApply: { pitch, videoURL in await viewModel.apply(competitionId: competition.id, pitch: pitch, videoDemoUrl: videoURL) },
+                onJoin: { detailsFor = nil; onOpen(competition) },
+                onDismiss: { detailsFor = nil }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch tab {
+        case 0:
+            if viewModel.live.isEmpty {
+                DMEmptyState(title: s.noCompetitionsLive, systemImage: "star")
             } else {
-                ScrollView {
-                    LazyVStack(spacing: theme.spacing.sm) {
-                        ForEach(viewModel.competitions) { competition in
-                            CompetitionRow(
-                                competition: competition,
-                                onOpen: { onOpen(competition) },
-                                onRequestSponsor: { onRequestSponsor("competition", competition.id) }
-                            )
+                LazyVStack(spacing: theme.spacing.sm) {
+                    ForEach(viewModel.live) { competition in
+                        CompetitionRow(
+                            competition: competition,
+                            isLive: true,
+                            onOpen: { onOpen(competition) },
+                            onRequestSponsor: { onRequestSponsor("competition", competition.id) }
+                        )
+                    }
+                }
+            }
+        case 1:
+            if viewModel.upcoming.isEmpty {
+                DMEmptyState(title: s.noCompetitionsUpcoming, systemImage: "star")
+            } else {
+                LazyVStack(spacing: theme.spacing.sm) {
+                    ForEach(viewModel.upcoming) { competition in
+                        CompetitionRow(
+                            competition: competition,
+                            isLive: false,
+                            onOpen: { detailsFor = competition },
+                            onRequestSponsor: { onRequestSponsor("competition", competition.id) }
+                        )
+                    }
+                }
+            }
+        default:
+            if viewModel.replays.isEmpty {
+                DMEmptyState(title: s.noReplays, subtitle: s.noReplaysHint, systemImage: "play.rectangle")
+            } else {
+                LazyVStack(spacing: theme.spacing.sm) {
+                    ForEach(viewModel.replays) { replay in
+                        CompetitionReplayRow(replay: replay, onOpen: { onOpenReplay(replay) })
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Carte d'une compétition (En direct / À venir) : couverture, badge statut + mode, badge prix,
+/// titre, description, date de début. Miroir de `CompetitionCard`
+/// (`CompetitionsScreen.kt:219-290`) — sans l'équivalent fiat (`perCreditEur`), non câblé
+/// côté iOS.
+private struct CompetitionRow: View {
+    @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
+    let competition: Competition
+    let isLive: Bool
+    let onOpen: () -> Void
+    let onRequestSponsor: () -> Void
+
+    var body: some View {
+        DMCard(padded: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                DMRemoteImage(url: competition.coverURL, fallback: "🏆")
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 170)
+                    .overlay {
+                        if isLive { Text("▶").font(.system(size: 40)).foregroundStyle(.white) }
+                    }
+                    .overlay(alignment: .topLeading) {
+                        if isLive {
+                            DMBadgePill("🔴 \(s.liveBadge)", foreground: .white, background: Color(hex: 0xEF4444), bold: true)
+                                .padding(theme.spacing.sm)
                         }
+                    }
+                    .overlay(alignment: .topTrailing) {
+                        DMBadgePill(
+                            competition.mode == "online" ? "🌐 \(s.compOnline)" : "📍 \(s.compOnsite)",
+                            foreground: .white,
+                            background: Color.black.opacity(0.5)
+                        )
+                        .padding(theme.spacing.sm)
+                    }
+                    .clipped()
+
+                VStack(alignment: .leading, spacing: theme.spacing.sm) {
+                    if !isLive {
+                        if competition.viewerTicketPrice > 0 {
+                            DMBadgePill("🪙 \(formatCredits(competition.viewerTicketPrice))", foreground: theme.colors.foreground, background: Color.black.opacity(0.4))
+                        } else {
+                            DMBadgePill("🎁 \(s.free)", foreground: Color(hex: 0x10B981), background: Color(hex: 0x10B981, alpha: 0.2))
+                        }
+                    }
+                    Text(competition.title).font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+                    if let description = competition.description?.nilIfBlank {
+                        Text(description).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground).lineLimit(2)
+                    }
+                    if let start = isoMinute(competition.startAt) {
+                        Text("📅 \(start)").font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                    }
+
+                    if isLive {
+                        DMButton(s.watchLive, style: .destructive, action: onOpen)
+                    } else {
+                        HStack(spacing: theme.spacing.sm) {
+                            DMButton(s.compViewDetails, action: onOpen)
+                            if competition.status != "ended" && competition.status != "cancelled"
+                                && competition.acceptsSponsors && !isDeadlinePassed(competition.sponsorSubmissionDeadline) {
+                                DMButton(s.requestSponsorBtn, style: .outline, action: onRequestSponsor)
+                            }
+                        }
+                    }
+                }
+                .padding(theme.spacing.md)
+            }
+        }
+    }
+}
+
+/// Carte d'un replay de compétition : couverture + badge « Replay disponible » + Regarder.
+/// Miroir de `CompetitionReplayCard` (`CompetitionsScreen.kt:304-324`).
+private struct CompetitionReplayRow: View {
+    @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
+    let replay: ReplayVideo
+    let onOpen: () -> Void
+
+    var body: some View {
+        DMCard(padded: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                DMRemoteImage(url: replay.thumbnailURL, fallback: "🎬")
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 170)
+                    .overlay { Text("▶").font(.system(size: 40)).foregroundStyle(.white) }
+                    .overlay(alignment: .topTrailing) {
+                        if replay.videoURL != nil {
+                            DMBadgePill("▶ \(s.replayAvailable)", foreground: .white, background: Color(hex: 0x10B981, alpha: 0.8))
+                                .padding(theme.spacing.sm)
+                        }
+                    }
+                    .clipped()
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(replay.title ?? s.screenCompetitions).font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+                    if let date = isoDay(replay.recordedDate) {
+                        Text("📅 \(date)").font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                    }
+                    DMButton(s.watchLive, action: onOpen)
+                }
+                .padding(theme.spacing.md)
+            }
+        }
+    }
+}
+
+/// Détail d'une compétition « à venir » : badges, description, dates, récompense, frais, puis
+/// « Candidater » (si éligible) et « Voir / Rejoindre ». Miroir de `CompetitionDetailsDialog`
+/// (`CompetitionsScreen.kt:338-415`).
+private struct CompetitionDetailsSheet: View {
+    @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
+
+    let competition: Competition
+    let isArtist: Bool
+    let hasApplied: Bool
+    let applying: Bool
+    let onApply: (String?, String?) async -> Error?
+    let onJoin: () -> Void
+    let onDismiss: () -> Void
+
+    @State private var showApply = false
+
+    private var deadlinePassed: Bool { isDeadlinePassed(competition.applicationDeadline) }
+    private var applicationsNotOpenYet: Bool {
+        competition.applicationOpensAt != nil && !isDeadlinePassed(competition.applicationOpensAt)
+    }
+    private var canApply: Bool { isArtist && !hasApplied && !deadlinePassed && competition.status == "published" }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: theme.spacing.md) {
+                Text(competition.title).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+
+                HStack(spacing: theme.spacing.xs) {
+                    DMBadgePill(
+                        competition.mode == "onsite" ? "📍 \(s.compOnsite)" : "🌐 \(s.compOnline)",
+                        foreground: theme.colors.foreground,
+                        background: theme.colors.primary.opacity(0.15)
+                    )
+                    if competition.viewerTicketPrice > 0 {
+                        DMBadgePill("🪙 \(formatCredits(competition.viewerTicketPrice))", foreground: theme.colors.foreground, background: theme.colors.primary.opacity(0.15))
+                    } else {
+                        DMBadgePill("🎁 \(s.free)", foreground: theme.colors.foreground, background: theme.colors.primary.opacity(0.15))
+                    }
+                }
+
+                if let description = competition.description?.nilIfBlank {
+                    Text(description).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                }
+
+                VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                    infoLine("📅 \(s.compApplicationOpensAt)", isoMinute(competition.applicationOpensAt))
+                    infoLine("📅 \(s.compApplicationDeadline)", isoMinute(competition.applicationDeadline))
+                    infoLine("📅 \(s.compStartAtLabel)", isoMinute(competition.startAt))
+                    infoLine("📅 \(s.compEndAtLabel)", isoMinute(competition.endAt))
+                    infoLine("👥 \(s.maxCandidatesLabel)", competition.maxCandidates.map(String.init))
+                    infoLine("🏆 \(s.compRewardDesc)", competition.rewardDescription?.nilIfBlank)
+                    if competition.entryFeeRequired {
+                        infoLine("💰 \(s.compEntryFeeAmount)", formatCredits(competition.entryFeeAmount))
+                    }
+                }
+
+                if hasApplied {
+                    Text("✅ \(s.compApplied)").font(DMFont.caption).bold().foregroundStyle(theme.colors.accent)
+                } else if isArtist && deadlinePassed {
+                    Text(s.compDeadlinePassed).font(DMFont.caption).foregroundStyle(theme.colors.destructive)
+                }
+
+                if canApply {
+                    DMButton(
+                        applicationsNotOpenYet ? s.compApplicationsNotOpenYet : s.compApply,
+                        style: .secondary,
+                        isEnabled: !applicationsNotOpenYet
+                    ) { showApply = true }
+                }
+
+                HStack(spacing: theme.spacing.sm) {
+                    DMButton(s.compViewJoin, action: onJoin)
+                    DMButton(s.compCancel, style: .outline, action: onDismiss)
+                }
+            }
+            .padding(theme.spacing.lg)
+        }
+        .dmScreenBackground()
+        .sheet(isPresented: $showApply) {
+            CompetitionApplySheet(applying: applying, onSubmit: onApply, onApplied: { showApply = false; onDismiss() })
+        }
+    }
+
+    private func infoLine(_ label: String, _ value: String?) -> some View {
+        Group {
+            if let value, !value.isEmpty {
+                HStack(spacing: theme.spacing.xs) {
+                    Text(label).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                    Text(value).font(DMFont.caption).foregroundStyle(theme.colors.foreground)
+                }
+            }
+        }
+    }
+}
+
+/// Popup « Déposer ma candidature » : présentation + lien vidéo démo, tous deux requis avant
+/// envoi. Miroir de `CompetitionApplyDialog` (`CompetitionsScreen.kt:423-482`).
+private struct CompetitionApplySheet: View {
+    @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
+
+    let applying: Bool
+    let onSubmit: (String?, String?) async -> Error?
+    let onApplied: () -> Void
+
+    @State private var pitch = ""
+    @State private var videoURL = ""
+    @State private var error: String?
+
+    private var canSubmit: Bool { !pitch.trimmed.isEmpty && !videoURL.trimmed.isEmpty && !applying }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text(s.compApplyTitle).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+            DMTextField(s.compApplyPitch, text: $pitch, axis: .vertical)
+            DMTextField(s.compApplyVideo, text: $videoURL)
+            if let error { DMMessage(error, kind: .error) }
+            DMButton(applying ? s.sending : s.compApply, isLoading: applying, isEnabled: canSubmit) {
+                guard !pitch.trimmed.isEmpty, !videoURL.trimmed.isEmpty else {
+                    error = s.compApplyRequiredFields
+                    return
+                }
+                Task {
+                    if let failure = await onSubmit(pitch.trimmed, videoURL.trimmed) {
+                        error = (failure as? APIError)?.message.nilIfBlank ?? s.sendFailed
+                    } else {
+                        onApplied()
                     }
                 }
             }
         }
         .padding(theme.spacing.lg)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .presentationDetents([.medium])
         .dmScreenBackground()
-        .task { await viewModel.load() }
-        .refreshable { await viewModel.load() }
-    }
-}
-
-/// Carte d'une compétition : titre, période, statut, récompense + bouton « Sponsoriser » contextuel.
-private struct CompetitionRow: View {
-    @Environment(\.dmTheme) private var theme
-    @Environment(\.dmStrings) private var s
-    let competition: Competition
-    let onOpen: () -> Void
-    let onRequestSponsor: () -> Void
-
-    var body: some View {
-        DMCard {
-            VStack(spacing: theme.spacing.sm) {
-                Button(action: onOpen) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(competition.title)
-                                .font(DMFont.body).bold()
-                                .foregroundStyle(theme.colors.foreground)
-                            if let start = isoDay(competition.startAt) {
-                                Text(start).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
-                            }
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text(competition.status.capitalizedFirst)
-                                .font(DMFont.caption)
-                                .foregroundStyle(theme.colors.mutedForeground)
-                            if competition.rewardAmount > 0 {
-                                Text("🏆 \(formatAmount(competition.rewardAmount))")
-                                    .font(DMFont.caption).bold()
-                                    .foregroundStyle(theme.colors.accent)
-                            }
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-
-                if competition.acceptsSponsors && !isDeadlinePassed(competition.sponsorSubmissionDeadline) {
-                    DMButton(s.requestSponsorBtn, style: .outline, action: onRequestSponsor)
-                }
-            }
-        }
     }
 }
 

@@ -391,6 +391,9 @@ public struct ReplayVideo: Codable, Sendable, Identifiable, Equatable {
     public let artistId: String?
     /// Créateur du replay (peut différer de ``artistId`` — ex. un manager de duel/compétition).
     public let createdBy: String?
+    /// Date d'enregistrement affichée sur les cartes catalogue (miroir `recorded_date`,
+    /// `shared-domain/replay/ReplayDtos.kt`).
+    public let recordedDate: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title, description, duration
@@ -403,6 +406,7 @@ public struct ReplayVideo: Codable, Sendable, Identifiable, Equatable {
         case sourceType = "source_type"
         case artistId = "artist_id"
         case createdBy = "created_by"
+        case recordedDate = "recorded_date"
     }
 
     public init(from decoder: Decoder) throws {
@@ -420,6 +424,7 @@ public struct ReplayVideo: Codable, Sendable, Identifiable, Equatable {
         sourceType = c.opt(String.self, .sourceType)
         artistId = c.opt(String.self, .artistId)
         createdBy = c.opt(String.self, .createdBy)
+        recordedDate = c.opt(String.self, .recordedDate)
     }
 
     /// Vrai si un déblocage payant est nécessaire (premium **et** prix > 0).

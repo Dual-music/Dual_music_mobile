@@ -266,6 +266,24 @@ public struct DuelRepository: Sendable {
         try await http.request(.get(DuelEndpoints.votes(id)), as: [DuelVoteTotal].self)
     }
 
+    /// Tallies de votes en masse pour le catalogue (`GET /duels/votes/batch?ids=a,b,c`).
+    /// Best-effort : une erreur réseau donne juste une liste vide.
+    public func votesBatch(ids: [String]) async -> [DuelVoteTotal] {
+        guard !ids.isEmpty else { return [] }
+        return (try? await http.request(
+            .get(DuelEndpoints.votesBatch, query: ["ids": ids.joined(separator: ",")]),
+            as: [DuelVoteTotal].self
+        )) ?? []
+    }
+
+    /// Replays publics de duels (`GET /replays?sourceType=duel&isPublic=true`).
+    public func duelReplays() async -> [ReplayVideo] {
+        (try? await http.request(
+            .get(ReplayEndpoints.list, query: ["sourceType": "duel", "isPublic": "true", "limit": "100"]),
+            as: [ReplayVideo].self
+        )) ?? []
+    }
+
     /// Historique de chat (dernière page) pour amorcer l'overlay.
     public func chatHistory(duelId: String) async throws -> [DuelChatMessage] {
         try await http.request(

@@ -335,7 +335,7 @@ public final class AppContainer {
 
     var duelsList: DuelsListViewModel {
         if let cachedDuelsList { return cachedDuelsList }
-        let viewModel = DuelsListViewModel(repository: duelRepository)
+        let viewModel = DuelsListViewModel(repository: duelRepository, realtime: realtime)
         cachedDuelsList = viewModel
         return viewModel
     }

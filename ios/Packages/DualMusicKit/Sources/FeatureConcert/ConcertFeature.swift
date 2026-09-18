@@ -596,24 +596,43 @@ private struct PendingConcertRow: View {
     }
 }
 
-/// Ligne d'un replay de concert.
+/// Ligne d'un replay de concert : couverture 16:9 + badge lecture, titre, date. Miroir de
+/// `ConcertReplayCard` (`ConcertsScreen.kt:402-427`).
 private struct ConcertReplayRow: View {
     @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
     let replay: ReplayVideo
 
     var body: some View {
-        DMCard {
-            HStack {
-                Image(systemName: "play.rectangle.fill").foregroundStyle(theme.colors.accent)
-                Text(replay.title ?? "").font(DMFont.body).foregroundStyle(theme.colors.foreground)
-                Spacer()
+        DMCard(padded: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                DMRemoteImage(url: replay.thumbnailURL, fallback: "🎬")
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 180)
+                    .overlay { Text("▶").font(.system(size: 40)).foregroundStyle(.white) }
+                    .overlay(alignment: .topTrailing) {
+                        if replay.videoURL != nil {
+                            DMBadgePill("▶ \(s.replayAvailable)", foreground: .white, background: Color(hex: 0x10B981, alpha: 0.8))
+                                .padding(theme.spacing.sm)
+                        }
+                    }
+                    .clipped()
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(replay.title ?? s.screenConcerts).font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
+                    if let date = isoDay(replay.recordedDate) {
+                        Text("📅 \(date)").font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                    }
+                }
+                .padding(theme.spacing.md)
             }
         }
     }
 }
 
-/// Carte d'un concert : titre, date, dédicaces, statut, prix du billet + bouton « Sponsoriser »
-/// contextuel (concerts d'artiste uniquement).
+/// Carte d'un concert : couverture (badge « en direct » si live), badge prix/gratuit, titre,
+/// date, dédicaces, bouton « Sponsoriser » contextuel. Miroir de `ConcertCard`
+/// (`ConcertsScreen.kt:253-333`) — sans l'équivalent fiat (`perCreditEur`), non câblé côté iOS.
 private struct ConcertRow: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
@@ -622,57 +641,50 @@ private struct ConcertRow: View {
     let onRequestSponsor: () -> Void
 
     var body: some View {
-        DMCard {
-            VStack(spacing: theme.spacing.sm) {
-                Button(action: onOpen) {
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 2) {
+        DMCard(padded: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                DMRemoteImage(url: concert.cover, fallback: "🎵")
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 180)
+                    .overlay {
+                        if concert.status == .live { Text("▶").font(.system(size: 40)).foregroundStyle(.white) }
+                    }
+                    .overlay(alignment: .topLeading) {
+                        if concert.status == .live {
+                            DMBadgePill("🔴 \(s.liveBadge)", foreground: .white, background: Color(hex: 0xEF4444), bold: true)
+                                .padding(theme.spacing.sm)
+                        }
+                    }
+                    .clipped()
+
+                VStack(alignment: .leading, spacing: theme.spacing.sm) {
+                    Button(action: onOpen) {
+                        VStack(alignment: .leading, spacing: theme.spacing.sm) {
+                            if concert.ticketPrice > 0 {
+                                DMBadgePill("🪙 \(formatCredits(concert.ticketPrice))", foreground: theme.colors.foreground, background: Color.black.opacity(0.4))
+                            } else {
+                                DMBadgePill("🎁 \(s.freeLabel)", foreground: Color(hex: 0x10B981), background: Color(hex: 0x10B981, alpha: 0.2))
+                            }
                             Text(concert.title)
                                 .font(DMFont.body).bold()
                                 .foregroundStyle(theme.colors.foreground)
                             if let date = isoMinute(concert.scheduledDate) {
-                                Text(date).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                                Text("📅 \(date)").font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
                             }
                             if concert.allowsDedications {
-                                Text(s.dedicationsOpen)
-                                    .font(DMFont.caption)
-                                    .foregroundStyle(theme.colors.accent)
+                                Text(s.dedicationsOpen).font(DMFont.caption).foregroundStyle(theme.colors.accent)
                             }
                         }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text(statusLabel)
-                                .font(DMFont.caption).bold()
-                                .foregroundStyle(concert.status == .live ? theme.colors.accent : theme.colors.mutedForeground)
-                            if concert.ticketPrice > 0 {
-                                Text("\(formatAmount(concert.ticketPrice)) \(s.credits)")
-                                    .font(DMFont.caption)
-                                    .foregroundStyle(theme.colors.foreground)
-                            } else {
-                                Text(s.freeLabel)
-                                    .font(DMFont.caption)
-                                    .foregroundStyle(theme.colors.mutedForeground)
-                            }
-                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+
+                    if concert.isArtistConcert && concert.allowsSponsorAds && !isDeadlinePassed(concert.sponsorSubmissionDeadline) {
+                        DMButton(s.requestSponsorBtn, style: .outline, action: onRequestSponsor)
                     }
                 }
-                .buttonStyle(.plain)
-
-                if concert.isArtistConcert && concert.allowsSponsorAds && !isDeadlinePassed(concert.sponsorSubmissionDeadline) {
-                    DMButton(s.requestSponsorBtn, style: .outline, action: onRequestSponsor)
-                }
+                .padding(theme.spacing.md)
             }
-        }
-    }
-
-    /// Libellé lisible du statut.
-    private var statusLabel: String {
-        switch concert.status {
-        case .live: return s.statusLiveNow
-        case .upcoming: return s.statusUpcoming
-        case .ended: return s.statusEnded
-        case .cancelled: return s.statusCancelled
-        default: return concert.status.rawValue.capitalizedFirst
         }
     }
 }

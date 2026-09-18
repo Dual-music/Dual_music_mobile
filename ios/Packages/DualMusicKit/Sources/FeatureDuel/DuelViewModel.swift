@@ -707,26 +707,74 @@ public final class DuelViewModel {
     }
 }
 
-/// ViewModel de la liste des duels (catalogue).
+/// ViewModel du catalogue de duels (3 onglets) — parité `DuelsListViewModel` Android :
+///  - En direct / À venir : `GET /duels` filtré par statut + tallies de votes en masse.
+///  - Replays : `GET /replays?sourceType=duel&isPublic=true`.
+///  - Spectateurs en temps réel par carte : présence Socket.IO `/live` (rooms `duel:<id>`).
 @Observable
 @MainActor
 public final class DuelsListViewModel {
 
-    public private(set) var duels: [Duel] = []
+    public private(set) var live: [Duel] = []
+    public private(set) var upcoming: [Duel] = []
+    public private(set) var replays: [ReplayVideo] = []
+    /// duelId → (votes artiste1, votes artiste2).
+    public private(set) var votes: [String: (Double, Double)] = [:]
+    /// duelId → spectateurs (présence temps réel).
+    public private(set) var presence: [String: Int] = [:]
     public private(set) var isLoading = false
 
     private let repository: DuelRepository
+    private let realtime: RealtimeClient
+    private var liveSession: NamespaceSession?
+    private var subscriptions: [Subscription] = []
 
-    /// - Parameter repository: lectures REST des duels.
-    public init(repository: DuelRepository) {
+    /// - Parameters:
+    ///   - repository: lectures REST des duels.
+    ///   - realtime: client Socket.IO partagé, pour la présence par carte « en direct ».
+    public init(repository: DuelRepository, realtime: RealtimeClient) {
         self.repository = repository
+        self.realtime = realtime
     }
 
-    /// Charge le catalogue (les duels en direct d'abord, tri côté serveur).
+    /// Charge le catalogue (en direct / à venir / replays) + tallies de votes en masse, puis
+    /// rejoint les rooms de présence des duels en direct.
     public func load() async {
         guard !isLoading else { return }
         isLoading = true
-        duels = (try? await repository.duels()) ?? []
+        let all = (try? await repository.duels(limit: 100)) ?? []
+        live = all.filter { $0.status == .live }
+        upcoming = all.filter { $0.status == .upcoming }
+        let batch = await repository.votesBatch(ids: all.map(\.id))
+        var v: [String: (Double, Double)] = [:]
+        for d in all {
+            let vs = batch.filter { $0.duelId == d.id }
+            v[d.id] = (
+                vs.first { $0.artistId == d.artist1Id }?.total ?? 0,
+                vs.first { $0.artistId == d.artist2Id }?.total ?? 0
+            )
+        }
+        votes = v
+        replays = await repository.duelReplays()
         isLoading = false
+        connectPresence()
+    }
+
+    /// Rejoint la room `duel:<id>` de chaque duel en direct pour afficher le nombre de
+    /// spectateurs sur sa carte (parité web/Android : présence Socket.IO `/live`).
+    private func connectPresence() {
+        guard !live.isEmpty else { return }
+        let session = liveSession ?? realtime.session(.live)
+        liveSession = session
+        let duels = live
+        subscriptions.removeAll()
+        subscriptions.append(session.onConnect {
+            duels.forEach { session.join(.duel, id: $0.id) }
+        })
+        subscriptions.append(session.onEvent(Realtime.Event.presence, as: PresencePayload.self) { [weak self] payload in
+            guard let self, let room = payload.room, room.hasPrefix("duel:") else { return }
+            self.presence[String(room.dropFirst(5))] = payload.count
+        })
+        Task { await session.connect() }
     }
 }

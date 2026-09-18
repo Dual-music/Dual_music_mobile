@@ -1002,7 +1002,8 @@ private struct VoteBar: View {
     }
 }
 
-/// Liste des duels — point d'entrée vers une room de duel.
+/// Catalogue des duels (3 onglets : En direct / À venir / Replays + recherche) — miroir de
+/// `DuelsListScreen.kt`.
 @MainActor
 public struct DuelsListView: View {
     @Environment(\.dmTheme) private var theme
@@ -1010,96 +1011,287 @@ public struct DuelsListView: View {
 
     private let viewModel: DuelsListViewModel
     private let onOpen: (Duel) -> Void
+    private let onOpenReplay: (ReplayVideo) -> Void
     private let onRequestSponsor: (String, String) -> Void
+
+    @State private var tab = 0
+    @State private var search = ""
 
     /// - Parameters:
     ///   - viewModel: source du catalogue.
     ///   - onOpen: callback à l'ouverture d'un duel.
+    ///   - onOpenReplay: callback à l'ouverture d'un replay de duel.
     ///   - onRequestSponsor: ouvre le sponsoring présélectionné sur ce duel (`"duel"`, id).
     public init(
         viewModel: DuelsListViewModel,
         onOpen: @escaping (Duel) -> Void,
+        onOpenReplay: @escaping (ReplayVideo) -> Void = { _ in },
         onRequestSponsor: @escaping (String, String) -> Void = { _, _ in }
     ) {
         self.viewModel = viewModel
         self.onOpen = onOpen
+        self.onOpenReplay = onOpenReplay
         self.onRequestSponsor = onRequestSponsor
     }
 
-    public var body: some View {
-        VStack(spacing: theme.spacing.md) {
-            Text(s.screenDuels)
-                .font(DMFont.pageTitle)
-                .foregroundStyle(theme.colors.foreground)
-                .frame(maxWidth: .infinity)
+    private var query: String { search.trimmed.lowercased() }
 
-            if viewModel.isLoading {
-                DMLoadingBox()
-            } else if viewModel.duels.isEmpty {
-                DMEmptyState(title: s.noDuels, subtitle: s.noDuelsHint, systemImage: "calendar")
-                Spacer()
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: theme.spacing.sm) {
-                        ForEach(viewModel.duels) { duel in
-                            DuelRow(duel: duel, onOpen: { onOpen(duel) }, onRequestSponsor: { onRequestSponsor("duel", duel.id) })
-                        }
+    private func matches(_ duel: Duel) -> Bool {
+        query.isEmpty
+            || (duel.artist1?.displayName.lowercased().contains(query) ?? false)
+            || (duel.artist2?.displayName.lowercased().contains(query) ?? false)
+    }
+
+    private func matches(_ replay: ReplayVideo) -> Bool {
+        query.isEmpty || (replay.title?.lowercased().contains(query) ?? false)
+    }
+
+    public var body: some View {
+        ScrollView {
+            VStack(spacing: theme.spacing.md) {
+                Text(s.duelsPageTitle)
+                    .font(DMFont.pageTitle)
+                    .foregroundStyle(theme.colors.primary)
+                    .frame(maxWidth: .infinity)
+                Text(s.duelsSubtitle)
+                    .font(DMFont.caption)
+                    .foregroundStyle(theme.colors.mutedForeground)
+                    .frame(maxWidth: .infinity)
+
+                DMTextField(s.searchPlaceholder, text: $search)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: theme.spacing.xs) {
+                        DMTabPill("\(s.duelTabLive) (\(viewModel.live.count))", selected: tab == 0) { tab = 0 }
+                        DMTabPill("\(s.duelTabUpcoming) (\(viewModel.upcoming.count))", selected: tab == 1) { tab = 1 }
+                        DMTabPill("\(s.duelTabReplays) (\(viewModel.replays.count))", selected: tab == 2) { tab = 2 }
                     }
                 }
+
+                if viewModel.isLoading {
+                    DMLoadingBox()
+                } else {
+                    tabContent
+                }
             }
+            .padding(theme.spacing.lg)
         }
-        .padding(theme.spacing.lg)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .dmScreenBackground()
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
     }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch tab {
+        case 0:
+            let filtered = viewModel.live.filter(matches)
+            if filtered.isEmpty {
+                DMEmptyState(title: s.noDuelsLive, systemImage: "calendar")
+            } else {
+                LazyVStack(spacing: theme.spacing.sm) {
+                    ForEach(filtered) { duel in
+                        DuelRow(
+                            duel: duel,
+                            votes: viewModel.votes[duel.id],
+                            viewers: viewModel.presence[duel.id],
+                            isLive: true,
+                            onOpen: { onOpen(duel) },
+                            onRequestSponsor: { onRequestSponsor("duel", duel.id) }
+                        )
+                    }
+                }
+            }
+        case 1:
+            let filtered = viewModel.upcoming.filter(matches)
+            if filtered.isEmpty {
+                DMEmptyState(title: s.noDuelsUpcoming, systemImage: "calendar")
+            } else {
+                LazyVStack(spacing: theme.spacing.sm) {
+                    ForEach(filtered) { duel in
+                        DuelRow(
+                            duel: duel,
+                            votes: viewModel.votes[duel.id],
+                            viewers: nil,
+                            isLive: false,
+                            onOpen: { onOpen(duel) },
+                            onRequestSponsor: { onRequestSponsor("duel", duel.id) }
+                        )
+                    }
+                }
+            }
+        default:
+            let filtered = viewModel.replays.filter(matches)
+            if filtered.isEmpty {
+                DMEmptyState(title: s.noDuelReplays, systemImage: "play.rectangle")
+            } else {
+                LazyVStack(spacing: theme.spacing.sm) {
+                    ForEach(filtered) { replay in
+                        DuelReplayRow(replay: replay, onOpen: { onOpenReplay(replay) })
+                    }
+                }
+            }
+        }
+    }
 }
 
-/// Carte d'un duel : les deux artistes + son statut + bouton « Sponsoriser » contextuel.
+/// Carte d'un duel (En direct / À venir) : badge statut, prix payant/gratuit, les deux artistes
+/// avec avatar + votes, barre de répartition, spectateurs (en direct), bouton voter/voir +
+/// « Sponsoriser » contextuel. Miroir de `DuelCard` (`DuelsListScreen.kt:212-276`).
 private struct DuelRow: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
     let duel: Duel
+    let votes: (Double, Double)?
+    let viewers: Int?
+    let isLive: Bool
     let onOpen: () -> Void
     let onRequestSponsor: () -> Void
 
+    private var a1: Double { votes?.0 ?? 0 }
+    private var a2: Double { votes?.1 ?? 0 }
+    private var total: Double { a1 + a2 }
+    private var leftShare: Double {
+        guard total > 0 else { return 0.5 }
+        return min(0.98, max(0.02, a1 / total))
+    }
+
     var body: some View {
         DMCard {
-            VStack(spacing: theme.spacing.sm) {
-                Button(action: onOpen) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("\(duel.artist1?.displayName ?? s.artist1)  vs  \(duel.artist2?.displayName ?? s.artist2)")
-                                .font(DMFont.body).bold()
-                                .foregroundStyle(theme.colors.foreground)
-                            if let time = isoMinute(duel.scheduledTime) {
-                                Text(time).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
-                            }
-                        }
-                        Spacer()
-                        Text(statusLabel)
-                            .font(DMFont.caption).bold()
-                            .foregroundStyle(duel.status == .live ? theme.colors.accent : theme.colors.mutedForeground)
-                    }
+            VStack(alignment: .leading, spacing: theme.spacing.sm) {
+                DMBadgePill(
+                    isLive ? "🔥 \(s.liveBadge)" : "📅 \(s.upcomingBadge)",
+                    foreground: .white,
+                    background: isLive ? Color(hex: 0xB91C1C) : Color.black.opacity(0.4),
+                    bold: true
+                )
+
+                if let time = isoMinute(duel.scheduledTime) {
+                    Text("📅 \(time)").font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
                 }
-                .buttonStyle(.plain)
+
+                if duel.ticketPrice > 0 {
+                    DMBadgePill(
+                        "\(s.duelPaid) • \(Int(duel.ticketPrice)) \(s.creditUnit)",
+                        foreground: Color(hex: 0xF59E0B),
+                        background: Color(hex: 0xF59E0B, alpha: 0.2)
+                    )
+                } else {
+                    DMBadgePill(s.free, foreground: Color(hex: 0x10B981), background: Color(hex: 0x10B981, alpha: 0.2))
+                }
+
+                HStack(alignment: .top, spacing: theme.spacing.sm) {
+                    ArtistColumnView(name: duel.artist1?.displayName ?? s.artist1, avatarURL: duel.artist1?.avatarURL, votes: Int(a1))
+                    Text("🏆").font(.system(size: 20)).padding(.top, theme.spacing.lg)
+                    ArtistColumnView(name: duel.artist2?.displayName ?? s.artist2, avatarURL: duel.artist2?.avatarURL, votes: Int(a2))
+                }
+
+                if total > 0 {
+                    GeometryReader { geo in
+                        HStack(spacing: 0) {
+                            Rectangle().fill(theme.gradients.primary).frame(width: geo.size.width * leftShare)
+                            Rectangle().fill(theme.colors.electricBlue)
+                        }
+                    }
+                    .frame(height: 8)
+                    .clipShape(RoundedRectangle(cornerRadius: theme.radius.sm, style: .continuous))
+                }
+
+                if isLive, let viewers {
+                    Text("👥 \(viewers) \(s.spectators)")
+                        .font(DMFont.caption)
+                        .foregroundStyle(theme.colors.mutedForeground)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+
+                DMButton(isLive ? s.voteBtn : s.viewDuelBtn, action: onOpen)
 
                 if duel.acceptsSponsors && !isDeadlinePassed(duel.sponsorSubmissionDeadline) {
                     DMButton(s.requestSponsorBtn, style: .outline, action: onRequestSponsor)
                 }
             }
         }
+        .onTapGesture(perform: onOpen)
+    }
+}
+
+/// Colonne d'un artiste du duel : avatar 56 pt + nom + votes. Miroir de `ArtistColumn`
+/// (`DuelsListScreen.kt:290-298`).
+private struct ArtistColumnView: View {
+    @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
+    let name: String
+    let avatarURL: String?
+    let votes: Int
+
+    var body: some View {
+        VStack(spacing: 2) {
+            DMRemoteImage(url: avatarURL, fallback: "🎤")
+                .frame(width: 56, height: 56)
+                .clipShape(Circle())
+            Text(name)
+                .font(DMFont.caption).bold()
+                .foregroundStyle(theme.colors.foreground)
+                .multilineTextAlignment(.center)
+                .lineLimit(1)
+            Text("\(votes) \(s.votesWord)")
+                .font(DMFont.caption)
+                .foregroundStyle(theme.colors.accent)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// Carte d'un replay de duel : miniature 16:9 (badge « 🏆 VS », glyphe lecture, durée), titre,
+/// vues, date d'enregistrement. Miroir de `ReplayCard` (`DuelsListScreen.kt:301-326`).
+private struct DuelReplayRow: View {
+    @Environment(\.dmTheme) private var theme
+    @Environment(\.dmStrings) private var s
+    let replay: ReplayVideo
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            DMCard(padded: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    DMRemoteImage(url: replay.thumbnailURL, fallback: "🎬")
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 180)
+                        .overlay { Text("▶").font(.system(size: 40)).foregroundStyle(.white) }
+                        .overlay(alignment: .topLeading) {
+                            DMBadgePill("🏆 VS", foreground: .white, background: Color(hex: 0xB91C1C), bold: true)
+                                .padding(theme.spacing.sm)
+                        }
+                        .overlay(alignment: .bottomTrailing) {
+                            DMBadgePill("🕒 \(durationLabel)", foreground: .white, background: Color.black.opacity(0.6))
+                                .padding(theme.spacing.sm)
+                        }
+                        .clipped()
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(replay.title ?? "Duel")
+                            .font(DMFont.body).bold()
+                            .foregroundStyle(theme.colors.foreground)
+                        HStack {
+                            Text("👁 \(replay.viewsCount) \(s.views)")
+                                .font(DMFont.caption)
+                                .foregroundStyle(theme.colors.mutedForeground)
+                            Spacer()
+                            if let date = isoDay(replay.recordedDate) {
+                                Text(date).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+                            }
+                        }
+                    }
+                    .padding(theme.spacing.md)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
-    /// Libellé lisible du statut (mêmes textes qu'Android).
-    private var statusLabel: String {
-        switch duel.status {
-        case .live: return s.statusLiveNow
-        case .upcoming: return s.statusUpcoming
-        case .ended: return s.statusEnded
-        case .cancelled: return s.statusCancelled
-        default: return duel.status.rawValue.capitalizedFirst
-        }
+    private var durationLabel: String {
+        guard let d = replay.duration else { return "N/A" }
+        return "\(d)s"
     }
 }
