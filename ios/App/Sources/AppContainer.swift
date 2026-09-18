@@ -365,7 +365,7 @@ public final class AppContainer {
 
     var competitions: CompetitionsViewModel {
         if let cachedCompetitions { return cachedCompetitions }
-        let viewModel = CompetitionsViewModel(repository: competitionRepository)
+        let viewModel = CompetitionsViewModel(repository: competitionRepository, wallet: walletRepository)
         cachedCompetitions = viewModel
         return viewModel
     }

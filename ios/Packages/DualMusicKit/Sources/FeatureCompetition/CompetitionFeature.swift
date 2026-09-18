@@ -100,6 +100,20 @@ public struct CompetitionPerformer: Sendable, Equatable {
     public var isActive: Bool { performerId != nil }
 }
 
+/// État micro/caméra d'un publieur (indexé par identité LiveKit) → badges des tuiles multi-cam.
+/// Miroir de `CompMediaState` Android (`CompetitionRoomScreen.kt:165`).
+public struct CompMediaState: Sendable, Equatable {
+    public let isMicOn: Bool
+    public let isCameraOn: Bool
+    public let isStreaming: Bool
+
+    public init(isMicOn: Bool, isCameraOn: Bool, isStreaming: Bool) {
+        self.isMicOn = isMicOn
+        self.isCameraOn = isCameraOn
+        self.isStreaming = isStreaming
+    }
+}
+
 /// Réponse de `GET /lives/:id/likes` (réutilisée par les compétitions).
 private struct CompetitionLikesResponse: Decodable, Sendable {
     let likes: Int
@@ -521,11 +535,16 @@ public final class CompetitionsViewModel {
     public private(set) var appliedCompetitionIds: Set<String> = []
     /// Résultat transitoire de la dernière candidature (dialogue de détails).
     public private(set) var applying = false
+    /// Contre-valeur € d'UN crédit (solde courant / sa contre-valeur €) — miroir de
+    /// `CompetitionsViewModel.perCreditEur` Android, affichée à côté du prix des cartes.
+    public private(set) var perCreditEur: Double = 0
 
     private let repository: CompetitionRepository
+    private let wallet: WalletRepository
 
-    public init(repository: CompetitionRepository) {
+    public init(repository: CompetitionRepository, wallet: WalletRepository) {
         self.repository = repository
+        self.wallet = wallet
     }
 
     /// Charge le catalogue (en direct / à venir / replays) + éligibilité à candidater.
@@ -541,6 +560,10 @@ public final class CompetitionsViewModel {
         upcoming = all.filter { !isLiveNow($0, now) }
         replays = await repository.competitionReplays()
         isLoading = false
+
+        if let balance = try? await wallet.balance(), balance.balance > 0 {
+            perCreditEur = balance.eurValue / balance.balance
+        }
 
         isArtist = await repository.amIArtist()
         if isArtist {
@@ -683,6 +706,9 @@ public final class CompetitionRoomViewModel {
 
     /// Candidats coupés d'AUTORITÉ par le manager (hard-mute) — ids utilisateur.
     public private(set) var mutedArtists: Set<String> = []
+    /// État micro/caméra des publieurs, indexé par identité LiveKit → badges des tuiles multi-cam
+    /// (miroir de `mediaStates` Android, diffusé via l'événement `media-state`).
+    public private(set) var mediaStates: [String: CompMediaState] = [:]
     /// Caméra épinglée par le manager (identité LiveKit) — focus imposé, synchronisé.
     public private(set) var forcedFocusId: String?
     /// Manager : masque les autres cases pour TOUS (diffusion éphémère, distincte du focus).
@@ -799,6 +825,9 @@ public final class CompetitionRoomViewModel {
         subscriptions.append(live.onConnect { [weak self] in
             guard let self else { return }
             live.join(.competition, id: self.competitionId)
+            // (Re)diffuse mon état média à la (re)connexion pour les tuiles des autres — miroir
+            // Android (`if (_broadcasting.value) broadcastMediaState()`).
+            if self.media.isCameraEnabled || self.media.isMicrophoneEnabled { self.broadcastMediaState() }
         })
         subscriptions.append(chat.onConnect { [weak self] in
             guard let self else { return }
@@ -869,6 +898,14 @@ public final class CompetitionRoomViewModel {
             case "winner_stopped":
                 self.winnerInfo = nil
                 self.winnerSoundUrl = nil
+            case "media-state":
+                if let id = envelope.payload?.identity {
+                    self.mediaStates[id] = CompMediaState(
+                        isMicOn: envelope.payload?.isMicOn ?? false,
+                        isCameraOn: envelope.payload?.isCameraOn ?? false,
+                        isStreaming: envelope.payload?.isStreaming ?? false
+                    )
+                }
             default:
                 break
             }
@@ -926,16 +963,35 @@ public final class CompetitionRoomViewModel {
     /// Démarre la diffusion caméra + micro (si ``canPublish``).
     public func startBroadcast() async {
         await media.startBroadcast()
+        broadcastMediaState()
     }
 
     /// Coupe/rétablit MON micro.
     public func toggleMic() async {
         await media.setMicrophone(enabled: !media.isMicrophoneEnabled)
+        broadcastMediaState()
     }
 
     /// Coupe/rétablit MA caméra.
     public func toggleCamera() async {
         await media.setCamera(enabled: !media.isCameraEnabled)
+        broadcastMediaState()
+    }
+
+    /// Diffuse MON état micro/caméra sur `competition-media-<id>` (event `media-state`), indexé
+    /// par mon identité LiveKit → les autres affichent les bons badges sur ma tuile. Met aussi à
+    /// jour la map locale pour un rendu immédiat — miroir `broadcastMediaState()` Android.
+    private func broadcastMediaState() {
+        guard let id = media.localIdentity else { return }
+        let mic = media.isMicrophoneEnabled
+        let cam = media.isCameraEnabled
+        let streaming = mic || cam
+        mediaStates[id] = CompMediaState(isMicOn: mic, isCameraOn: cam, isStreaming: streaming)
+        liveSession?.broadcast(
+            channel: "competition-media-\(competitionId)",
+            event: "media-state",
+            payload: ["identity": id, "isMicOn": mic, "isCameraOn": cam, "isStreaming": streaming]
+        )
     }
 
     /// Bascule caméra avant/arrière.
@@ -1159,7 +1215,7 @@ public final class CompetitionRoomViewModel {
     private func applyMuteState(_ artistId: String, muted: Bool) {
         if muted { mutedArtists.insert(artistId) } else { mutedArtists.remove(artistId) }
         if artistId == callerId {
-            Task { await media.setMicrophone(enabled: !muted) }
+            Task { await media.setMicrophone(enabled: !muted); broadcastMediaState() }
         }
     }
 
@@ -1322,6 +1378,7 @@ public struct CompetitionsListView: View {
         .sheet(item: $detailsFor) { competition in
             CompetitionDetailsSheet(
                 competition: competition,
+                perCreditEur: viewModel.perCreditEur,
                 isArtist: viewModel.isArtist,
                 hasApplied: viewModel.appliedCompetitionIds.contains(competition.id),
                 applying: viewModel.applying,
@@ -1343,6 +1400,7 @@ public struct CompetitionsListView: View {
                     ForEach(viewModel.live) { competition in
                         CompetitionRow(
                             competition: competition,
+                            perCreditEur: viewModel.perCreditEur,
                             isLive: true,
                             onOpen: { onOpen(competition) },
                             onRequestSponsor: { onRequestSponsor("competition", competition.id) }
@@ -1358,6 +1416,7 @@ public struct CompetitionsListView: View {
                     ForEach(viewModel.upcoming) { competition in
                         CompetitionRow(
                             competition: competition,
+                            perCreditEur: viewModel.perCreditEur,
                             isLive: false,
                             onOpen: { detailsFor = competition },
                             onRequestSponsor: { onRequestSponsor("competition", competition.id) }
@@ -1379,14 +1438,61 @@ public struct CompetitionsListView: View {
     }
 }
 
+/// Décompte visuel `MM:SS` jusqu'à `endsAtIso`, mis à jour en direct — miroir de `LiveCountdown.kt`
+/// (pastille noire, timer, libellé optionnel, vire au ROUGE dans les 10 dernières secondes).
+/// `endDate` est résolu UNE SEULE FOIS à l'initialisation (comme le `remember(endsAtIso)`
+/// Android) plutôt qu'à chaque tick de ``TimelineView``.
+private struct CompetitionCountdownBadge: View {
+    let label: String?
+    private let endDate: Date?
+
+    init(endsAtIso: String, label: String?) {
+        self.label = label
+        self.endDate = ISO8601DateFormatter().date(from: endsAtIso)
+            ?? {
+                let f = ISO8601DateFormatter()
+                f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                return f.date(from: endsAtIso)
+            }()
+    }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { context in
+            let remaining = remainingSeconds(at: context.date)
+            let urgent = remaining > 0 && remaining <= 10
+            HStack(spacing: 6) {
+                Image(systemName: "timer")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white)
+                if let label, !label.isEmpty {
+                    Text(label).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+                }
+                Text(formattedTime(remaining)).font(.system(size: 13, weight: .black)).foregroundStyle(.white)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(urgent ? Color(hex: 0xDC2626) : Color.black.opacity(0.55), in: Capsule())
+        }
+    }
+
+    private func remainingSeconds(at now: Date) -> Int {
+        guard let endDate else { return 0 }
+        return max(0, Int(endDate.timeIntervalSince(now)))
+    }
+
+    private func formattedTime(_ seconds: Int) -> String {
+        String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
 /// Carte d'une compétition (En direct / À venir) : couverture, badge statut + mode, badge prix,
-/// titre, description, date de début. Miroir de `CompetitionCard`
-/// (`CompetitionsScreen.kt:219-290`) — sans l'équivalent fiat (`perCreditEur`), non câblé
-/// côté iOS.
+/// titre, description, date de début. Miroir de `CompetitionCard` (`CompetitionsScreen.kt:219-290`).
 private struct CompetitionRow: View {
     @Environment(\.dmTheme) private var theme
     @Environment(\.dmStrings) private var s
     let competition: Competition
+    /// Contre-valeur € d'UN crédit (0 = inconnue → pastille sans équivalent €).
+    let perCreditEur: Double
     let isLive: Bool
     let onOpen: () -> Void
     let onRequestSponsor: () -> Void
@@ -1419,7 +1525,8 @@ private struct CompetitionRow: View {
                 VStack(alignment: .leading, spacing: theme.spacing.sm) {
                     if !isLive {
                         if competition.viewerTicketPrice > 0 {
-                            DMBadgePill("🪙 \(formatCredits(competition.viewerTicketPrice))", foreground: theme.colors.foreground, background: Color.black.opacity(0.4))
+                            let eur = perCreditEur > 0 ? " \(formatEuro(competition.viewerTicketPrice * perCreditEur))" : ""
+                            DMBadgePill("🪙 \(formatCredits(competition.viewerTicketPrice))\(eur)", foreground: theme.colors.foreground, background: Color.black.opacity(0.4))
                         } else {
                             DMBadgePill("🎁 \(s.free)", foreground: Color(hex: 0x10B981), background: Color(hex: 0x10B981, alpha: 0.2))
                         }
@@ -1494,6 +1601,8 @@ private struct CompetitionDetailsSheet: View {
     @Environment(\.dmStrings) private var s
 
     let competition: Competition
+    /// Contre-valeur € d'UN crédit (0 = inconnue → pastille sans équivalent €).
+    let perCreditEur: Double
     let isArtist: Bool
     let hasApplied: Bool
     let applying: Bool
@@ -1521,7 +1630,8 @@ private struct CompetitionDetailsSheet: View {
                         background: theme.colors.primary.opacity(0.15)
                     )
                     if competition.viewerTicketPrice > 0 {
-                        DMBadgePill("🪙 \(formatCredits(competition.viewerTicketPrice))", foreground: theme.colors.foreground, background: theme.colors.primary.opacity(0.15))
+                        let eur = perCreditEur > 0 ? " \(formatEuro(competition.viewerTicketPrice * perCreditEur))" : ""
+                        DMBadgePill("🪙 \(formatCredits(competition.viewerTicketPrice))\(eur)", foreground: theme.colors.foreground, background: theme.colors.primary.opacity(0.15))
                     } else {
                         DMBadgePill("🎁 \(s.free)", foreground: theme.colors.foreground, background: theme.colors.primary.opacity(0.15))
                     }
@@ -1642,6 +1752,8 @@ public struct CompetitionRoomView: View {
     @State private var showModeratorsSheet = false
     @State private var showFilterSheet = false
     @State private var showSettingsSheet = false
+    @State private var showRecordingSheet = false
+    @State private var showCommentPopup = false
     @State private var showGiftSheet = false
     @State private var showLeaderboardSheet = false
     @State private var showReactionBar = false
@@ -1734,9 +1846,6 @@ public struct CompetitionRoomView: View {
             .allowsHitTesting(false)
 
             // Badge nom + micro de la tuile principale (miroir `CompetitionRoomScreen.kt:1158-1183`).
-            // ⚠️ iOS n'a pas d'équivalent de `mediaStates` Android (état mic par tuile DISTANTE) :
-            // seul `mutedArtists` (hard-mute manager, synchronisé) est disponible ici — simplification
-            // assumée, le badge affiche donc « micro coupé » seulement si le manager l'a forcé.
             if let main = mainTile, let mainName = viewModel.candidates.first(where: { $0.artistId == main.id })?.artist?.displayName {
                 mainTileBadge(identity: main.id, name: mainName)
             }
@@ -1769,11 +1878,9 @@ public struct CompetitionRoomView: View {
                         onClose: onLeave,
                         badgeText: "COMPÉTITION"
                     )
-                    if let performerId = viewModel.performer.performerId, viewModel.performer.endsAt != nil {
+                    if let performerId = viewModel.performer.performerId, let endsAt = viewModel.performer.endsAt {
                         let name = viewModel.candidates.first { $0.artistId == performerId }?.artist?.displayName
-                        Text("🎤 \(name ?? s.artistSingular)")
-                            .font(DMFont.caption).bold()
-                            .foregroundStyle(theme.colors.accent)
+                        CompetitionCountdownBadge(endsAtIso: endsAt, label: name ?? s.artistSingular)
                     }
                 }
                 .padding(theme.spacing.md)
@@ -1863,6 +1970,8 @@ public struct CompetitionRoomView: View {
         .sheet(isPresented: $showModeratorsSheet) { moderatorsSheet }
         .sheet(isPresented: $showFilterSheet) { filterSheet }
         .sheet(isPresented: $showSettingsSheet) { settingsSheet }
+        .sheet(isPresented: $showRecordingSheet) { recordingSheet }
+        .sheet(isPresented: $showCommentPopup) { commentComposerSheet }
         .sheet(isPresented: $showGiftSheet) { giftSheet }
         .sheet(isPresented: $showLeaderboardSheet) { leaderboardSheet }
         // Sélecteur de candidat AVANT d'ouvrir la feuille de cadeau (parité `CompetitionRoomScreen.kt:1849-1884` —
@@ -1908,13 +2017,16 @@ public struct CompetitionRoomView: View {
         }
     }
 
-    /// Badge nom + micro de la tuile PRINCIPALE — miroir `CompetitionRoomScreen.kt:1162-1183`.
+    /// Badge nom + micro de la tuile PRINCIPALE — miroir `CompetitionRoomScreen.kt:1162-1183`. Le
+    /// hard-mute du manager (``CompetitionRoomViewModel/mutedArtists``) est PRIORITAIRE sur
+    /// ``CompetitionRoomViewModel/mediaStates`` (même raison qu'Android : ce dernier ne se met à
+    /// jour qu'après que le candidat coupé ait rediffusé son état, aller-retour).
     private func mainTileBadge(identity: String, name: String) -> some View {
-        let muted = viewModel.mutedArtists.contains(identity)
+        let micOn = viewModel.mutedArtists.contains(identity) ? false : (viewModel.mediaStates[identity]?.isMicOn ?? true)
         return HStack(spacing: 6) {
-            Image(systemName: muted ? "mic.slash.fill" : "mic.fill")
+            Image(systemName: micOn ? "mic.fill" : "mic.slash.fill")
                 .font(.system(size: 13))
-                .foregroundStyle(muted ? Color(hex: 0xEF4444) : Color(hex: 0x22C55E))
+                .foregroundStyle(micOn ? Color(hex: 0x22C55E) : Color(hex: 0xEF4444))
             Text(name).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
         }
         .padding(.horizontal, 10)
@@ -1982,6 +2094,7 @@ public struct CompetitionRoomView: View {
                             .frame(width: 72, height: 96)
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             .onTapGesture { localFocus = tile.id }
+                            .overlay(alignment: .bottomLeading) { thumbnailBadge(identity: tile.id) }
                         if viewModel.isManager {
                             Button { viewModel.setFocus(tile.id) } label: {
                                 Image(systemName: "pin.fill")
@@ -2003,11 +2116,32 @@ public struct CompetitionRoomView: View {
         .padding(.bottom, 110)
     }
 
-    /// Rail vertical gauche — miroir `CompetitionRoomScreen.kt:1473-1516` (œil masquer tout,
-    /// modérateurs, démarrer/réglages/filtres, pub sponsor). L'icône d'enregistrement dédiée
-    /// d'Android reste regroupée dans ``settingsSheet`` côté iOS — simplification assumée pour
-    /// contenir la taille de cette refonte, la fonctionnalité d'enregistrement elle-même n'est
-    /// pas perdue.
+    /// Badge nom + micro/caméra d'une vignette — miroir `CompetitionRoomScreen.kt:1307-1322`.
+    /// Comme Android, l'icône caméra reste verte fixe (une tuile n'existe que si sa piste vidéo
+    /// est publiée) ; seul le micro varie selon ``CompetitionRoomViewModel/mediaStates``/
+    /// ``CompetitionRoomViewModel/mutedArtists``.
+    private func thumbnailBadge(identity: String) -> some View {
+        let name = viewModel.candidates.first { $0.artistId == identity }?.artist?.displayName
+        let micOn = viewModel.mutedArtists.contains(identity) ? false : (viewModel.mediaStates[identity]?.isMicOn ?? true)
+        return HStack(spacing: 2) {
+            Image(systemName: micOn ? "mic.fill" : "mic.slash.fill")
+                .font(.system(size: 9))
+                .foregroundStyle(micOn ? Color(hex: 0x22C55E) : Color(hex: 0xEF4444))
+            Image(systemName: "video.fill")
+                .font(.system(size: 9))
+                .foregroundStyle(Color(hex: 0x22C55E))
+            if let name {
+                Text(name).font(.system(size: 8)).foregroundStyle(.white).lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 3)
+        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.black.opacity(0.55))
+    }
+
+    /// Rail vertical gauche — miroir `CompetitionRoomScreen.kt:1473-1521` (œil masquer tout,
+    /// modérateurs, démarrer/réglages/filtres, pub sponsor, enregistrement).
     private var leftRail: some View {
         VStack(spacing: theme.spacing.sm) {
             railButton("eye.slash.fill", bg: .black.opacity(0.4)) { hideOverlay = true }
@@ -2036,6 +2170,11 @@ public struct CompetitionRoomView: View {
                         }
                     }
                 }
+                // Enregistrement : icône DÉDIÉE du rail (manager uniquement) — miroir
+                // `CompetitionRoomScreen.kt:1507-1521` / `LiveRoomView.recordingControl`.
+                if viewModel.isManager {
+                    recordingControl
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -2052,6 +2191,66 @@ public struct CompetitionRoomView: View {
                 .background(bg, in: Circle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// Enregistrement (organisateur) : icône ronde ouvrant la feuille dédiée en mode `manual`
+    /// (avec pastille REC quand actif/pause) ; simple indicateur non-tapable en mode `auto` —
+    /// miroir exact de `LiveRoomView.recordingControl`/`DuelViews`.
+    @ViewBuilder
+    private var recordingControl: some View {
+        if viewModel.recordingCtl.mode == "manual" {
+            Button { showRecordingSheet = true } label: {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "record.circle")
+                        .foregroundStyle(.white)
+                        .frame(width: 46, height: 46)
+                        .background(.black.opacity(0.4), in: Circle())
+                    RecordingRailBadge(active: viewModel.recordingCtl.active, paused: viewModel.recordingCtl.paused)
+                        .offset(x: 2, y: -2)
+                }
+            }
+            .buttonStyle(.plain)
+        } else if viewModel.recordingCtl.mode == "auto" && viewModel.recordingCtl.active {
+            RecordingHostButton(mode: viewModel.recordingCtl.mode, active: true, busy: false, onToggle: {})
+        }
+    }
+
+    /// Feuille dédiée enregistrement (organisateur) — miroir `CompetitionRoomScreen.kt:1608-1631` /
+    /// `LiveRoomView.recordingSheet`. Distincte de ``settingsSheet`` (Android ne les regroupe pas).
+    private var recordingSheet: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text("🔴 \(s.recording)").font(DMFont.pageTitle).bold().foregroundStyle(theme.colors.foreground)
+            RecordingSessionControls(
+                mode: viewModel.recordingCtl.mode,
+                active: viewModel.recordingCtl.active,
+                paused: viewModel.recordingCtl.paused,
+                finalizing: viewModel.recordingCtl.finalizing,
+                accumulatedSeconds: viewModel.recordingCtl.accumulatedSeconds,
+                runStartedAt: viewModel.recordingCtl.runStartedAt,
+                busy: viewModel.recordingCtl.busy,
+                onStart: { viewModel.recordingCtl.start(onError: { recordingErrorMessage = $0 }) },
+                onPause: { viewModel.recordingCtl.pause(onError: { recordingErrorMessage = $0 }) },
+                onResume: { viewModel.recordingCtl.resume(onError: { recordingErrorMessage = $0 }) },
+                onCancel: { showCancelRecordingConfirm = true },
+                onSave: {
+                    viewModel.recordingCtl.save(onError: { recordingErrorMessage = $0 })
+                    showRecordingSheet = false
+                }
+            )
+            if let recordingErrorMessage {
+                Text(recordingErrorMessage).font(DMFont.caption).foregroundStyle(theme.colors.destructive)
+            }
+            Spacer()
+        }
+        .padding(theme.spacing.lg)
+        .presentationDetents([.medium])
+        .dmScreenBackground()
+        .confirmationDialog(s.cancel, isPresented: $showCancelRecordingConfirm, titleVisibility: .visible) {
+            Button(s.cancel, role: .destructive) {
+                viewModel.recordingCtl.cancel(onError: { recordingErrorMessage = $0 })
+                showCancelRecordingConfirm = false
+            }
+        }
     }
 
     /// Les 6 derniers messages visibles. Le manager peut bannir l'auteur d'un message en
@@ -2081,23 +2280,25 @@ public struct CompetitionRoomView: View {
     /// (``showGiftPicker``) au lieu de sauter directement à la feuille d'envoi.
     private var actionBar: some View {
         HStack(spacing: theme.spacing.sm) {
-            TextField(viewModel.chatEnabled ? s.saySomething : s.chatDisabled, text: $draft)
-                .textFieldStyle(.plain)
-                .foregroundStyle(.white)
+            // Pastille message : ouvre le popup de saisie au lieu d'un champ toujours visible —
+            // miroir `CompetitionRoomScreen.kt:1430-1442` (`showCommentPopup`).
+            Button { showCommentPopup = true } label: {
+                HStack(spacing: 4) {
+                    if !viewModel.chatEnabled {
+                        Image(systemName: "lock.fill").font(.system(size: 12)).foregroundStyle(.white.opacity(0.7))
+                    }
+                    Text(viewModel.chatEnabled ? s.saySomething : s.chatDisabled)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, theme.spacing.md)
                 .padding(.vertical, theme.spacing.sm)
-                .background(.white.opacity(0.15), in: Capsule())
-                .submitLabel(.send)
-                .disabled(!viewModel.chatEnabled || viewModel.iAmBanned)
-                .onSubmit(send)
-            Button(action: send) {
-                Image(systemName: "paperplane.fill")
-                    .foregroundStyle(.white)
-                    .padding(theme.spacing.sm)
-                    .background(theme.colors.accent, in: Circle())
+                .background(.black.opacity(0.35), in: Capsule())
             }
             .buttonStyle(.plain)
-            .disabled(draft.trimmed.isEmpty || !viewModel.chatEnabled || viewModel.iAmBanned)
+            .disabled(!viewModel.chatEnabled || viewModel.iAmBanned)
             Button { viewModel.sendLike() } label: {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "heart.fill")
@@ -2164,11 +2365,37 @@ public struct CompetitionRoomView: View {
 
     private static let reactionEmojis = ["🔥", "😍", "👏", "🎵", "💎", "🎶", "⚡", "🌟", "😂"]
 
-    /// Envoie le brouillon puis vide le champ.
+    /// Envoie le brouillon, vide le champ et referme le popup de saisie.
     private func send() {
         let text = draft
         draft = ""
+        showCommentPopup = false
         Task { await viewModel.sendMessage(text) }
+    }
+
+    /// Popup « Commenter » — miroir `CompetitionRoomScreen.kt:2065-2127` (tap sur la pastille de
+    /// ``actionBar``). Sans le fil « répondre à » ni le sélecteur d'emojis inline d'Android :
+    /// ``CompetitionChatMessage`` n'a pas de `parentId` côté iOS et l'app propose déjà une barre
+    /// de réactions dédiée (``reactionBar``) — simplification assumée pour rester dans le
+    /// périmètre de cette fermeture de lacune (champ toujours visible → popup).
+    private var commentComposerSheet: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
+            Text(s.commentComposerTitle).font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+            HStack(spacing: theme.spacing.sm) {
+                DMTextField(s.saySomething, text: $draft, submitLabel: .send, onSubmit: send)
+                Button(action: send) {
+                    Image(systemName: "paperplane.fill")
+                        .foregroundStyle(.white)
+                        .padding(theme.spacing.sm)
+                        .background(theme.colors.primary, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(draft.trimmed.isEmpty)
+            }
+        }
+        .padding(theme.spacing.lg)
+        .presentationDetents([.height(180)])
+        .dmScreenBackground()
     }
 
     /// Libellé localisé d'un motif de signalement.
@@ -2352,26 +2579,6 @@ public struct CompetitionRoomView: View {
             }
 
             Divider()
-            Text("🔴 \(s.recording)").font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
-            RecordingSessionControls(
-                mode: viewModel.recordingCtl.mode,
-                active: viewModel.recordingCtl.active,
-                paused: viewModel.recordingCtl.paused,
-                finalizing: viewModel.recordingCtl.finalizing,
-                accumulatedSeconds: viewModel.recordingCtl.accumulatedSeconds,
-                runStartedAt: viewModel.recordingCtl.runStartedAt,
-                busy: viewModel.recordingCtl.busy,
-                onStart: { viewModel.recordingCtl.start(onError: { recordingErrorMessage = $0 }) },
-                onPause: { viewModel.recordingCtl.pause(onError: { recordingErrorMessage = $0 }) },
-                onResume: { viewModel.recordingCtl.resume(onError: { recordingErrorMessage = $0 }) },
-                onCancel: { showCancelRecordingConfirm = true },
-                onSave: { viewModel.recordingCtl.save(onError: { recordingErrorMessage = $0 }) }
-            )
-            if let recordingErrorMessage {
-                Text(recordingErrorMessage).font(DMFont.caption).foregroundStyle(theme.colors.destructive)
-            }
-
-            Divider()
             Text("📢 \(s.sponsorStartAd)").font(DMFont.body).bold().foregroundStyle(theme.colors.foreground)
             if viewModel.sponsorAd.activeAd != nil {
                 DMButton(s.sponsorStopAd, style: .destructive, isEnabled: !viewModel.sponsorAd.busy) { viewModel.sponsorAd.stop() }
@@ -2388,12 +2595,6 @@ public struct CompetitionRoomView: View {
         // Le sélecteur de pub sponsor est déclaré au niveau racine (voir `body`) — partagé avec
         // le déclencheur du rail gauche, pas dupliqué ici pour éviter deux présentations
         // concurrentes de la même feuille système sur le même `$showSponsorAdPicker`.
-        .confirmationDialog(s.cancel, isPresented: $showCancelRecordingConfirm, titleVisibility: .visible) {
-            Button(s.cancel, role: .destructive) {
-                viewModel.recordingCtl.cancel(onError: { recordingErrorMessage = $0 })
-                showCancelRecordingConfirm = false
-            }
-        }
     }
 
     private func settingsRow(_ systemImage: String, _ label: String, action: @escaping () -> Void) -> some View {

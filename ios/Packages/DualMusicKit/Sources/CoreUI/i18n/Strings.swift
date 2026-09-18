@@ -463,6 +463,8 @@ public struct DMStrings: Sendable {
     public let freeLabel: String
     public let dedicationsOpen: String
     public let saySomething: String
+    /// Titre du popup « commenter » (compétition — miroir `CompetitionRoomScreen.kt:2074`).
+    public let commentComposerTitle: String
     public let sendGift: String
     // Espace admin.
     public let adminSpace: String
@@ -1142,6 +1144,7 @@ public extension DMStrings {
         freeLabel: "Gratuit",
         dedicationsOpen: "💌 Dédicaces ouvertes",
         saySomething: "Dis quelque chose…",
+        commentComposerTitle: "Commenter",
         sendGift: "Envoyer un cadeau",
         adminSpace: "Espace admin",
         adminRoleRequests: "Candidatures de rôle",
@@ -1789,6 +1792,7 @@ public extension DMStrings {
         freeLabel: "Free",
         dedicationsOpen: "💌 Dedications open",
         saySomething: "Say something…",
+        commentComposerTitle: "Comment",
         sendGift: "Send a gift",
         adminSpace: "Admin space",
         adminRoleRequests: "Role applications",
