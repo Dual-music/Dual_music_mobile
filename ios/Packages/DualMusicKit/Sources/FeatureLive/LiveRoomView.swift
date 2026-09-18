@@ -179,9 +179,42 @@ public struct LiveRoomView: View {
         }
     }
 
-    /// Compteur de spectateurs + boutons signaler/modérateurs, en haut.
+    /// Badge LIVE + spectateurs + likes + boutons signaler/modérateurs/partager, en haut.
+    /// Miroir de la barre du haut de `LiveRoomScreen.kt` (446-494) — badge rouge, spectateurs,
+    /// likes, puis (à droite) nom artiste/partage/suivre pour le spectateur.
     private var viewerBadge: some View {
         HStack {
+            HStack(spacing: 6) {
+                HStack(spacing: 5) {
+                    Text("🔴").font(.system(size: 10))
+                    Text(s.live.uppercased())
+                        .font(.system(size: 11, weight: .black))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(theme.colors.destructive, in: Capsule())
+
+                HStack(spacing: 4) {
+                    Image(systemName: "eye.fill").font(.system(size: 12))
+                    Text("\(viewModel.viewerCount)").font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.black.opacity(0.4), in: Capsule())
+
+                HStack(spacing: 4) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(theme.colors.destructive)
+                    Text("\(viewModel.likes)").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.black.opacity(0.4), in: Capsule())
+            }
+            Spacer(minLength: 8)
             if !viewModel.isHost {
                 // Nom de l'artiste (spectateur) → profil public (parité duel « tap nom »).
                 Button { onOpenArtist(hostUserId) } label: {
@@ -205,6 +238,15 @@ public struct LiveRoomView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text(s.reportAction))
+
+                ShareLink(item: s.shareLiveText) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(DMFont.caption)
+                        .foregroundStyle(.white)
+                        .padding(theme.spacing.xs)
+                        .background(.black.opacity(0.4), in: Circle())
+                }
+                .accessibilityLabel(Text(s.shareAction))
 
                 Button { viewModel.follow(hostUserId) } label: {
                     Image(systemName: "person.badge.plus")
@@ -232,16 +274,6 @@ public struct LiveRoomView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text(s.moderators))
             }
-            Spacer()
-            HStack(spacing: 4) {
-                Image(systemName: "eye.fill")
-                Text("\(viewModel.viewerCount)")
-            }
-            .font(DMFont.caption)
-            .foregroundStyle(.white)
-            .padding(.horizontal, theme.spacing.md)
-            .padding(.vertical, theme.spacing.xs)
-            .background(.black.opacity(0.4), in: Capsule())
         }
     }
 

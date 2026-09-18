@@ -509,6 +509,11 @@ public struct DMStrings: Sendable {
     public let reportSent: String
     public let banAction: String
     public let banConfirmMessage: String
+    // En-tête de direct partagé (Live/Duel/Concert/Compétition) — miroir de `LiveHeader` Android.
+    public let shareAction: String
+    public let closeAction: String
+    public let quitLiveAction: String
+    public let participantsAction: String
     // « Mes lives » (hôte).
     public let myLives: String
     public let myLivesHint: String
@@ -1136,6 +1141,10 @@ public extension DMStrings {
         reportSent: "Signalement envoyé",
         banAction: "Bannir",
         banConfirmMessage: "Cette personne ne pourra plus écrire ni rejoindre, et ses messages seront masqués pour tout le monde.",
+        shareAction: "Partager",
+        closeAction: "Fermer",
+        quitLiveAction: "Quitter",
+        participantsAction: "Participants",
         myLives: "Mes Lives",
         myLivesHint: "Gérez vos lives passés et lancez-en un nouveau",
         liveTitle: "Titre du live",
@@ -1738,6 +1747,10 @@ public extension DMStrings {
         reportSent: "Report sent",
         banAction: "Ban",
         banConfirmMessage: "This person won't be able to write or rejoin anymore, and their messages will be hidden for everyone.",
+        shareAction: "Share",
+        closeAction: "Close",
+        quitLiveAction: "Leave",
+        participantsAction: "Participants",
         myLives: "My Lives",
         myLivesHint: "Manage your past lives and start a new one",
         liveTitle: "Live title",
