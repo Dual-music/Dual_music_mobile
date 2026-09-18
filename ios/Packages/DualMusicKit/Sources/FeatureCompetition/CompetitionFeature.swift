@@ -1275,6 +1275,11 @@ public struct CompetitionRoomView: View {
     @State private var recordingErrorMessage: String?
     @State private var showSponsorAdPicker = false
     @State private var localFocus: String?
+    // Ajoutés pour la refonte plein écran immersive (parité Live/Duel/Concert) :
+    @State private var hideOverlay = false
+    @State private var showGiftPicker = false
+    @State private var giftTargetCandidateId: String?
+    @State private var showDonorsTab = false
 
     /// - Parameters:
     ///   - viewModel: état + actions.
@@ -1311,116 +1316,150 @@ public struct CompetitionRoomView: View {
         return tiles.first
     }
 
+    /// Vignettes des publieurs autres que la tuile principale.
+    private var thumbnails: [(id: String, track: VideoTrack)] {
+        guard let main = mainTile else { return allTiles }
+        return allTiles.filter { $0.id != main.id }
+    }
+
+    /// Miroir de `CompetitionRoomScreen.kt:1130` (`thumbsVisible`) : masquées quand le manager a
+    /// épinglé une caméra pour tout le monde (spotlight), sauf pour le manager lui-même.
+    private var thumbsVisible: Bool {
+        !thumbnails.isEmpty && !viewModel.forcedHideOthers && (viewModel.forcedFocusId == nil || viewModel.isManager)
+    }
+
+    /// Candidats ciblables pour un cadeau/vote : approuvés seulement, ou repli sur tous s'il n'y
+    /// a pas d'approbation utilisée (parité `CompetitionRoomScreen.kt:1851`/`1926`).
+    private var giftableCandidates: [CompetitionCandidate] {
+        let approved = viewModel.candidates.filter { $0.status == "approved" }
+        return approved.isEmpty ? viewModel.candidates : approved
+    }
+
+    /// Room plein écran immersive (parité `CompetitionRoomScreen.kt:961-2203`, même paradigme
+    /// que Live/Duel/Concert) : la vidéo remplit tout l'écran, toute l'interface flotte dessus.
     public var body: some View {
-        VStack(spacing: theme.spacing.md) {
-            HStack {
-                Text(s.ranking)
-                    .font(DMFont.pageTitle)
-                    .foregroundStyle(theme.colors.foreground)
-                Spacer()
-                ShareLink(item: s.shareLiveText) {
-                    Image(systemName: "square.and.arrow.up")
-                        .foregroundStyle(theme.colors.mutedForeground)
-                }
-                HStack(spacing: 4) {
-                    Image(systemName: "eye.fill")
-                    Text("\(viewModel.viewerCount)")
-                }
-                .font(DMFont.caption)
-                .foregroundStyle(theme.colors.mutedForeground)
-                if viewModel.isManager {
-                    Button { showSettingsSheet = true } label: {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: "slider.horizontal.3")
-                                .foregroundStyle(theme.colors.accent)
-                            RecordingRailBadge(active: viewModel.recordingCtl.active, paused: viewModel.recordingCtl.paused)
-                                .offset(x: 6, y: -6)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-                if viewModel.canModerate {
-                    Button {
-                        showModeratorsSheet = true
-                        if viewModel.isManager { Task { await viewModel.loadViewers() } }
-                    } label: {
-                        Image(systemName: "person.2.fill")
-                            .foregroundStyle(theme.colors.mutedForeground)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Text(s.moderators))
-                }
-                Button { showReport = true } label: {
-                    Image(systemName: "flag.fill")
-                        .foregroundStyle(theme.colors.mutedForeground)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(s.reportAction))
-            }
+        ZStack {
+            Color.black.ignoresSafeArea()
 
-            if let error = viewModel.errorMessage { DMMessage(error, kind: .error) }
-
-            // Vidéo : tuile principale (focus imposé > focus local > première) + vignettes des
-            // autres publieurs actifs (manager + candidats approuvés en mode "online"). Absente
-            // si personne ne diffuse (mode "onsite" sans manager connecté, par ex.).
-            if viewModel.canPublish || mainTile != nil {
-                videoGrid
-                if viewModel.canPublish { hostControls }
-            }
-
-            if let performerId = viewModel.performer.performerId, viewModel.performer.endsAt != nil {
-                let name = viewModel.candidates.first { $0.artistId == performerId }?.artist?.displayName
-                Text("🎤 \(name ?? s.artistSingular)")
-                    .font(DMFont.caption).bold()
-                    .foregroundStyle(theme.colors.accent)
-            }
-
-            if viewModel.candidates.isEmpty {
-                DMEmptyState(title: s.noCandidates, subtitle: s.noCandidatesHint, systemImage: "star")
-                Spacer()
+            // --- Couche vidéo principale ---
+            if let main = mainTile {
+                SwiftUIVideoView(main.track, layoutMode: .fill).ignoresSafeArea()
             } else {
-                ScrollView {
-                    LazyVStack(spacing: theme.spacing.sm) {
-                        ForEach(Array(viewModel.candidates.enumerated()), id: \.element.id) { index, candidate in
-                            CandidateRow(
-                                rank: index + 1,
-                                candidate: candidate,
-                                voteCredits: voteCredits,
-                                isManager: viewModel.isManager,
-                                isMuted: viewModel.mutedArtists.contains(candidate.artistId),
-                                isPerforming: viewModel.performer.performerId == candidate.artistId,
-                                onVote: { Task { await viewModel.vote(candidateId: candidate.id, credits: voteCredits) } },
-                                onGift: { showGiftSheet = true },
-                                onApprove: { Task { await viewModel.reviewCandidate(candidateId: candidate.id, approve: true) } },
-                                onReject: { Task { await viewModel.reviewCandidate(candidateId: candidate.id, approve: false) } },
-                                onToggleMute: { viewModel.toggleMuteArtist(candidate.artistId) },
-                                onTogglePerformer: {
-                                    Task { await viewModel.setPerformer(candidateId: viewModel.performer.performerId == candidate.artistId ? nil : candidate.artistId, durationSeconds: 120) }
-                                },
-                                onJuryVotes: { votes in Task { await viewModel.setJuryVotes(candidateId: candidate.id, juryVotes: votes) } },
-                                onOpenArtist: { onOpenArtist(candidate.artistId) }
-                            )
-                        }
-                    }
-                }
+                // Pas encore de flux : fond dégradé + trophée (parité `CompetitionRoomScreen.kt:1147-1150`).
+                theme.gradients.hero.ignoresSafeArea()
+                Text("🏆").font(.system(size: 54))
             }
 
-            if showReactionBar { reactionBar }
-            chatOverlay
-            bottomBar
-        }
-        .padding(theme.spacing.lg)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .dmScreenBackground()
-        .overlay {
-            if let winner = viewModel.winnerInfo { winnerCelebration(winner) }
-        }
-        .overlay {
+            // Dégradés haut + bas pour la lisibilité des overlays (miroir `CompetitionRoomScreen.kt:1153-1156`).
+            LinearGradient(
+                colors: [.black.opacity(0.35), .clear, .black.opacity(0.6)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            // Badge nom + micro de la tuile principale (miroir `CompetitionRoomScreen.kt:1158-1183`).
+            // ⚠️ iOS n'a pas d'équivalent de `mediaStates` Android (état mic par tuile DISTANTE) :
+            // seul `mutedArtists` (hard-mute manager, synchronisé) est disponible ici — simplification
+            // assumée, le badge affiche donc « micro coupé » seulement si le manager l'a forcé.
+            if let main = mainTile, let mainName = viewModel.candidates.first(where: { $0.artistId == main.id })?.artist?.displayName {
+                mainTileBadge(identity: main.id, name: mainName)
+            }
+
+            // Célébration finale (compétition clôturée) — miroir `CompetitionRoomScreen.kt:1189-1197`.
+            // Rendue AVANT le masquage `hideOverlay` ci-dessous : reste visible œil fermé (comme Android).
+            if viewModel.status == "finished", let top = viewModel.candidates.first {
+                winnerCelebration(
+                    CompetitionWinner(name: top.artist?.displayName ?? s.winnerGeneric, avatar: top.artist?.avatarURL, votes: Int(top.score), percent: 100),
+                    showStopButton: false
+                )
+            }
+
+            if hideOverlay {
+                // Interface masquée (œil du rail) : seul un bouton de restauration reste visible —
+                // parité `CompetitionRoomScreen.kt:1199-1207`. Contrairement à Android (qui coupe
+                // aussi via `return@Box` la barrière de bannissement/le gate d'accès programmé), on
+                // les garde TOUJOURS actifs ici — les masquer serait un contournement d'accès.
+                hiddenOverlayButton
+            } else {
+                topDonorBubble
+
+                VStack(spacing: theme.spacing.xs) {
+                    LiveHeader(
+                        eventLabel: "",
+                        viewerCount: viewModel.viewerCount,
+                        likes: viewModel.likes,
+                        shareText: s.shareLiveText,
+                        onReport: { showReport = true },
+                        onClose: onLeave,
+                        badgeText: "COMPÉTITION"
+                    )
+                    if let performerId = viewModel.performer.performerId, viewModel.performer.endsAt != nil {
+                        let name = viewModel.candidates.first { $0.artistId == performerId }?.artist?.displayName
+                        Text("🎤 \(name ?? s.artistSingular)")
+                            .font(DMFont.caption).bold()
+                            .foregroundStyle(theme.colors.accent)
+                    }
+                }
+                .padding(theme.spacing.md)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+                if viewModel.isManager, viewModel.forcedFocusId != nil {
+                    pinReleaseButton
+                }
+
+                if thumbsVisible {
+                    thumbnailColumn
+                }
+
+                leftRail
+
+                // Cadeau reçu : carte glissante bas-gauche (miroir `CompetitionRoomScreen.kt:2228-2257`,
+                // même composant que Live — Android a explicitement retiré le burst centré ici).
+                if let gift = viewModel.giftFeed.last {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            GiftReceivedCard(imageURL: gift.image, name: gift.name ?? s.sendGift, valueCredits: gift.value)
+                            Spacer()
+                        }
+                        .padding(.leading, 10)
+                        .padding(.bottom, 300)
+                    }
+                    .id(gift.id)
+                    .allowsHitTesting(false)
+                    .task(id: gift.id) {
+                        try? await Task.sleep(nanoseconds: 3_200_000_000)
+                        viewModel.consumeOldestGift()
+                    }
+                }
+
+                // Réactions emoji flottantes (miroir `CompetitionRoomScreen.kt:1331-1338`).
+                FloatingReactionsLayer(
+                    reactions: viewModel.emojiFeed.map { FloatingReactionItem(id: "\($0.id)", emoji: $0.emoji) },
+                    onFinished: { _ in viewModel.consumeOldestEmoji() }
+                )
+
+                VStack(spacing: theme.spacing.sm) {
+                    Spacer()
+                    chatOverlay
+                    if showReactionBar { reactionBar }
+                    if let error = viewModel.errorMessage { DMMessage(error, kind: .error) }
+                    actionBar
+                }
+                .padding(theme.spacing.md)
+            }
+
+            // Célébration du vainqueur annoncé par le manager (n'arrête PAS le direct) — miroir
+            // `CompetitionRoomScreen.kt:2151-2168`. Toujours au-dessus, même œil fermé.
+            if let winner = viewModel.winnerInfo {
+                winnerCelebration(winner)
+            }
+
             if viewModel.iAmBanned { bannedGate }
-        }
-        // Pub sponsor : overlay vidéo plein écran pour tous quand une pub est active — le
-        // déclencheur est dans la feuille de réglages (voir `settingsSheet`), pas un bouton ici.
-        .overlay {
+
+            // Pub sponsor : overlay vidéo plein écran pour tous quand une pub est active.
             SponsorAdLayer(
                 activeAd: viewModel.sponsorAd.activeAd,
                 canTrigger: viewModel.isManager,
@@ -1431,10 +1470,9 @@ public struct CompetitionRoomView: View {
                 onStop: { viewModel.sponsorAd.stop() },
                 showTriggerButton: false
             )
-        }
-        // Gate d'accès programmé (parité web `ScheduledAccessGate`) : rendu en dernier →
-        // toujours au-dessus (même de la barrière de bannissement).
-        .overlay {
+
+            // Gate d'accès programmé (parité web `ScheduledAccessGate`) : rendu en dernier →
+            // toujours au-dessus (même de la barrière de bannissement).
             ScheduledAccessGateView(
                 type: "competition",
                 scheduledAtIso: viewModel.competition?.startAt,
@@ -1448,12 +1486,31 @@ public struct CompetitionRoomView: View {
         }
         .task { await viewModel.start() }
         .onDisappear { Task { await viewModel.stop() } }
-        .refreshable { await viewModel.refresh() }
         .sheet(isPresented: $showModeratorsSheet) { moderatorsSheet }
         .sheet(isPresented: $showFilterSheet) { filterSheet }
         .sheet(isPresented: $showSettingsSheet) { settingsSheet }
         .sheet(isPresented: $showGiftSheet) { giftSheet }
         .sheet(isPresented: $showLeaderboardSheet) { leaderboardSheet }
+        // Sélecteur de candidat AVANT d'ouvrir la feuille de cadeau (parité `CompetitionRoomScreen.kt:1849-1884` —
+        // l'ancien flux sautait directement à la feuille sans cette étape de sélection par nom).
+        .confirmationDialog(s.sendGift, isPresented: $showGiftPicker, titleVisibility: .visible) {
+            ForEach(giftableCandidates) { candidate in
+                Button(candidate.artist?.displayName ?? s.artistSingular) {
+                    giftTargetCandidateId = candidate.id
+                    showGiftSheet = true
+                }
+            }
+            Button(s.cancel, role: .cancel) {}
+        }
+        .confirmationDialog(s.sponsorStartAd, isPresented: $showSponsorAdPicker, titleVisibility: .visible) {
+            if viewModel.sponsorAd.ads.isEmpty {
+                Button(s.sponsorNoAds) {}.disabled(true)
+            } else {
+                ForEach(viewModel.sponsorAd.ads) { ad in
+                    Button("\(ad.title) · \(ad.durationSeconds)s") { viewModel.sponsorAd.play(adVideoId: ad.id) }
+                }
+            }
+        }
         .confirmationDialog(s.reportAction, isPresented: $showReport, titleVisibility: .visible) {
             ForEach(ReportReason.allCases, id: \.self) { reason in
                 Button(reportLabel(reason)) {
@@ -1477,6 +1534,152 @@ public struct CompetitionRoomView: View {
         }
     }
 
+    /// Badge nom + micro de la tuile PRINCIPALE — miroir `CompetitionRoomScreen.kt:1162-1183`.
+    private func mainTileBadge(identity: String, name: String) -> some View {
+        let muted = viewModel.mutedArtists.contains(identity)
+        return HStack(spacing: 6) {
+            Image(systemName: muted ? "mic.slash.fill" : "mic.fill")
+                .font(.system(size: 13))
+                .foregroundStyle(muted ? Color(hex: 0xEF4444) : Color(hex: 0x22C55E))
+            Text(name).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(.black.opacity(0.55), in: Capsule())
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        .padding(.leading, theme.spacing.md)
+        .padding(.bottom, 110)
+        .allowsHitTesting(false)
+    }
+
+    /// Bulle du meilleur donateur, nom défilant — miroir `TopDonorBubble.kt` (réutilise le
+    /// composant partagé ``ScrollingLabel``, déjà utilisé par Live/Duel pour le même besoin).
+    @ViewBuilder
+    private var topDonorBubble: some View {
+        if let donor = viewModel.topDonor {
+            HStack(spacing: 6) {
+                Text("👑").font(.system(size: 15))
+                ScrollingLabel("\(donor.displayName)  ·  \(Int(donor.value)) 💎")
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(Color.white.opacity(0.2), in: Capsule())
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.horizontal, 12)
+            .padding(.top, 56)
+        }
+    }
+
+    /// Bouton de restauration de l'interface masquée — miroir `CompetitionRoomScreen.kt:1200-1207`.
+    private var hiddenOverlayButton: some View {
+        Button { hideOverlay = false } label: {
+            Image(systemName: "eye.fill")
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(.black.opacity(0.4), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .padding(theme.spacing.md)
+    }
+
+    /// Libère le focus imposé (manager) — miroir `CompetitionRoomScreen.kt:1247-1254`.
+    private var pinReleaseButton: some View {
+        Button { viewModel.setFocus(nil) } label: {
+            Image(systemName: "pin.slash.fill")
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+                .background(theme.colors.primary, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .padding(.top, 96)
+        .padding(.trailing, theme.spacing.md)
+    }
+
+    /// Vignettes multi-cam en bas-droite — miroir `CompetitionRoomScreen.kt:1267-1329`. Tap =
+    /// focus local ; épingle (manager) = focus imposé à tous, synchronisé.
+    private var thumbnailColumn: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 6) {
+                ForEach(thumbnails, id: \.id) { tile in
+                    ZStack(alignment: .topTrailing) {
+                        SwiftUIVideoView(tile.track, layoutMode: .fill)
+                            .frame(width: 72, height: 96)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .onTapGesture { localFocus = tile.id }
+                        if viewModel.isManager {
+                            Button { viewModel.setFocus(tile.id) } label: {
+                                Image(systemName: "pin.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.white)
+                                    .padding(4)
+                                    .background(.black.opacity(0.55), in: Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(3)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxHeight: 420)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .padding(.trailing, theme.spacing.md)
+        .padding(.bottom, 110)
+    }
+
+    /// Rail vertical gauche — miroir `CompetitionRoomScreen.kt:1473-1516` (œil masquer tout,
+    /// modérateurs, démarrer/réglages/filtres, pub sponsor). L'icône d'enregistrement dédiée
+    /// d'Android reste regroupée dans ``settingsSheet`` côté iOS — simplification assumée pour
+    /// contenir la taille de cette refonte, la fonctionnalité d'enregistrement elle-même n'est
+    /// pas perdue.
+    private var leftRail: some View {
+        VStack(spacing: theme.spacing.sm) {
+            railButton("eye.slash.fill", bg: .black.opacity(0.4)) { hideOverlay = true }
+            if viewModel.isManager {
+                railButton("shield.fill", bg: .black.opacity(0.4)) {
+                    showModeratorsSheet = true
+                    Task { await viewModel.loadViewers() }
+                }
+            }
+            if viewModel.canPublish {
+                if !viewModel.media.isCameraEnabled, !viewModel.media.isMicrophoneEnabled {
+                    railButton("video.fill", bg: theme.colors.accent) {
+                        Task { await viewModel.startBroadcast() }
+                    }
+                } else {
+                    railButton("slider.horizontal.3", bg: .black.opacity(0.4)) { showSettingsSheet = true }
+                    railButton("camera.filters", bg: .black.opacity(0.4)) { showFilterSheet = true }
+                }
+                if viewModel.isManager {
+                    railButton(viewModel.sponsorAd.activeAd != nil ? "megaphone.fill" : "megaphone", bg: .black.opacity(0.4)) {
+                        if viewModel.sponsorAd.activeAd != nil {
+                            viewModel.sponsorAd.stop()
+                        } else {
+                            viewModel.sponsorAd.loadAds()
+                            showSponsorAdPicker = true
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.leading, theme.spacing.md)
+        .padding(.top, 120)
+    }
+
+    /// Bouton circulaire du rail gauche.
+    private func railButton(_ systemImage: String, bg: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .background(bg, in: Circle())
+        }
+        .buttonStyle(.plain)
+    }
+
     /// Les 6 derniers messages visibles. Le manager peut bannir l'auteur d'un message en
     /// tapant sur son nom — jamais lui-même.
     private var chatOverlay: some View {
@@ -1492,21 +1695,24 @@ public struct CompetitionRoomView: View {
                         }
                     Text(message.content)
                         .font(DMFont.caption)
-                        .foregroundStyle(theme.colors.foreground)
+                        .foregroundStyle(.white)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Barre du bas : saisie de message + likes/réactions + cadeau + vote + classement.
-    private var bottomBar: some View {
+    /// Barre d'action bas : saisie de message + likes/réactions + cadeau + classement — miroir
+    /// `CompetitionRoomScreen.kt:1416-1464`. Le cadeau ouvre désormais le sélecteur de candidat
+    /// (``showGiftPicker``) au lieu de sauter directement à la feuille d'envoi.
+    private var actionBar: some View {
         HStack(spacing: theme.spacing.sm) {
             TextField(viewModel.chatEnabled ? s.saySomething : s.chatDisabled, text: $draft)
                 .textFieldStyle(.plain)
+                .foregroundStyle(.white)
                 .padding(.horizontal, theme.spacing.md)
                 .padding(.vertical, theme.spacing.sm)
-                .background(theme.colors.card, in: Capsule())
+                .background(.white.opacity(0.15), in: Capsule())
                 .submitLabel(.send)
                 .disabled(!viewModel.chatEnabled || viewModel.iAmBanned)
                 .onSubmit(send)
@@ -1521,9 +1727,9 @@ public struct CompetitionRoomView: View {
             Button { viewModel.sendLike() } label: {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "heart.fill")
-                        .foregroundStyle(Color(red: 1, green: 0.3, blue: 0.42))
+                        .foregroundStyle(Color(hex: 0xFF4D6D))
                         .padding(theme.spacing.sm)
-                        .background(theme.colors.card, in: Circle())
+                        .background(.black.opacity(0.3), in: Circle())
                     if viewModel.likes > 0 {
                         Text("\(viewModel.likes)")
                             .font(.system(size: 10)).bold()
@@ -1537,13 +1743,13 @@ public struct CompetitionRoomView: View {
             .buttonStyle(.plain)
             Button { showReactionBar.toggle() } label: {
                 Image(systemName: "face.smiling.fill")
-                    .foregroundStyle(theme.colors.foreground)
+                    .foregroundStyle(.white)
                     .padding(theme.spacing.sm)
-                    .background(theme.colors.card, in: Circle())
+                    .background(.black.opacity(0.3), in: Circle())
             }
             .buttonStyle(.plain)
             if !viewModel.candidates.isEmpty {
-                Button { showGiftSheet = true } label: {
+                Button { showGiftPicker = true } label: {
                     Image(systemName: "gift.fill")
                         .foregroundStyle(.white)
                         .padding(theme.spacing.sm)
@@ -1556,15 +1762,15 @@ public struct CompetitionRoomView: View {
                 Task { await viewModel.loadGiftLeaderboard() }
             } label: {
                 Image(systemName: "trophy.fill")
-                    .foregroundStyle(Color(red: 1, green: 0.76, blue: 0.03))
+                    .foregroundStyle(Color(hex: 0xFFC107))
                     .padding(theme.spacing.sm)
-                    .background(theme.colors.card, in: Circle())
+                    .background(.black.opacity(0.35), in: Circle())
             }
             .buttonStyle(.plain)
         }
     }
 
-    /// Barre d'emojis réactions (togglée par le bouton emoji de ``bottomBar``).
+    /// Barre d'emojis réactions (togglée par le bouton emoji de ``actionBar``).
     private var reactionBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: theme.spacing.sm) {
@@ -1574,7 +1780,7 @@ public struct CompetitionRoomView: View {
                     } label: {
                         Text(emoji)
                             .padding(theme.spacing.sm)
-                            .background(theme.colors.card, in: Circle())
+                            .background(.black.opacity(0.35), in: Circle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -1677,103 +1883,6 @@ public struct CompetitionRoomView: View {
         }
     }
 
-    /// Grille des publieurs actifs : moi (aperçu local, si je publie) puis les autres, triés
-    /// par identité pour un ordre stable entre deux rafraîchissements.
-    /// Tuile principale (focus) + vignettes des autres publieurs. Tap sur une vignette = focus
-    /// local ; épingle (manager) = focus imposé à tous, synchronisé.
-    private var videoGrid: some View {
-        let tiles = allTiles
-        let main = mainTile
-        let thumbs = tiles.filter { $0.id != main?.id }
-        return VStack(alignment: .leading, spacing: theme.spacing.xs) {
-            if let main {
-                SwiftUIVideoView(main.track, layoutMode: .fill)
-                    .aspectRatio(16 / 10, contentMode: .fill)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-            if !thumbs.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: theme.spacing.xs) {
-                        ForEach(thumbs, id: \.id) { tile in
-                            ZStack(alignment: .topTrailing) {
-                                SwiftUIVideoView(tile.track, layoutMode: .fill)
-                                    .frame(width: 84, height: 110)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                    .onTapGesture { localFocus = tile.id }
-                                if viewModel.isManager {
-                                    Button { viewModel.setFocus(tile.id) } label: {
-                                        Image(systemName: "pin.fill")
-                                            .font(.system(size: 11))
-                                            .foregroundStyle(.white)
-                                            .padding(4)
-                                            .background(.black.opacity(0.5), in: Circle())
-                                    }
-                                    .buttonStyle(.plain)
-                                    .padding(3)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            if viewModel.isManager, viewModel.forcedFocusId != nil {
-                Button {
-                    viewModel.setFocus(nil)
-                } label: {
-                    Label(s.stopAction, systemImage: "pin.slash.fill")
-                        .font(DMFont.caption).bold()
-                        .foregroundStyle(theme.colors.accent)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    /// Contrôles du publieur (manager ou candidat approuvé) : démarrer la diffusion, puis
-    /// mic/caméra/bascule/filtre une fois lancée.
-    private var hostControls: some View {
-        Group {
-            if !viewModel.media.isCameraEnabled, !viewModel.media.isMicrophoneEnabled {
-                Button {
-                    Task { await viewModel.startBroadcast() }
-                } label: {
-                    Text(s.startLive)
-                        .font(DMFont.caption).bold()
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, theme.spacing.md)
-                        .padding(.vertical, theme.spacing.sm)
-                        .background(theme.colors.accent, in: Capsule())
-                }
-                .buttonStyle(.plain)
-            } else {
-                HStack(spacing: theme.spacing.md) {
-                    controlButton(viewModel.media.isMicrophoneEnabled ? "mic.fill" : "mic.slash.fill") {
-                        Task { await viewModel.toggleMic() }
-                    }
-                    controlButton(viewModel.media.isCameraEnabled ? "video.fill" : "video.slash.fill") {
-                        Task { await viewModel.toggleCamera() }
-                    }
-                    controlButton("arrow.triangle.2.circlepath.camera.fill") {
-                        Task { await viewModel.switchCamera() }
-                    }
-                    controlButton("camera.filters") {
-                        showFilterSheet = true
-                    }
-                }
-            }
-        }
-    }
-
-    private func controlButton(_ systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .foregroundStyle(theme.colors.foreground)
-                .padding(theme.spacing.sm)
-                .background(theme.colors.card, in: Circle())
-        }
-        .buttonStyle(.plain)
-    }
-
     /// Feuille : grille des filtres couleur (voir ``VideoFilterPresets/all``).
     private var filterSheet: some View {
         ScrollView {
@@ -1859,9 +1968,13 @@ public struct CompetitionRoomView: View {
                     viewModel.toggleHideOthers()
                 }
             }
-            DMButton(s.endLive, style: .destructive) {
-                showSettingsSheet = false
-                Task { await viewModel.finalize() }
+            // Réservé au manager (parité `CompetitionRoomScreen.kt:1555-1557` : ce bouton clôture
+            // DÉFINITIVEMENT la compétition, un candidat publieur ne doit pas pouvoir le faire).
+            if viewModel.isManager {
+                DMButton(s.endLive, style: .destructive) {
+                    showSettingsSheet = false
+                    Task { await viewModel.finalize() }
+                }
             }
 
             Divider()
@@ -1898,19 +2011,13 @@ public struct CompetitionRoomView: View {
         .padding(theme.spacing.lg)
         .presentationDetents([.medium, .large])
         .dmScreenBackground()
+        // Le sélecteur de pub sponsor est déclaré au niveau racine (voir `body`) — partagé avec
+        // le déclencheur du rail gauche, pas dupliqué ici pour éviter deux présentations
+        // concurrentes de la même feuille système sur le même `$showSponsorAdPicker`.
         .confirmationDialog(s.cancel, isPresented: $showCancelRecordingConfirm, titleVisibility: .visible) {
             Button(s.cancel, role: .destructive) {
                 viewModel.recordingCtl.cancel(onError: { recordingErrorMessage = $0 })
                 showCancelRecordingConfirm = false
-            }
-        }
-        .confirmationDialog(s.sponsorStartAd, isPresented: $showSponsorAdPicker, titleVisibility: .visible) {
-            if viewModel.sponsorAd.ads.isEmpty {
-                Button(s.sponsorNoAds) {}.disabled(true)
-            } else {
-                ForEach(viewModel.sponsorAd.ads) { ad in
-                    Button("\(ad.title) · \(ad.durationSeconds)s") { viewModel.sponsorAd.play(adVideoId: ad.id) }
-                }
             }
         }
     }
@@ -1937,6 +2044,7 @@ public struct CompetitionRoomView: View {
             managerName: viewModel.isManager ? nil : "Manager",
             inventory: viewModel.inventory,
             catalog: viewModel.giftCatalog,
+            presetCandidateId: giftTargetCandidateId,
             onSendToCandidate: { candidateId, giftId, credits in
                 Task { await viewModel.sendGift(candidateId: candidateId, giftId: giftId, credits: credits); showGiftSheet = false }
             },
@@ -1946,13 +2054,33 @@ public struct CompetitionRoomView: View {
             onPurchase: { giftId in Task { await viewModel.purchaseGift(giftId: giftId) } }
         )
         .task { await viewModel.loadGiftCatalog(); await viewModel.loadInventory() }
+        .onDisappear { giftTargetCandidateId = nil }
     }
 
-    // MARK: - Classement des donateurs
+    // MARK: - Classement : candidats + donateurs (onglets, parité `CompetitionRoomScreen.kt:1654-1739`)
 
     private var leaderboardSheet: some View {
         VStack(alignment: .leading, spacing: theme.spacing.md) {
-            Text("🏆 \(s.donors)").font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+            Text("🏆 \(s.ranking)").font(DMFont.pageTitle).foregroundStyle(theme.colors.foreground)
+            HStack(spacing: theme.spacing.sm) {
+                DMButton(s.ranking, style: showDonorsTab ? .outline : .primary) { showDonorsTab = false }
+                    .frame(maxWidth: .infinity)
+                DMButton(s.donors, style: showDonorsTab ? .primary : .outline) { showDonorsTab = true }
+                    .frame(maxWidth: .infinity)
+            }
+            if showDonorsTab {
+                donorsList
+            } else {
+                candidatesList
+            }
+        }
+        .padding(theme.spacing.lg)
+        .presentationDetents([.medium, .large])
+        .dmScreenBackground()
+    }
+
+    private var donorsList: some View {
+        Group {
             if viewModel.leaderboard.isEmpty {
                 Text(s.emptyRanking).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
             } else {
@@ -1969,25 +2097,70 @@ public struct CompetitionRoomView: View {
                 }
             }
         }
-        .padding(theme.spacing.lg)
-        .presentationDetents([.medium])
-        .dmScreenBackground()
+    }
+
+    /// Onglet compétiteurs : rang, score, actions manager — inclut le bannissement (bouton 🚫,
+    /// miroir `CompetitionRoomScreen.kt:2357-2358`, absent avant cette refonte).
+    private var candidatesList: some View {
+        Group {
+            if viewModel.candidates.isEmpty {
+                Text(s.noCandidatesHint).font(DMFont.caption).foregroundStyle(theme.colors.mutedForeground)
+            } else {
+                ScrollView {
+                    VStack(spacing: theme.spacing.sm) {
+                        ForEach(Array(viewModel.candidates.enumerated()), id: \.element.id) { index, candidate in
+                            CandidateRow(
+                                rank: index + 1,
+                                candidate: candidate,
+                                voteCredits: voteCredits,
+                                isManager: viewModel.isManager,
+                                isMuted: viewModel.mutedArtists.contains(candidate.artistId),
+                                isPerforming: viewModel.performer.performerId == candidate.artistId,
+                                onVote: { Task { await viewModel.vote(candidateId: candidate.id, credits: voteCredits) } },
+                                onGift: {
+                                    giftTargetCandidateId = candidate.id
+                                    showLeaderboardSheet = false
+                                    // Laisse la feuille de classement se fermer avant d'en présenter
+                                    // une autre — deux `.sheet` système ne peuvent pas coexister.
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showGiftSheet = true }
+                                },
+                                onApprove: { Task { await viewModel.reviewCandidate(candidateId: candidate.id, approve: true) } },
+                                onReject: { Task { await viewModel.reviewCandidate(candidateId: candidate.id, approve: false) } },
+                                onToggleMute: { viewModel.toggleMuteArtist(candidate.artistId) },
+                                onTogglePerformer: {
+                                    Task { await viewModel.setPerformer(candidateId: viewModel.performer.performerId == candidate.artistId ? nil : candidate.artistId, durationSeconds: 120) }
+                                },
+                                onJuryVotes: { votes in Task { await viewModel.setJuryVotes(candidateId: candidate.id, juryVotes: votes) } },
+                                onBan: { Task { await viewModel.banUser(userId: candidate.artistId, reason: "Banni par l'organisateur") } },
+                                onOpenArtist: { onOpenArtist(candidate.artistId) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Célébration du vainqueur
 
-    private func winnerCelebration(_ winner: CompetitionWinner) -> some View {
+    /// - Parameter showStopButton: `false` pour la célébration FINALE (compétition clôturée, pas
+    ///   d'annonce à arrêter) — `true` (défaut) pour l'annonce manuelle du manager en cours de
+    ///   compétition, qui reste arrêtable (miroir `CompetitionRoomScreen.kt:2161-2166`).
+    private func winnerCelebration(_ winner: CompetitionWinner, showStopButton: Bool = true) -> some View {
         ZStack {
             Color.black.opacity(0.6).ignoresSafeArea()
-            VStack(spacing: theme.spacing.md) {
-                Text(s.winnerTitle).font(.system(size: 40))
-                Text(winner.name).font(DMFont.pageTitle).bold().foregroundStyle(.white)
-                Text("\(winner.votes) · \(winner.percent)%")
-                    .font(DMFont.body)
-                    .foregroundStyle(.white.opacity(0.85))
-                if viewModel.isManager {
+            WinnerCelebration(
+                winnerName: winner.name,
+                title: s.winnerTitle,
+                avatarURL: winner.avatar,
+                subtitle: "\(winner.votes) · \(winner.percent)%"
+            )
+            if showStopButton, viewModel.isManager {
+                VStack {
+                    Spacer()
                     DMButton(s.stopAction) { viewModel.stopWinnerAnnouncement() }
                         .frame(maxWidth: 220)
+                        .padding(.bottom, theme.spacing.xl)
                 }
             }
         }
@@ -2021,6 +2194,9 @@ private struct CompetitionGiftSendSheet: View {
     let managerName: String?
     let inventory: [InventoryItem]
     let catalog: [VirtualGift]
+    /// Candidat présélectionné par le picker qui précède cette feuille (``CompetitionRoomView``'s
+    /// `showGiftPicker`) — repli sur le premier candidat si absent.
+    let presetCandidateId: String?
     let onSendToCandidate: (String, String, Int) -> Void
     let onSendToManager: (String, Int) -> Void
     let onPurchase: (String) -> Void
@@ -2093,7 +2269,7 @@ private struct CompetitionGiftSendSheet: View {
         .padding(theme.spacing.lg)
         .presentationDetents([.large])
         .dmScreenBackground()
-        .onAppear { if targetCandidateId == nil && !targetIsManager { targetCandidateId = candidates.first?.id } }
+        .onAppear { if targetCandidateId == nil && !targetIsManager { targetCandidateId = presetCandidateId ?? candidates.first?.id } }
     }
 
     private func pill(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -2127,6 +2303,9 @@ private struct CandidateRow: View {
     let onToggleMute: () -> Void
     let onTogglePerformer: () -> Void
     let onJuryVotes: (Int) -> Void
+    /// Bannit ce candidat (arrête sa diffusion pour tous, ne peut plus rejoindre) — miroir
+    /// `CompetitionRoomScreen.kt:2357-2358`, sans confirmation (comme Android).
+    let onBan: () -> Void
     let onOpenArtist: () -> Void
 
     @State private var juryText = ""
@@ -2173,6 +2352,12 @@ private struct CandidateRow: View {
                                     .foregroundStyle(isMuted ? theme.colors.destructive : theme.colors.mutedForeground)
                             }
                             .buttonStyle(.plain)
+                            Button(action: onBan) {
+                                Image(systemName: "nosign")
+                                    .foregroundStyle(theme.colors.destructive)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(Text(s.banAction))
                             Spacer()
                             TextField("Jury", text: $juryText)
                                 .textFieldStyle(.roundedBorder)

@@ -769,19 +769,23 @@ public struct DuelRoomView: View {
     // MARK: - Célébration du vainqueur
 
     /// Plein écran, persistante pour tous jusqu'à ce que le manager l'arrête (n'arrête pas
-    /// le direct).
+    /// le direct). Miroir de `WinnerCelebration` Android (confetti + lueur + carte dorée) —
+    /// remplace l'ancien texte simple.
     private func winnerCelebration(_ winner: DuelWinner) -> some View {
         ZStack {
             Color.black.opacity(0.6).ignoresSafeArea()
-            VStack(spacing: theme.spacing.md) {
-                Text(s.winnerTitle).font(.system(size: 40))
-                Text(winner.name).font(DMFont.pageTitle).bold().foregroundStyle(.white)
-                Text("\(winner.votes) · \(winner.percent)%")
-                    .font(DMFont.body)
-                    .foregroundStyle(.white.opacity(0.85))
-                if viewModel.isManager {
+            WinnerCelebration(
+                winnerName: winner.name,
+                title: s.winnerTitle,
+                avatarURL: winner.avatar,
+                subtitle: "\(winner.votes) · \(winner.percent)%"
+            )
+            if viewModel.isManager {
+                VStack {
+                    Spacer()
                     DMButton(s.stopAction) { viewModel.stopWinnerAnnouncement() }
                         .frame(maxWidth: 220)
+                        .padding(.bottom, theme.spacing.xl)
                 }
             }
         }
