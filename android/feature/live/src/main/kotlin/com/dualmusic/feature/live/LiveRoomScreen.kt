@@ -145,23 +145,25 @@ fun LiveRoomScreen(
     artistName: String? = null,
     onOpenArtist: (String) -> Unit = {},
 ) {
+    val error by viewModel.error.collectAsStateWithLifecycle()
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val viewerCount by viewModel.viewerCount.collectAsStateWithLifecycle()
-    // Ma diffusion : room principale si je suis l'hôte, ma room d'invité dédiée sinon (parité
-    // web — voir LiveViewModel.selfMedia/guestMedia). Piloté depuis CE client, jamais `media`
-    // pour un invité (qui reste connecté à `media` en simple spectateur pendant qu'il diffuse).
-    val selfMedia = if (isHost) viewModel.media else viewModel.guestMedia
-    val remoteTrack by viewModel.media.primaryVideoTrack.collectAsStateWithLifecycle()
+    // Room UNIQUE : hôte, invités et spectateurs partagent `viewModel.media`. Ma diffusion (hôte
+    // ou invité monté sur scène) passe par ce même client.
+    val selfMedia = viewModel.media
+    // Piste de l'ARTISTE (par userId — les invités publient dans la même room, ils ne doivent
+    // jamais prendre sa place en grand par défaut).
+    val remoteTrack by viewModel.hostVideoTrack.collectAsStateWithLifecycle()
     val localTrack by selfMedia.localVideoTrack.collectAsStateWithLifecycle()
     val micOn by selfMedia.micEnabled.collectAsStateWithLifecycle()
     val camOn by selfMedia.camEnabled.collectAsStateWithLifecycle()
     val activeFilter by selfMedia.activeFilter.collectAsStateWithLifecycle()
     val backgroundMode by selfMedia.backgroundMode.collectAsStateWithLifecycle()
-    // Pistes des AUTRES invités actifs (chacun dans sa propre room `live-guest-<liveId>-<id>`) —
-    // valeur `null` = invité présent mais caméra coupée (case gardée en placeholder, jamais retirée).
+    // Pistes des AUTRES invités actifs — valeur `null` = invité présent mais caméra coupée (case
+    // gardée en placeholder, jamais retirée).
     val guestVideos by viewModel.guestVideos.collectAsStateWithLifecycle()
-    // Client LiveKit par invité (room de rendu dédiée + état micro distant pour le badge).
-    val guestClients by viewModel.guestClients.collectAsStateWithLifecycle()
+    // État micro de chaque participant distant (badge des cases), par userId.
+    val guestMicOn by viewModel.guestMicOn.collectAsStateWithLifecycle()
     // Mon id (invité) — pour afficher le chrono sur MA PROPRE case (self-preview) quand je suis
     // l'invité minuté, exactement comme tout le monde le voit sur la case des autres.
     val myUserId by viewModel.myUserIdFlow.collectAsStateWithLifecycle()
@@ -292,8 +294,10 @@ fun LiveRoomScreen(
     }
 
     // Pistes "brutes" (hôte + ma propre diffusion) — les invités sont gérés séparément ci-dessous
-    // (case toujours présente, même caméra coupée, avec nom + badges + chrono).
-    val allTracks = remoteVideos + listOfNotNull(if (broadcasting) localTrack else null)
+    // (case toujours présente, même caméra coupée, avec nom + badges + chrono). Room unique : les
+    // pistes des invités sont AUSSI dans `remoteVideos` → on ne prend ici que celle de l'hôte,
+    // sinon chaque invité apparaîtrait deux fois (case brute + case invité).
+    val allTracks = listOfNotNull(remoteTrack) + listOfNotNull(if (broadcasting) localTrack else null)
     // Invité actuellement agrandi (s'il l'est toujours), pour résoudre la case principale.
     val focusedGuest = focusedGuestId?.let { gid -> acceptedGuests.find { it.userId == gid } }
     // Case principale : invité épinglé > focus choisi au tap (s'il est encore publié) > défaut
@@ -325,11 +329,23 @@ fun LiveRoomScreen(
     val showSelfPreview = broadcasting && track !== localTrack
     val thumbEntries: List<LiveThumbEntry> =
         plainThumbs.map { LiveThumbEntry.Plain(it) } +
-            guestThumbs.map { g -> LiveThumbEntry.Guest(g.userId, g.displayName, g.user?.avatarUrl, guestVideos[g.userId], guestClients[g.userId]) } +
+            guestThumbs.map { g -> LiveThumbEntry.Guest(g.userId, g.displayName, g.user?.avatarUrl, guestVideos[g.userId], guestMicOn[g.userId] == true) } +
             (if (showSelfPreview) listOf(LiveThumbEntry.SelfPreview) else emptyList())
     val thumbs = thumbEntries
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        // Popup moderne pour les échecs d'action en direct (parité compétition/duel/concert).
+        // `Dialog()` flotte dans sa propre fenêtre système, peu importe sa position dans l'arbre.
+        error?.let { message ->
+            com.dualmusic.core.ui.components.DMErrorDialog(
+                message = message,
+                onDismiss = { viewModel.clearError() },
+                onRetry = if (message.startsWith("Impossible de démarrer la diffusion")) {
+                    { viewModel.startBroadcast() }
+                } else null,
+            )
+        }
+
         // Écran de permission (hôte).
         if (isHost && !granted) {
             Column(
@@ -348,7 +364,8 @@ fun LiveRoomScreen(
         if (focusedGuest != null) {
             GuestTileContent(
                 track = track,
-                client = guestClients[focusedGuest.userId],
+                room = viewModel.media.room,
+                micOn = guestMicOn[focusedGuest.userId] == true,
                 label = focusedGuest.displayName,
                 avatarUrl = focusedGuest.user?.avatarUrl,
                 showBadge = false,
@@ -517,8 +534,11 @@ fun LiveRoomScreen(
             val maxThumbs = 3
             val visible = thumbs.take(maxThumbs)
             val overflow = thumbs.size - visible.size
+            // La barre d'emojis (togglée) s'insère au-dessus de la barre d'action et venait
+            // recouvrir la vignette du bas : on remonte la pile d'autant quand elle est ouverte.
+            val thumbsBottom = 84.dp + if (showReactionBar) 48.dp else 0.dp
             Column(
-                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 8.dp, bottom = 84.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 8.dp, bottom = thumbsBottom),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 visible.forEach { entry ->
@@ -544,13 +564,14 @@ fun LiveRoomScreen(
                                     // purement et simplement (caméra fermée par défaut à l'entrée en scène).
                                     GuestTileContent(
                                         track = localTrack,
-                                        client = selfMedia,
+                                        room = viewModel.media.room,
+                                        // MON état micro, connu localement.
+                                        micOn = micOn,
                                         // Affiché pour TOUT LE MONDE (hôte compris, voir `showSelfPreview`)
                                         // dès qu'on ne regarde pas sa propre caméra → pas besoin de mon
                                         // propre avatar, "Vous" suffit à s'identifier.
                                         label = "Vous",
                                         avatarUrl = null,
-                                        micOnOverride = micOn,
                                         modifier = Modifier.fillMaxSize(),
                                     )
                                     myUserId?.let { uid ->
@@ -569,7 +590,8 @@ fun LiveRoomScreen(
                                 ) {
                                     GuestTileContent(
                                         track = entry.track,
-                                        client = entry.client,
+                                        room = viewModel.media.room,
+                                        micOn = entry.micOn,
                                         label = entry.label,
                                         avatarUrl = entry.avatarUrl,
                                         modifier = Modifier.fillMaxSize(),
@@ -1599,7 +1621,7 @@ private fun GuestChronoChip(remainingSec: Int, modifier: Modifier = Modifier) {
  * badges micro/caméra, gardé même caméra coupée — parité duel `SlotTile`/`SlotContent`). */
 private sealed class LiveThumbEntry {
     data class Plain(val track: VideoTrack) : LiveThumbEntry()
-    data class Guest(val userId: String, val label: String, val avatarUrl: String?, val track: VideoTrack?, val client: LiveRoomClient?) : LiveThumbEntry()
+    data class Guest(val userId: String, val label: String, val avatarUrl: String?, val track: VideoTrack?, val micOn: Boolean) : LiveThumbEntry()
     // Mon PROPRE aperçu (invité en train de diffuser) : toujours affiché tant que je suis sur
     // scène, même caméra coupée (placeholder) — état lu directement à l'usage (micOn/camOn/etc.
     // déjà collectés plus haut dans le composable), pas besoin de porter des champs ici.
@@ -1614,21 +1636,18 @@ private sealed class LiveThumbEntry {
 @Composable
 private fun GuestTileContent(
     track: VideoTrack?,
-    client: LiveRoomClient?,
+    /** Room unique dont provient la piste (rendu). */
+    room: io.livekit.android.room.Room,
+    /** État micro de ce participant (badge) — par userId côté ViewModel, ou le mien pour ma case. */
+    micOn: Boolean,
     label: String,
     avatarUrl: String?,
     modifier: Modifier = Modifier,
     showBadge: Boolean = true,
-    // Pour MA PROPRE case (self-preview) : `client.remoteMicOn` lirait le micro d'un AUTRE
-    // participant distant (faux pour ma propre room, où je suis le seul publieur) — on force
-    // alors l'état déjà connu localement (`selfMedia.micEnabled`) au lieu de le déduire du client.
-    micOnOverride: Boolean? = null,
 ) {
-    val colors = DualMusicTheme.colors  
-    val micOn = micOnOverride ?: if (client != null) client.remoteMicOn.collectAsStateWithLifecycle().value else false
-    val room = client?.room
+    val colors = DualMusicTheme.colors
     Box(modifier = modifier.background(Color(0xFF241338))) {
-        if (track != null && room != null) {
+        if (track != null) {
             androidx.compose.runtime.key(track) { LiveVideoView(track = track, room = room, modifier = Modifier.fillMaxSize()) }
         } else {
             Column(

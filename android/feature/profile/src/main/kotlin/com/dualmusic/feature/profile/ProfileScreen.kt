@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -100,6 +101,7 @@ fun ProfileScreen(viewModel: EditProfileViewModel, onOpenMenu: () -> Unit) {
             .fillMaxSize()
             .background(DualMusicTheme.gradients.hero)
             .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -146,6 +148,7 @@ fun ProfileScreen(viewModel: EditProfileViewModel, onOpenMenu: () -> Unit) {
             DMButton(
                 if (ui.uploading) strings.uploading else strings.changePhoto,
                 style = DMButtonStyle.SECONDARY,
+                enabled = !ui.uploading,
                 onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
             )
         }

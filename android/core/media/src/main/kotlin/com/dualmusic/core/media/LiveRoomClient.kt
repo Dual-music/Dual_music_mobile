@@ -5,8 +5,10 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.lifecycle.ProcessLifecycleOwner
+import io.livekit.android.AudioOptions
 import io.livekit.android.LiveKit
 import io.livekit.android.LiveKitOverrides
+import io.livekit.android.events.DisconnectReason
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
 import io.livekit.android.room.Room
@@ -59,8 +61,19 @@ class LiveRoomClient(
     private val ownsEgl: Boolean = sharedEglBase == null
     private val eglBase: EglBase = sharedEglBase ?: EglBase.create()
 
-    /** Room LiveKit sous-jacente (créée avec notre EglBase pour le processor vidéo). */
-    val room: Room = LiveKit.create(appContext, overrides = LiveKitOverrides(eglBase = eglBase))
+    /**
+     * Room LiveKit sous-jacente (créée avec notre EglBase pour le processor vidéo).
+     * Routage audio PARTAGÉ entre toutes les rooms (voir [SharedAudioRouting]) : la fermeture
+     * d'une room d'invité ne doit plus « restaurer » l'audio du téléphone pendant que les autres
+     * rooms jouent encore.
+     */
+    val room: Room = LiveKit.create(
+        appContext,
+        overrides = LiveKitOverrides(
+            eglBase = eglBase,
+            audioOptions = AudioOptions(audioHandler = SharedAudioRouting.forRoom(appContext)),
+        ),
+    )
 
     private val _connectionState = MutableStateFlow<LiveConnectionState>(LiveConnectionState.Idle)
     val connectionState: StateFlow<LiveConnectionState> = _connectionState.asStateFlow()
@@ -80,9 +93,13 @@ class LiveRoomClient(
     private val _remoteTiles = MutableStateFlow<List<Pair<String, VideoTrack>>>(emptyList())
     val remoteTiles: StateFlow<List<Pair<String, VideoTrack>>> = _remoteTiles.asStateFlow()
 
-    /** Micro du 1er participant distant activé (piste audio publiée et non coupée) — indicateur UI. */
+    /** Au moins un participant distant a le micro ouvert (piste audio publiée et non coupée) — indicateur UI. */
     private val _remoteMicOn = MutableStateFlow(false)
     val remoteMicOn: StateFlow<Boolean> = _remoteMicOn.asStateFlow()
+
+    /** État micro de CHAQUE participant distant, par `userId` (room unique : hôte + invités). */
+    private val _remoteMicByUser = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val remoteMicByUser: StateFlow<Map<String, Boolean>> = _remoteMicByUser.asStateFlow()
 
     /** Piste vidéo LOCALE (aperçu de l'hôte quand il diffuse). `null` en mode viewer. */
     private val _localVideoTrack = MutableStateFlow<VideoTrack?>(null)
@@ -123,9 +140,21 @@ class LiveRoomClient(
      */
     private var eventsJob: kotlinx.coroutines.Job? = null
 
+    /** Paramètres du dernier [join] — pour rejoindre automatiquement après une coupure. */
+    private data class JoinParams(val roomName: String, val isHost: Boolean, val canPublish: Boolean)
+    private var lastJoin: JoinParams? = null
+    /** Vrai entre [leave] et le prochain [join] : aucune reconnexion automatique. */
+    @Volatile private var intentionalLeave = false
+    private var reconnectJob: kotlinx.coroutines.Job? = null
+    private var reconnectAttempt = 0
+    /** Vrai pendant que CETTE room publie micro/caméra (service de premier plan actif). */
+    private var broadcasting = false
+
     /**
      * Rejoint une room : récupère un jeton (ou utilise un jeton pré-chauffé) puis se
-     * connecte au SFU.
+     * connecte au SFU. En cas d'échec ou de coupure non définitive, rejoint automatiquement
+     * (backoff progressif) — avant, un `Disconnected` laissait la room morte sans recours :
+     * spectateur sans son, ou invité qui n'entendait plus UN participant précis.
      */
     suspend fun join(
         roomName: String,
@@ -133,7 +162,10 @@ class LiveRoomClient(
         prewarmedToken: com.dualmusic.domain.media.LiveKitToken? = null,
         canPublish: Boolean = false,
     ) {
-        _connectionState.value = LiveConnectionState.Connecting
+        intentionalLeave = false
+        lastJoin = JoinParams(roomName, isHost, canPublish)
+        reconnectJob?.cancel()
+        _connectionState.value = if (reconnectAttempt > 0) LiveConnectionState.Reconnecting else LiveConnectionState.Connecting
         try {
             // Un seul collecteur `room.events` actif à la fois : un client qui quitte puis rejoint
             // (invité montant/descendant de scène) ne doit PAS empiler des collecteurs successifs.
@@ -151,7 +183,10 @@ class LiveRoomClient(
                         is RoomEvent.ParticipantDisconnected -> refreshPrimaryTrack()
                         is RoomEvent.Reconnecting -> _connectionState.value = LiveConnectionState.Reconnecting
                         is RoomEvent.Reconnected -> _connectionState.value = LiveConnectionState.Connected
-                        is RoomEvent.Disconnected -> _connectionState.value = LiveConnectionState.Idle
+                        is RoomEvent.Disconnected -> {
+                            _connectionState.value = LiveConnectionState.Idle
+                            scheduleReconnect(event.reason)
+                        }
                         else -> Unit
                     }
                 }
@@ -159,12 +194,70 @@ class LiveRoomClient(
 
             val creds = prewarmedToken ?: tokenService.token(roomName = roomName, isHost = isHost, canPublish = canPublish)
             room.connect(creds.url, creds.token)
+            reconnectAttempt = 0
             _connectionState.value = LiveConnectionState.Connected
             // La publication caméra/micro (hôte) est déclenchée par l'UI via [startBroadcast].
             refreshPrimaryTrack()
         } catch (e: Throwable) {
             _connectionState.value = LiveConnectionState.Failed(e.message ?: "Connexion impossible")
+            // Jeton pré-chauffé périmé ou réseau instable : on retente avec un jeton frais.
+            scheduleReconnect(null)
         }
+    }
+
+    /**
+     * Programme une reconnexion après une coupure NON définitive. `DUPLICATE_IDENTITY` (connecté
+     * ailleurs), expulsion, room fermée ou départ volontaire → on n'insiste pas.
+     */
+    private fun scheduleReconnect(reason: DisconnectReason?) {
+        if (intentionalLeave) return
+        val params = lastJoin ?: return
+        if (reason != null && reason in FINAL_DISCONNECT_REASONS) {
+            if (reason != DisconnectReason.CLIENT_INITIATED) {
+                _connectionState.value = LiveConnectionState.Failed("Déconnecté : ${reason.name.lowercase().replace('_', ' ')}")
+            }
+            return
+        }
+        if (reconnectAttempt >= RECONNECT_DELAYS_MS.size) {
+            _connectionState.value = LiveConnectionState.Failed("Connexion au direct perdue")
+            return
+        }
+        val delayMs = RECONNECT_DELAYS_MS[reconnectAttempt]
+        reconnectAttempt += 1
+        _connectionState.value = LiveConnectionState.Reconnecting
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch {
+            kotlinx.coroutines.delay(delayMs)
+            if (intentionalLeave) return@launch
+            val wasBroadcasting = broadcasting
+            join(roomName = params.roomName, isHost = params.isHost, canPublish = params.canPublish)
+            // Une déconnexion complète dépublie nos pistes : on republie si on diffusait, en
+            // conservant les états micro/caméra choisis par l'utilisateur.
+            if (wasBroadcasting && _connectionState.value is LiveConnectionState.Connected) {
+                val mic = _micEnabled.value
+                val cam = _camEnabled.value
+                cameraTrack?.let { runCatching { it.stopCapture() } }
+                cameraTrack = null
+                runCatching { startBroadcast() }
+                runCatching { setMicEnabled(mic) }
+                if (!cam) runCatching { setCamEnabled(false) }
+            }
+        }
+    }
+
+    companion object {
+        /** `userId` porté par une identité LiveKit (`userId` ou `userId#deviceId`). */
+        fun userIdOf(identity: String?): String? = identity?.substringBefore('#')
+
+        private val RECONNECT_DELAYS_MS = longArrayOf(1500, 3000, 6000, 10000, 15000, 30000)
+        private val FINAL_DISCONNECT_REASONS = setOf(
+            DisconnectReason.CLIENT_INITIATED,
+            DisconnectReason.DUPLICATE_IDENTITY,
+            DisconnectReason.PARTICIPANT_REMOVED,
+            DisconnectReason.ROOM_DELETED,
+            DisconnectReason.ROOM_CLOSED,
+            DisconnectReason.USER_REJECTED,
+        )
     }
 
     /**
@@ -200,6 +293,12 @@ class LiveRoomClient(
      * processor (flou désactivé au départ). Rafraîchit l'aperçu local.
      */
     suspend fun startBroadcast() {
+        // Service de premier plan « micro/caméra » : sans lui, Android coupe le micro dès que
+        // l'app passe en arrière-plan (l'orateur entend tout le monde, personne ne l'entend).
+        if (!broadcasting) {
+            broadcasting = true
+            LiveBroadcastService.acquire(appContext)
+        }
         room.localParticipant.setMicrophoneEnabled(true)
         _micEnabled.value = true
         ensureProcessor()
@@ -221,8 +320,40 @@ class LiveRoomClient(
         }
     }
 
-    /** Quitte la room + libère la caméra / le processor. */
+    /** Vrai si le jeton courant (ou une mise à jour à chaud du SFU) autorise la publication. */
+    fun hasPublishPermission(): Boolean = room.localParticipant.permissions?.canPublish == true
+
+    /**
+     * Arrête de PUBLIER (micro + caméra) SANS quitter la room : un invité qui descend de scène
+     * (ou est retiré) redevient simple spectateur dans la même room unique et continue de
+     * voir/entendre tout le monde. Libère la caméra et le service de premier plan.
+     */
+    suspend fun stopBroadcast() {
+        runCatching { room.localParticipant.setMicrophoneEnabled(false) }
+        _micEnabled.value = false
+        cameraTrack?.let { t ->
+            runCatching { room.localParticipant.unpublishTrack(t) }
+            runCatching { t.stopCapture() }
+        }
+        cameraTrack = null
+        _localVideoTrack.value = null
+        _camEnabled.value = false
+        if (broadcasting) {
+            broadcasting = false
+            LiveBroadcastService.release(appContext)
+        }
+    }
+
+    /** Quitte la room + libère la caméra / le processor. Aucune reconnexion automatique ensuite. */
     fun leave() {
+        intentionalLeave = true
+        reconnectJob?.cancel()
+        reconnectJob = null
+        reconnectAttempt = 0
+        if (broadcasting) {
+            broadcasting = false
+            LiveBroadcastService.release(appContext)
+        }
         room.disconnect()
         cameraTrack?.let { runCatching { it.stopCapture() } }
         cameraTrack = null
@@ -334,13 +465,18 @@ class LiveRoomClient(
         _blurEnabled.value = false
     }
 
-    /** Identité LiveKit locale (= userId) — pour épingler sa propre caméra (focus imposé). */
-    fun localIdentity(): String? = room.localParticipant.identity?.value
+    /**
+     * Identité locale ramenée au `userId` — pour épingler sa propre caméra (focus imposé).
+     * L'identité LiveKit brute est `userId#deviceId` (voir `LiveKitTokenRequest.deviceId`) ; on
+     * expose partout le `userId` seul pour que les comparaisons avec les ids métier (candidats,
+     * bannis, focus imposé) restent valables.
+     */
+    fun localIdentity(): String? = userIdOf(room.localParticipant.identity?.value)
 
-    /** Rafraîchit la liste des pistes distantes (+ identité) + la piste primaire (première = hôte). */
+    /** Rafraîchit la liste des pistes distantes (+ userId) + la piste primaire (première = hôte). */
     private fun refreshPrimaryTrack() {
         val tiles = room.remoteParticipants.values.flatMap { p ->
-            val id = p.identity?.value ?: ""
+            val id = userIdOf(p.identity?.value) ?: ""
             // On EXCLUT les pistes vidéo MUTÉES (caméra coupée) → la case redevient placeholder au
             // lieu de figer la dernière image. TrackMuted/Unmuted déclenche ce refresh.
             p.videoTrackPublications
@@ -351,9 +487,14 @@ class LiveRoomClient(
         val videos = tiles.map { it.second }
         _remoteVideos.value = videos
         _primaryVideoTrack.value = videos.firstOrNull()
-        // Micro du 1er distant : une piste audio publiée et NON coupée.
-        _remoteMicOn.value = room.remoteParticipants.values.firstOrNull()
-            ?.audioTrackPublications?.any { !it.first.muted } ?: false
+        // Micro distant : AU MOINS un participant distant publie une piste audio non coupée.
+        // (Avant : `firstOrNull()` — dans une room d'invité, le « premier » distant est souvent un
+        // simple spectateur sans piste → badge « muet » alors que l'invité parlait.)
+        val micByUser = room.remoteParticipants.values
+            .mapNotNull { p -> userIdOf(p.identity?.value)?.let { it to p.audioTrackPublications.any { pub -> !pub.first.muted } } }
+            .toMap()
+        _remoteMicByUser.value = micByUser
+        _remoteMicOn.value = micByUser.values.any { it }
     }
 
     /** Piste vidéo locale = caméra publiée par l'hôte (aperçu). */

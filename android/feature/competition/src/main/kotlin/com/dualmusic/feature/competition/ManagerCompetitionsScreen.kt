@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -24,7 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.ui.draw.clip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -103,8 +106,9 @@ class ManagerCompetitionsViewModel(
             val myId = repository.myUserId()
             runCatching { repository.myCompetitions() }
                 .onSuccess { comps -> _ui.update { it.copy(myId = myId, competitions = comps, message = null) } }
-                // DIAGNOSTIC : on affiche la vraie cause (au lieu de masquer par une liste vide).
-                .onFailure { e -> _ui.update { it.copy(myId = myId, message = "⚠️ ${e::class.simpleName}: ${(e.message ?: "").take(200)}") } }
+                // On affiche la vraie cause (au lieu de masquer par une liste vide) sans exposer
+                // le nom de classe Kotlin de l'exception — un détail technique, pas un message utile.
+                .onFailure { e -> _ui.update { it.copy(myId = myId, message = friendlyLoadError(e)) } }
             _ui.update { it.copy(manualCandidatesEnabled = repository.manualCandidatesEnabled()) }
         }
     }
@@ -123,10 +127,34 @@ class ManagerCompetitionsViewModel(
         }
     }
 
-    /** Valide/rejette un candidat puis recharge les candidats. */
-    fun reviewCandidate(competitionId: String, candidateId: String, approve: Boolean) {
+    /** Valide/rejette un candidat (motif optionnel au rejet) puis recharge les candidats. */
+    fun reviewCandidate(
+        competitionId: String,
+        candidateId: String,
+        approve: Boolean,
+        rejectionReason: String? = null,
+        onResult: (Throwable?) -> Unit = {},
+    ) {
         viewModelScope.launch {
-            runCatching { repository.reviewCandidate(candidateId, approve) }.onSuccess { loadCandidates(competitionId) }
+            runCatching { repository.reviewCandidate(candidateId, approve, rejectionReason) }
+                .onSuccess { loadCandidates(competitionId); onResult(null) }
+                .onFailure { onResult(it) }
+        }
+    }
+
+    /**
+     * Retire un candidat (déjà approuvé, typiquement) puis recharge les candidats. Le résultat
+     * indique si un remboursement a réellement eu lieu (voir [CompetitionRepository.removeCandidate]).
+     */
+    fun removeCandidate(
+        competitionId: String,
+        candidateId: String,
+        onResult: (com.dualmusic.domain.competition.RemoveCandidateResult?, Throwable?) -> Unit,
+    ) {
+        viewModelScope.launch {
+            runCatching { repository.removeCandidate(candidateId) }
+                .onSuccess { result -> loadCandidates(competitionId); onResult(result, null) }
+                .onFailure { onResult(null, it) }
         }
     }
 
@@ -189,14 +217,21 @@ class ManagerCompetitionsViewModel(
     }
 
     /** Traduit une erreur technique en message clair pour l'utilisateur (sans exception brute). */
-    private fun friendlyCreateError(t: Throwable): String {
+    private fun friendlyCreateError(t: Throwable) =
+        friendlyError(t, com.dualmusic.core.ui.i18n.appStrings.competitionCreateFailed)
+
+    private fun friendlyLoadError(t: Throwable) =
+        friendlyError(t, com.dualmusic.core.ui.i18n.appStrings.competitionsLoadFailed)
+
+    /** Traduit une [DomainError] en message court, adapté au contexte via [fallback]. */
+    private fun friendlyError(t: Throwable, fallback: String): String {
         val s = com.dualmusic.core.ui.i18n.appStrings
         val de = t as? com.dualmusic.domain.api.DomainError ?: return s.networkSlow
         return when {
             de.code == "VALIDATION_ERROR" -> s.competitionCheckFields
             // Message serveur court et lisible → on l'affiche tel quel (diagnostic utile).
             de.message.isNotBlank() && de.message.length <= 140 -> de.message
-            else -> s.competitionCreateFailed
+            else -> fallback
         }
     }
 }
@@ -242,6 +277,7 @@ fun ManagerCompetitionsScreen(viewModel: ManagerCompetitionsViewModel) {
             .fillMaxSize()
             .background(DualMusicTheme.gradients.hero)
             .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(DualMusicTheme.spacing.md),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
@@ -374,9 +410,44 @@ private fun CompetitionDetailScreen(
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val candidates by viewModel.candidates.collectAsStateWithLifecycle()
     var addCandidateOpen by remember { mutableStateOf(false) }
+    // Revue des candidatures : dialog de détail (pitch + démo vidéo), retrait avec confirmation.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var detailCandidateId by remember { mutableStateOf<String?>(null) }
+    var confirmRemoveId by remember { mutableStateOf<String?>(null) }
+    var busyCandidateId by remember { mutableStateOf<String?>(null) }
+
+    fun showToast(message: String) {
+        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    fun doRemoveCandidate(candidateId: String) {
+        busyCandidateId = candidateId
+        viewModel.removeCandidate(competition.id, candidateId) { result, err ->
+            busyCandidateId = null
+            if (err != null) {
+                showToast(err.message ?: s.networkSlow)
+            } else {
+                showToast(if (result?.refunded == true) s.compRemovedRefunded else s.compRemovedNoRefund)
+                if (detailCandidateId == candidateId) detailCandidateId = null
+            }
+        }
+    }
+
+    fun doReviewCandidate(candidateId: String, approve: Boolean, rejectionReason: String?) {
+        busyCandidateId = candidateId
+        viewModel.reviewCandidate(competition.id, candidateId, approve, rejectionReason) { err ->
+            busyCandidateId = null
+            if (err != null) {
+                showToast(err.message ?: s.networkSlow)
+            } else {
+                showToast(s.compReviewedSuccess)
+                detailCandidateId = null
+            }
+        }
+    }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(DualMusicTheme.gradients.hero).verticalScroll(rememberScrollState()).padding(DualMusicTheme.spacing.md),
+        modifier = Modifier.fillMaxSize().background(DualMusicTheme.gradients.hero).verticalScroll(rememberScrollState()).imePadding().padding(DualMusicTheme.spacing.md),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
         DMButton("← ${s.back}", style = DMButtonStyle.OUTLINE, onClick = onBack)
@@ -426,20 +497,13 @@ private fun CompetitionDetailScreen(
             Text(s.noCandidates, color = colors.mutedForeground)
         } else {
             candidates.forEach { c ->
-                DMCard(modifier = Modifier.fillMaxWidth()) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(c.artist?.displayName ?: s.artistSingular, color = colors.foreground, fontWeight = FontWeight.Bold)
-                            Text("${c.score.toInt()} pts · ${c.status}", color = colors.mutedForeground, fontSize = 12.sp)
-                        }
-                        if (isManager && c.status == "pending") {
-                            Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
-                                DMButton(s.approveAction, onClick = { viewModel.reviewCandidate(competition.id, c.id, true) })
-                                DMButton(s.rejectAction, style = DMButtonStyle.OUTLINE, onClick = { viewModel.reviewCandidate(competition.id, c.id, false) })
-                            }
-                        }
-                    }
-                }
+                CandidateReviewRow(
+                    candidate = c,
+                    isManager = isManager,
+                    busy = busyCandidateId == c.id,
+                    onViewDetail = { detailCandidateId = c.id },
+                    onRequestRemove = { confirmRemoveId = c.id },
+                )
             }
         }
     }
@@ -451,6 +515,186 @@ private fun CompetitionDetailScreen(
             onDismiss = { addCandidateOpen = false },
         )
     }
+
+    // Dialog de détail (eye icon) : pitch + démo vidéo + actions approuver/rejeter/retirer.
+    val detailCandidate = candidates.find { it.id == detailCandidateId }
+    if (detailCandidate != null) {
+        CandidateDetailDialog(
+            candidate = detailCandidate,
+            isManager = isManager,
+            busy = busyCandidateId == detailCandidate.id,
+            onApprove = { doReviewCandidate(detailCandidate.id, true, null) },
+            onReject = { reason -> doReviewCandidate(detailCandidate.id, false, reason) },
+            onRequestRemove = { confirmRemoveId = detailCandidate.id },
+            onDismiss = { detailCandidateId = null },
+        )
+    }
+
+    // Confirmation avant retrait (action destructive, avec remboursement éventuel côté serveur).
+    val removeId = confirmRemoveId
+    if (removeId != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmRemoveId = null },
+            title = { Text(s.compRemoveCandidate) },
+            text = { Text(s.compRemoveCandidateConfirm) },
+            confirmButton = {
+                DMButton(s.compRemoveCandidate, style = DMButtonStyle.DESTRUCTIVE, enabled = busyCandidateId != removeId) {
+                    confirmRemoveId = null
+                    doRemoveCandidate(removeId)
+                }
+            },
+            dismissButton = {
+                DMButton(s.compCancel, style = DMButtonStyle.OUTLINE, onClick = { confirmRemoveId = null })
+            },
+        )
+    }
+}
+
+/** Libellé du statut d'un candidat (parité avec [candStatusPending]/`Approved`/`Rejected` de MyCompetitionsScreen). */
+private fun candidateStatusLabel(status: String, s: com.dualmusic.core.ui.i18n.Strings): String = when (status) {
+    "approved" -> s.candStatusApproved
+    "rejected" -> s.candStatusRejected
+    else -> s.candStatusPending
+}
+
+/** Ligne compacte d'un candidat : avatar + nom + statut, œil (détail) et retrait (si approuvé). */
+@Composable
+private fun CandidateReviewRow(
+    candidate: com.dualmusic.domain.competition.CompetitionCandidate,
+    isManager: Boolean,
+    busy: Boolean,
+    onViewDetail: () -> Unit,
+    onRequestRemove: () -> Unit,
+) {
+    val colors = DualMusicTheme.colors
+    val s = LocalStrings.current
+    DMCard(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm), verticalAlignment = Alignment.CenterVertically) {
+            com.dualmusic.core.ui.components.DMRemoteImage(
+                url = candidate.artist?.avatarUrl,
+                contentDescription = null,
+                modifier = Modifier.size(40.dp).clip(CircleShape),
+                fallbackEmoji = "🎤",
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    candidate.artist?.displayName ?: s.artistSingular,
+                    color = colors.foreground,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+                Text("${candidate.score.toInt()} pts · ${candidateStatusLabel(candidate.status, s)}", color = colors.mutedForeground, fontSize = 12.sp)
+            }
+            Icon(
+                Icons.Filled.Visibility,
+                contentDescription = s.compViewDetail,
+                tint = colors.mutedForeground,
+                modifier = Modifier.clickable(onClick = onViewDetail).padding(4.dp),
+            )
+            if (isManager && candidate.status == "approved") {
+                Icon(
+                    Icons.Filled.PersonRemove,
+                    contentDescription = s.compRemoveCandidate,
+                    tint = if (busy) colors.mutedForeground else colors.destructive,
+                    modifier = Modifier.clickable(enabled = !busy, onClick = onRequestRemove).padding(4.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Popup de détail d'un candidat (icône œil) : pitch + démo vidéo (lien cliquable, ouvert dans le
+ * navigateur — pas de lecteur intégré générique pour une URL arbitraire dans ce module), motif de
+ * rejet le cas échéant, puis actions manager (Valider/Rejeter si en attente, Retirer si approuvé).
+ * Parité web `CompetitionCandidateReview` (popup de détail).
+ */
+@Composable
+private fun CandidateDetailDialog(
+    candidate: com.dualmusic.domain.competition.CompetitionCandidate,
+    isManager: Boolean,
+    busy: Boolean,
+    onApprove: () -> Unit,
+    onReject: (String?) -> Unit,
+    onRequestRemove: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val s = LocalStrings.current
+    val colors = DualMusicTheme.colors
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var rejectReason by remember(candidate.id) { mutableStateOf("") }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                com.dualmusic.core.ui.components.DMRemoteImage(
+                    url = candidate.artist?.avatarUrl,
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp).clip(CircleShape),
+                    fallbackEmoji = "🎤",
+                )
+                Text(candidate.artist?.displayName ?: s.artistSingular, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                Text(candidateStatusLabel(candidate.status, s), color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Column {
+                    Text(s.compApplyPitch, color = colors.mutedForeground, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(candidate.pitch?.takeIf { it.isNotBlank() } ?: s.compNoPitch, color = colors.foreground, fontSize = 13.sp)
+                }
+                candidate.videoDemoUrl?.takeIf { it.isNotBlank() }?.let { url ->
+                    Column {
+                        Text(s.compDemoVideo, color = colors.mutedForeground, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "▶ ${s.compOpenDemoLink}",
+                            color = colors.primary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable {
+                                runCatching {
+                                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                                }
+                            },
+                        )
+                    }
+                }
+                val rejectionReason = candidate.rejectionReason
+                if (candidate.status == "rejected" && !rejectionReason.isNullOrBlank()) {
+                    Column {
+                        Text(s.compRejectReasonLabel, color = colors.mutedForeground, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(rejectionReason, color = colors.foreground, fontSize = 13.sp)
+                    }
+                }
+                if (isManager && candidate.status == "pending") {
+                    OutlinedTextField(
+                        value = rejectReason,
+                        onValueChange = { rejectReason = it },
+                        label = { Text(s.compRejectReasonLabel) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
+                        DMButton(s.approveAction, enabled = !busy, onClick = onApprove)
+                        DMButton(
+                            s.rejectAction,
+                            style = DMButtonStyle.OUTLINE,
+                            enabled = !busy,
+                            onClick = { onReject(rejectReason.trim().ifBlank { null }) },
+                        )
+                    }
+                }
+                if (isManager && candidate.status == "approved") {
+                    DMButton(s.compRemoveCandidate, style = DMButtonStyle.OUTLINE, enabled = !busy, onClick = onRequestRemove)
+                }
+            }
+        },
+        confirmButton = {
+            DMButton(s.compCancel, style = DMButtonStyle.OUTLINE, onClick = onDismiss)
+        },
+    )
 }
 
 /**
@@ -635,11 +879,27 @@ private fun CompetitionFormCard(
     var venueAddress by remember(k) { mutableStateOf(initial?.venueAddress ?: "") }
     var venueContact by remember(k) { mutableStateOf(initial?.venueContact ?: "") }
 
+    // Validation locale (avant envoi au serveur) : évite un aller-retour réseau pour des erreurs
+    // évidentes, et permet d'encadrer en rouge précisément le champ fautif au lieu du seul
+    // message générique "Vérifie les informations du formulaire".
+    var titleError by remember(k) { mutableStateOf(false) }
+    var deadlineError by remember(k) { mutableStateOf<String?>(null) }
+    var startError by remember(k) { mutableStateOf<String?>(null) }
+    var endError by remember(k) { mutableStateOf<String?>(null) }
+
     DMCard(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
             Text(if (initial != null) s.compEditTitle else s.compNew, color = colors.foreground, fontWeight = FontWeight.Bold)
 
-            OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text(s.titleLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it; titleError = false },
+                label = { Text(s.titleLabel) },
+                isError = titleError,
+                supportingText = if (titleError) { { Text(s.compTitleRequired, color = colors.destructive) } } else null,
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
             OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text(s.descriptionLabel) }, modifier = Modifier.fillMaxWidth())
             // Image de couverture : upload depuis la galerie OU saisie d'une URL (parité web).
             Text(s.compCover, color = colors.foreground, fontSize = 12.sp)
@@ -741,15 +1001,54 @@ private fun CompetitionFormCard(
             Text("🕒 ${s.compTimezoneHint} $tz", color = colors.accent, fontSize = 12.sp)
             DateTimePickerField(value = applicationOpensAt, onValueChange = { applicationOpensAt = it }, label = "${s.compApplicationOpensAt} ($tz)", modifier = Modifier.fillMaxWidth())
             Text(s.compApplicationOpensAtHint, color = colors.mutedForeground, fontSize = 11.sp)
-            DateTimePickerField(value = applicationDeadline, onValueChange = { applicationDeadline = it }, label = "${s.compApplicationDeadline} ($tz)", modifier = Modifier.fillMaxWidth())
-            DateTimePickerField(value = startAt, onValueChange = { startAt = it }, label = "${s.compStartAtLabel} ($tz)", modifier = Modifier.fillMaxWidth())
-            DateTimePickerField(value = endAt, onValueChange = { endAt = it }, label = "${s.compEndAtLabel} ($tz)", modifier = Modifier.fillMaxWidth())
+            DateTimePickerField(
+                value = applicationDeadline,
+                onValueChange = { applicationDeadline = it; deadlineError = null },
+                label = "${s.compApplicationDeadline} ($tz)",
+                isError = deadlineError != null,
+                errorText = deadlineError,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            DateTimePickerField(
+                value = startAt,
+                onValueChange = { startAt = it; startError = null },
+                label = "${s.compStartAtLabel} ($tz)",
+                isError = startError != null,
+                errorText = startError,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            DateTimePickerField(
+                value = endAt,
+                onValueChange = { endAt = it; endError = null },
+                label = "${s.compEndAtLabel} ($tz)",
+                isError = endError != null,
+                errorText = endError,
+                modifier = Modifier.fillMaxWidth(),
+            )
 
             DMButton(
                 if (creating) s.sending else if (initial != null) s.compEditTitle else s.createCompetitionAction,
-                enabled = !creating,
+                // Ne pas permettre l'envoi tant que la couverture est encore en cours de
+                // téléversement — sinon la compétition serait créée avec l'ancienne image (ou
+                // aucune), l'utilisateur croyant à tort que la nouvelle a été prise en compte.
+                enabled = !creating && !coverUploading,
                 modifier = Modifier.fillMaxWidth().padding(top = DualMusicTheme.spacing.sm),
                 onClick = {
+                    // Comparaison lexicographique valide : format fixe "yyyy-MM-ddTHH:mm".
+                    titleError = title.isBlank()
+                    deadlineError = if (applicationDeadline.isBlank()) s.compDateRequired else null
+                    startError = when {
+                        startAt.isBlank() -> s.compDateRequired
+                        applicationDeadline.isNotBlank() && startAt <= applicationDeadline -> s.compStartAfterDeadline
+                        else -> null
+                    }
+                    endError = when {
+                        endAt.isBlank() -> s.compDateRequired
+                        startAt.isNotBlank() && endAt <= startAt -> s.compEndAfterStart
+                        else -> null
+                    }
+                    if (titleError || deadlineError != null || startError != null || endError != null) return@DMButton
+
                     onSubmit(
                         CreateCompetitionBody(
                             managerId = "",

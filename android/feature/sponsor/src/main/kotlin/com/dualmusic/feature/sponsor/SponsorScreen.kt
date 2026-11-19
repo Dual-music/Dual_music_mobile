@@ -251,13 +251,16 @@ class SponsorViewModel(
  * Écran de sponsoring : Mes demandes (tarifs + demandes + paiement) et Nouvelle demande.
  *
  * @param viewModel source d'état.
+ * @param preselectedTarget `(eventType, eventId)` quand on arrive via le bouton "Sponsoriser"
+ *   d'une affiche (duel/concert/compétition) — ouvre directement l'onglet "Nouvelle" avec cet
+ *   événement verrouillé (pas de liste déroulante), au lieu de "Mes demandes" par défaut.
  */
 @Composable
-fun SponsorScreen(viewModel: SponsorViewModel) {
+fun SponsorScreen(viewModel: SponsorViewModel, preselectedTarget: Pair<String, String>? = null) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
-    var tab by remember { mutableIntStateOf(0) }
+    var tab by remember { mutableIntStateOf(if (preselectedTarget != null) 1 else 0) }
 
     LaunchedEffect(Unit) { viewModel.load() }
 
@@ -274,7 +277,7 @@ fun SponsorScreen(viewModel: SponsorViewModel) {
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(strings.newTab) })
         }
 
-        if (tab == 0) MyRequestsTab(ui, viewModel) else NewRequestTab(ui, viewModel) { tab = 0 }
+        if (tab == 0) MyRequestsTab(ui, viewModel) else NewRequestTab(ui, viewModel, preselectedTarget) { tab = 0 }
     }
 }
 
@@ -307,7 +310,12 @@ private fun MyRequestsTab(ui: SponsorUiState, viewModel: SponsorViewModel) {
 
 /** Onglet « Nouvelle » : choix de l'événement + média + description + envoi. */
 @Composable
-private fun NewRequestTab(ui: SponsorUiState, viewModel: SponsorViewModel, onSent: () -> Unit) {
+private fun NewRequestTab(
+    ui: SponsorUiState,
+    viewModel: SponsorViewModel,
+    preselectedTarget: Pair<String, String>? = null,
+    onSent: () -> Unit,
+) {
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     val context = LocalContext.current
@@ -315,6 +323,13 @@ private fun NewRequestTab(ui: SponsorUiState, viewModel: SponsorViewModel, onSen
 
     var selected by remember { mutableStateOf<SponsorableEvent?>(null) }
     var description by remember { mutableStateOf("") }
+    val isEventLocked = preselectedTarget != null
+
+    // Présélectionne l'événement ciblé dès que le catalogue est chargé.
+    LaunchedEffect(ui.events, preselectedTarget) {
+        val target = preselectedTarget ?: return@LaunchedEffect
+        selected = ui.events.firstOrNull { it.type == target.first && it.id == target.second }
+    }
 
     // Média : image OU vidéo (catégorie `sponsor`, ≤ 500 Mo côté serveur ; garde locale 100 Mo).
     val picker = rememberLauncherForActivityResult(
@@ -339,15 +354,26 @@ private fun NewRequestTab(ui: SponsorUiState, viewModel: SponsorViewModel, onSen
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
         item { Text(strings.step1ChooseEvent, color = colors.mutedForeground) }
-        if (ui.events.isEmpty()) item {
-            DMEmptyState(
-                title = strings.noEvents,
-                subtitle = strings.noEventsHint,
-                icon = Icons.Filled.Search,
-            )
-        }
-        items(ui.events) { ev ->
-            EventRow(ev, selected?.id == ev.id) { selected = ev }
+        if (isEventLocked) {
+            item {
+                val ev = selected
+                if (ev != null) {
+                    EventRow(ev, selected = true, onSelect = {})
+                } else {
+                    Text(strings.sponsorEventUnavailable, color = colors.mutedForeground)
+                }
+            }
+        } else {
+            if (ui.events.isEmpty()) item {
+                DMEmptyState(
+                    title = strings.noEvents,
+                    subtitle = strings.noEventsHint,
+                    icon = Icons.Filled.Search,
+                )
+            }
+            items(ui.events) { ev ->
+                EventRow(ev, selected?.id == ev.id) { selected = ev }
+            }
         }
 
         item { Text(strings.step2Media, color = colors.mutedForeground) }
@@ -365,6 +391,7 @@ private fun NewRequestTab(ui: SponsorUiState, viewModel: SponsorViewModel, onSen
                     DMButton(
                         if (ui.mediaUrl != null) strings.changeMedia else strings.chooseMedia,
                         style = DMButtonStyle.SECONDARY,
+                        enabled = !ui.uploadingMedia,
                         onClick = {
                             picker.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
@@ -387,6 +414,7 @@ private fun NewRequestTab(ui: SponsorUiState, viewModel: SponsorViewModel, onSen
         item {
             DMButton(
                 if (ui.submitting) strings.sending else strings.submitRequest,
+                enabled = !ui.submitting && !ui.uploadingMedia,
                 onClick = {
                     val ev = selected
                     if (ev == null) viewModel.setMessage(strings.selectEventError)
@@ -415,7 +443,7 @@ private fun EventRow(event: SponsorableEvent, selected: Boolean, onSelect: () ->
     }
 }
 
-/** Ligne d'une demande de sponsoring (paiement si approuvée). */
+/** Ligne d'une demande de sponsoring (paiement dès que l'admin a fixé le prix). */
 @Composable
 private fun RequestRow(request: SponsorRequest, onPay: () -> Unit) {
     val colors = DualMusicTheme.colors
@@ -439,6 +467,8 @@ private fun RequestRow(request: SponsorRequest, onPay: () -> Unit) {
 
 private fun statusLabel(status: String, strings: Strings): String = when (status) {
     "pending" -> strings.sponsorStatusPending
+    "awaiting_payment" -> strings.sponsorStatusAwaitingPayment
+    "paid" -> strings.sponsorStatusPaid
     "approved" -> strings.sponsorStatusApproved
     "rejected" -> strings.statusRejected
     else -> status

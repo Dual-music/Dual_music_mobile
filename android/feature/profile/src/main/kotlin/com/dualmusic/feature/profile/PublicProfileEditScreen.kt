@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -212,6 +213,7 @@ fun PublicProfileEditScreen(viewModel: PublicProfileViewModel, isArtist: Boolean
             .fillMaxSize()
             .background(DualMusicTheme.gradients.hero)
             .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
@@ -234,6 +236,7 @@ fun PublicProfileEditScreen(viewModel: PublicProfileViewModel, isArtist: Boolean
         DMButton(
             if (ui.uploading) strings.uploading else strings.changeCover,
             style = DMButtonStyle.SECONDARY,
+            enabled = !ui.uploading,
             modifier = Modifier.fillMaxWidth(),
             onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
         )

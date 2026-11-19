@@ -701,12 +701,17 @@ public struct LiveKitTokenRequest: Encodable, Sendable {
     public let isHost: Bool
     public let participantName: String?
     public let canPublish: Bool
+    /// Identifiant stable de l'appareil → identité LiveKit `userId#deviceId`. Le SFU n'accepte
+    /// qu'une connexion par identité et par room : sans ce suffixe, le même compte ouvert sur
+    /// l'iPhone ET le web s'éjectait en boucle (`DUPLICATE_IDENTITY`).
+    public let deviceId: String?
 
-    public init(roomName: String, isHost: Bool = false, participantName: String? = nil, canPublish: Bool = false) {
+    public init(roomName: String, isHost: Bool = false, participantName: String? = nil, canPublish: Bool = false, deviceId: String? = nil) {
         self.roomName = roomName
         self.isHost = isHost
         self.participantName = participantName
         self.canPublish = canPublish
+        self.deviceId = deviceId
     }
 }
 

@@ -76,6 +76,16 @@ fun toPickerValue(
     return out.format(date)
 }
 
+/**
+ * Instant (epoch millis) d'une date ISO UTC, ou `null` si vide/illisible — pour comparer à un
+ * "maintenant" courant (ex. [com.dualmusic.core.ui.components.ScheduledAccessGate], équivalent
+ * Android de `new Date(scheduledAt).getTime()` côté web).
+ */
+fun isoToEpochMillis(iso: String?): Long? {
+    if (iso.isNullOrBlank()) return null
+    return parseIsoAsUtc(iso)?.time
+}
+
 /** Parse une chaîne ISO (avec ou sans secondes/fuseau) comme instant UTC. */
 private fun parseIsoAsUtc(iso: String): Date? {
     // Normalise : espace→T, retire fraction/fuseau, garde yyyy-MM-ddTHH:mm[:ss].

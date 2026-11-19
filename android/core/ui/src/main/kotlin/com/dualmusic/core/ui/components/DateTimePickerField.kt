@@ -52,6 +52,8 @@ fun DateTimePickerField(
     label: String,
     modifier: Modifier = Modifier,
     placeholder: String = "jj/mm/aaaa --:--",
+    isError: Boolean = false,
+    errorText: String? = null,
 ) {
     var showDate by remember { mutableStateOf(false) }
     var showTime by remember { mutableStateOf(false) }
@@ -64,7 +66,7 @@ fun DateTimePickerField(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, colors.muted, RoundedCornerShape(8.dp))
+                .border(if (isError) 2.dp else 1.dp, if (isError) colors.destructive else colors.muted, RoundedCornerShape(8.dp))
                 .clickable { showDate = true }
                 .padding(horizontal = 14.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -87,6 +89,7 @@ fun DateTimePickerField(
                 Icon(Icons.Filled.DateRange, contentDescription = null, tint = colors.mutedForeground)
             }
         }
+        if (isError && errorText != null) Text(errorText, color = colors.destructive, fontSize = 12.sp)
     }
 
     if (showDate) {

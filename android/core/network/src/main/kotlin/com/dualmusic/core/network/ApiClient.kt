@@ -22,6 +22,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.serializer
 
 /**
@@ -127,7 +131,21 @@ class ApiClient(
                 }
             }
         } catch (e: Throwable) {
-            throw DomainError(0, ErrorCode.NETWORK, e.message ?: "Erreur réseau")
+            // Jamais le message brut de l'exception réseau : un timeout Ktor/OkHttp inclut l'URL
+            // complète et des paramètres internes ("Socket timeout has expired [url=...
+            // socket_timeout=unknown] ms"), illisible et déroutant affiché tel quel à l'utilisateur.
+            throw DomainError(0, ErrorCode.NETWORK, humanizeNetworkException(e))
+        }
+    }
+
+    /** Traduit une exception réseau bas niveau (timeout, DNS, connexion…) en message lisible. */
+    private fun humanizeNetworkException(e: Throwable): String {
+        val msg = e.message?.lowercase() ?: ""
+        return when {
+            msg.contains("timeout") -> "Connexion trop lente. Vérifiez votre connexion internet puis réessayez."
+            msg.contains("unable to resolve host") || msg.contains("failed to connect") || msg.contains("unreachable") ->
+                "Connexion interrompue. Vérifiez votre connexion internet puis réessayez."
+            else -> "Erreur réseau. Réessayez dans un instant."
         }
     }
 
@@ -142,22 +160,44 @@ class ApiClient(
             throw DomainError(0, "DECODING_ERROR", it.message ?: "Décodage impossible")
         }
         if (raw.status !in 200..299 || env.error != null) {
-            // Sur une erreur de validation, le backend précise le champ fautif dans `details`
-            // (ex. {"accept":"…required"}). On l'ajoute au message pour ne pas rester aveugle.
-            val detail = env.error?.details?.let { d ->
-                val s = d.toString()
-                if (s.isBlank() || s == "null" || s == "{}") "" else " ($s)"
-            } ?: ""
+            // Sur une erreur de validation, le backend précise le(s) champ(s) fautif(s) dans
+            // `details` (JSON arbitraire, forme variable selon le code d'erreur). On le traduit
+            // en texte lisible plutôt que d'exposer la syntaxe JSON brute (accolades,
+            // `clé=valeur`) telle quelle à l'utilisateur.
+            val fieldErrors = detailsAsMap(env.error?.details)
+            val detail = fieldErrors.entries.joinToString(" — ") { (k, v) -> "${humanizeKey(k)} : $v" }
             throw DomainError(
                 httpStatus = raw.status,
                 code = env.error?.code ?: "HTTP_${raw.status}",
-                message = (env.error?.message ?: "Erreur HTTP ${raw.status}") + detail,
+                message = listOfNotNull(env.error?.message ?: "Erreur HTTP ${raw.status}", detail.ifBlank { null })
+                    .joinToString(" — "),
+                details = fieldErrors,
             )
         }
         return env.data ?: throw DomainError(raw.status, "NO_DATA", "Champ data absent")
     }
 
     private fun httpError(status: Int) = DomainError(status, "HTTP_$status", "Erreur HTTP $status")
+
+    /**
+     * Aplati un `details` JSON en `Map<champ, valeur lisible>` — ne garde que les entrées d'un
+     * objet dont la valeur est un scalaire (string/nombre/booléen) ; un objet/tableau imbriqué
+     * est ignoré plutôt que de produire du JSON brut illisible.
+     */
+    private fun detailsAsMap(details: JsonElement?): Map<String, String> {
+        val obj = details as? JsonObject ?: return emptyMap()
+        return obj.entries.mapNotNull { (key, value) ->
+            val prim = value as? JsonPrimitive ?: return@mapNotNull null
+            val text = prim.jsonPrimitive.content
+            if (text.isBlank() || text == "null") null else key to text
+        }.toMap()
+    }
+
+    /** `"birthDate"` → `"Birth date"`, `"min_seconds"` → `"Min seconds"`. */
+    private fun humanizeKey(key: String): String {
+        val spaced = key.replace(Regex("([a-z0-9])([A-Z])"), "$1 $2").replace('_', ' ').lowercase()
+        return spaced.replaceFirstChar { it.uppercase() }
+    }
 
     /** Réponse brute intermédiaire (statut + corps texte). */
     private data class Raw(val status: Int, val body: String)

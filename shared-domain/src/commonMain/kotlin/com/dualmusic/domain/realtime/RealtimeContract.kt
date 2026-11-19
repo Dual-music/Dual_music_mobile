@@ -91,6 +91,13 @@ object Realtime {
         /** `/live` · room compétition — focus caméra imposé par le manager. Payload [FocusPayload]. */
         const val FOCUS = "focus"
 
+        /**
+         * `/live` · room compétition — un vote/cadeau vient de modifier un score de candidat
+         * (voix payante, voix de jury, cadeau) : signal de resynchronisation, pas le détail du
+         * changement — le client recharge la liste des candidats. Payload [CandidatesUpdatedPayload].
+         */
+        const val CANDIDATES_UPDATED = "candidates:updated"
+
         /** `/live` · room event — diffusion d'une pub sponsor (start/stop). Payload [SponsorAdPayload]. */
         const val SPONSOR_AD = "sponsor:ad"
 
@@ -136,6 +143,9 @@ data class GiftPayload(
     @SerialName("gift_id") val giftId: String? = null,
     @SerialName("gift_name") val giftName: String? = null,
     @SerialName("gift_image") val giftImage: String? = null,
+    /** Nom d'affichage de l'expéditeur — résolu côté serveur (parité web, qui l'affiche déjà). */
+    @SerialName("from_user_name") val fromUserName: String? = null,
+    @SerialName("from_user_avatar") val fromUserAvatar: String? = null,
 )
 
 /** Vidéo publicitaire sponsor diffusable dans un événement. */
@@ -222,6 +232,12 @@ data class PerformerPayload(
 data class FocusPayload(
     val competitionId: String? = null,
     val participantId: String? = null,
+)
+
+/** `candidates:updated` — resynchronisation du classement (voix/cadeaux) d'une compétition. */
+@Serializable
+data class CandidatesUpdatedPayload(
+    val competitionId: String? = null,
 )
 
 /**

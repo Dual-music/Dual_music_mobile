@@ -28,6 +28,8 @@ ios/App/Resources/GoogleService-Info.plist
 .gradle/
 **/build/
 local.properties
+keystore.properties
+*.jks
 *.apk
 *.aab
 *.keystore

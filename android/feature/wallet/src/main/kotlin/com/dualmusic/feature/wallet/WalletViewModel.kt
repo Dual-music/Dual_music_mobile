@@ -3,6 +3,7 @@ package com.dualmusic.feature.wallet
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dualmusic.domain.api.DomainError
+import com.dualmusic.domain.api.ErrorCode
 import com.dualmusic.domain.payment.CreditPurchase
 import com.dualmusic.domain.wallet.RevenueEvent
 import com.dualmusic.domain.wallet.SpendItem
@@ -77,7 +78,10 @@ class WalletViewModel(private val repository: WalletRepository) : ViewModel() {
     /** Traduit une erreur technique en message affichable. */
     private fun friendlyMessage(t: Throwable): String = when {
         t is DomainError && t.isAuthExpired -> "Session expirée — reconnecte-toi."
-        t is DomainError && t.isRetriable -> "Connexion instable. Réessaie."
+        // Erreur réseau (httpStatus 0) : message déjà précis (timeout, hors-ligne…), voir
+        // ApiClient#humanizeNetworkException — ne pas l'écraser par un texte générique.
+        t is DomainError && t.code == ErrorCode.NETWORK -> t.message
+        t is DomainError && t.isRetriable -> "Le serveur rencontre un problème. Réessaie dans un instant."
         t is DomainError -> t.message
         else -> "Impossible de charger le portefeuille."
     }

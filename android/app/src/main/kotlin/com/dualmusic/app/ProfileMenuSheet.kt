@@ -36,6 +36,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.theme.DualMusicTheme
 
@@ -64,6 +66,10 @@ fun ProfileMenuPage(
     isPureFan: Boolean,
     managerEnabled: Boolean,
     isAdmin: Boolean = false,
+    /** Invitations de duel reçues, en attente d'acceptation — badge sur l'item "Duels" (artiste). */
+    pendingDuelInvites: Int = 0,
+    /** Candidats en attente de revue (toutes compétitions gérées) — badge sur l'item "Compétitions" (manager). */
+    pendingCandidates: Int = 0,
     onNavigate: (Int) -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -81,21 +87,26 @@ fun ProfileMenuPage(
             isArtist -> {
                 MenuRow(Icons.Filled.Dashboard, s.menuDashboard) { onNavigate(20) }
                 MenuRow(Icons.Filled.Mic, s.menuArtistProfile) { onNavigate(21) }
-                MenuRow(Icons.Filled.SportsMartialArts, s.navDuels) { onNavigate(12) }
+                MenuRow(Icons.Filled.SportsMartialArts, s.navDuels, badge = pendingDuelInvites) { onNavigate(12) }
                 MenuRow(Icons.Filled.MusicNote, s.navConcerts) { onNavigate(23) }
                 MenuRow(Icons.Filled.Videocam, s.navLives) { onNavigate(24) }
-                MenuRow(Icons.Filled.EmojiEvents, s.menuMyCompetitions) { onNavigate(25) }
+                // Badge de revue manager même ici : un artiste AUSSI manager entre dans cette
+                // branche (isArtist prioritaire ci-dessus) mais l'entrée ouvre bien
+                // ManagerCompetitionsScreen (voir ProfileSection, sub=25) — pendingCandidates
+                // reste à 0 pour un non-manager (chargement gated sur isManager).
+                MenuRow(Icons.Filled.EmojiEvents, s.menuMyCompetitions, badge = pendingCandidates) { onNavigate(25) }
                 MenuRow(Icons.Filled.Movie, s.menuContent) { onNavigate(26) }
                 MenuRow(Icons.Filled.AccountBalanceWallet, s.menuEarnings) { onNavigate(3) }
                 MenuRow(Icons.Filled.Favorite, s.menuFollowing) { onNavigate(18) }
                 MenuRow(Icons.Filled.CreditCard, s.menuTransactions) { onNavigate(1) }
                 MenuRow(Icons.Filled.CardGiftcard, s.menuReferral) { onNavigate(7) }
+                MenuRow(Icons.Filled.Campaign, s.menuSponsor) { onNavigate(11) }
             }
             // ----- Menu MANAGER -----
             isManager -> {
                 MenuRow(Icons.Filled.Dashboard, s.menuDashboard) { onNavigate(20) }
                 MenuRow(Icons.Filled.SportsMartialArts, s.navDuels) { onNavigate(12) }
-                MenuRow(Icons.Filled.EmojiEvents, s.menuMyCompetitions) { onNavigate(25) }
+                MenuRow(Icons.Filled.EmojiEvents, s.menuMyCompetitions, badge = pendingCandidates) { onNavigate(25) }
                 MenuRow(Icons.Filled.Mic, s.menuArtistProfile) { onNavigate(21) }
                 // Gestion des replays de duels/compétitions gérés (prix, publication,
                 // téléchargement, remplacement) — même écran que côté artiste, filtré sur les
@@ -105,6 +116,7 @@ fun ProfileMenuPage(
                 MenuRow(Icons.Filled.Favorite, s.menuFollowing) { onNavigate(18) }
                 MenuRow(Icons.Filled.CreditCard, s.menuTransactions) { onNavigate(1) }
                 MenuRow(Icons.Filled.CardGiftcard, s.menuReferral) { onNavigate(7) }
+                MenuRow(Icons.Filled.Campaign, s.menuSponsor) { onNavigate(11) }
             }
             // ----- Menu FAN -----
             else -> {
@@ -130,9 +142,14 @@ fun ProfileMenuPage(
     }
 }
 
-/** Ligne d'item du menu : icône + libellé, cliquable. */
+/**
+ * Ligne d'item du menu : icône + libellé, cliquable.
+ * @param badge compte affiché en pastille à droite (ex. invitations en attente) — masqué si ≤ 0.
+ *   Chargé par l'écran appelant au montage (pas seulement à l'ouverture de cet item), pour être
+ *   visible immédiatement.
+ */
 @Composable
-private fun MenuRow(icon: ImageVector, label: String, tint: Color? = null, onClick: () -> Unit) {
+private fun MenuRow(icon: ImageVector, label: String, tint: Color? = null, badge: Int = 0, onClick: () -> Unit) {
     val colors = DualMusicTheme.colors
     val color = tint ?: colors.foreground
     androidx.compose.foundation.layout.Row(
@@ -146,7 +163,21 @@ private fun MenuRow(icon: ImageVector, label: String, tint: Color? = null, onCli
         Text(
             label,
             color = color,
-            modifier = Modifier.padding(start = DualMusicTheme.spacing.md),
+            modifier = Modifier.padding(start = DualMusicTheme.spacing.md).weight(1f),
         )
+        if (badge > 0) {
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .background(colors.destructive, androidx.compose.foundation.shape.CircleShape)
+                    .padding(horizontal = 7.dp, vertical = 2.dp),
+            ) {
+                Text(
+                    if (badge > 99) "99+" else badge.toString(),
+                    color = androidx.compose.ui.graphics.Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                )
+            }
+        }
     }
 }

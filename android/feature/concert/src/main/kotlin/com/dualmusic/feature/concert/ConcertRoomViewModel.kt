@@ -110,9 +110,29 @@ class ConcertRoomViewModel(
 
     val ticketPriceValue: Double get() = ticketPrice
 
+    /** Vrai si le caller possède déjà un billet — pour `ScheduledAccessGate` (distinct de [needsTicket]
+     *  qui ne se pose que si le concert est payant ET le caller pas hôte). */
+    private val _hasTicket = MutableStateFlow(false)
+    val hasTicket: StateFlow<Boolean> = _hasTicket.asStateFlow()
+
+    /** Vrai si le caller est admin (parité web `userRoles.includes("admin")`) — `ScheduledAccessGate`. */
+    private val _isAdmin = MutableStateFlow(false)
+    val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
+
+    /** Détail complet du concert (scheduled_date/status/ticket_price) pour `ScheduledAccessGate`. */
+    private val _concert = MutableStateFlow<com.dualmusic.domain.model.Concert?>(null)
+    val concert: StateFlow<com.dualmusic.domain.model.Concert?> = _concert.asStateFlow()
+
     /** Diffusion en cours (hôte). */
     private val _broadcasting = MutableStateFlow(false)
     val broadcasting: StateFlow<Boolean> = _broadcasting.asStateFlow()
+
+    // Message d'erreur humanisé pour la popup `DMErrorDialog` — avant ceci, un échec de
+    // démarrage de diffusion (réseau, salle pas encore prête) ne montrait RIEN : l'écran restait
+    // sur le bouton « Démarrer » sans le moindre retour (bug signalé, parité compétition/duel).
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+    fun clearError() { _error.value = null }
 
     /** Id de l'utilisateur courant (pour bannissement + cadeau reçu + détection modérateur). */
     private val _myUserId = MutableStateFlow<String?>(null)
@@ -154,9 +174,11 @@ class ConcertRoomViewModel(
             _myUserId.value = myId
             val host = myId != null && myId == hostUserId
             _isHost.value = host
+            _isAdmin.value = runCatching { repository.amIAdmin() }.getOrDefault(false)
             // Billetterie : re-vérifie côté serveur (le billet a pu être acheté ailleurs).
             if (!host && ticketPrice > 0.0) {
                 val info = runCatching { repository.ticketInfo(concertId) }.getOrNull()
+                _hasTicket.value = info?.hasTicket == true
                 _needsTicket.value = info?.hasTicket != true
             }
             if (!_needsTicket.value) joinMedia(host)
@@ -165,7 +187,11 @@ class ConcertRoomViewModel(
             _bannedUserIds.value = runCatching { repository.listStreamBans(concertId) }.getOrDefault(emptyList()).toSet()
             runCatching { repository.giftCatalog() }.getOrNull()?.let { _giftCatalog.value = it }
             // Réglage chat + modérateurs désignés (état initial ; le temps réel prend le relais ensuite).
-            runCatching { repository.concert(concertId) }.getOrNull()?.let { _chatEnabled.value = it.chatEnabled }
+            // Détail complet conservé pour le gate d'accès programmé (scheduled_date/status).
+            runCatching { repository.concert(concertId) }.getOrNull()?.let {
+                _chatEnabled.value = it.chatEnabled
+                _concert.value = it
+            }
             loadInventory()
             loadGiftLeaderboard()
             loadModerators()
@@ -190,9 +216,21 @@ class ConcertRoomViewModel(
         viewModelScope.launch {
             runCatching { repository.buyTicket(concertId) }.onSuccess {
                 _needsTicket.value = false
+                _hasTicket.value = true
                 joinMedia()
             }
         }
+    }
+
+    /**
+     * Achète le billet spectateur (accès programmé — `ScheduledAccessGate`). Distinct de
+     * [buyTicket] (qui rejoint aussi la vidéo) : le gate programmé peut débloquer l'achat AVANT
+     * que le concert soit en direct, où rejoindre la room n'a pas encore de sens.
+     */
+    suspend fun buyTicketForGate(): Result<Unit> {
+        val result = runCatching { repository.buyTicket(concertId) }
+        if (result.isSuccess) { _needsTicket.value = false; _hasTicket.value = true }
+        return result
     }
 
     /** Hôte : démarre la diffusion caméra/micro et passe le concert en direct. */
@@ -215,10 +253,14 @@ class ConcertRoomViewModel(
                 media.join(roomName = roomName, isHost = true, canPublish = true)
             }
             val started = media.connectionState.value is com.dualmusic.core.media.LiveConnectionState.Connected &&
-                runCatching { media.startBroadcast() }.isSuccess
+                runCatching { media.startBroadcast() }
+                    .onFailure { android.util.Log.w("ConcertRoom", "startBroadcast a échoué room=$roomName", it) }
+                    .isSuccess
             if (started) {
                 runCatching { repository.goLive(concertId) }
                 _broadcasting.value = true
+            } else {
+                _error.value = "Impossible de démarrer la diffusion. Réessaie dans un instant."
             }
         }
     }

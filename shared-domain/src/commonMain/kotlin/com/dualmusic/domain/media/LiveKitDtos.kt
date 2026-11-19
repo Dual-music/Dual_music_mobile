@@ -14,6 +14,12 @@ data class LiveKitTokenRequest(
     val isHost: Boolean = false,
     val participantName: String? = null,
     val canPublish: Boolean = false,
+    /**
+     * Identifiant stable de l'appareil → identité LiveKit `userId#deviceId`. Le SFU n'accepte
+     * qu'une connexion par identité et par room : sans ce suffixe, le même compte ouvert sur le
+     * mobile ET le web s'éjectait en boucle (`DUPLICATE_IDENTITY`).
+     */
+    val deviceId: String? = null,
 )
 
 /** Réponse : jeton d'accès à la room + URL du SFU + identité du participant. */

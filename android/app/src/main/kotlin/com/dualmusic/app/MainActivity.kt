@@ -134,24 +134,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * URL de base du backend Dual Music.
- *
- * ⚠️ À ADAPTER selon la cible :
- *  - Émulateur Android : `http://10.0.2.2:4000` (alias de « localhost » du PC).
- *  - Téléphone physique : `http://<IP-LOCALE-DU-PC>:4000` (ex. http://192.168.1.20:4000).
- *    Trouve l'IP avec `ipconfig` sur le PC (IPv4). Le PC et le téléphone doivent être sur
- *    le MÊME réseau Wi-Fi, et le backend doit tourner.
+ * URL de base du backend Dual Music — définie par type de build dans `app/build.gradle.kts` :
+ *  - debug   → backend local du PC (IP LAN, émulateur `10.0.2.2`, ou `127.0.0.1` + `adb reverse`) ;
+ *  - release → backend de production sur le VPS (`https://api.dualmusic.pro`).
  */
-
-/**
-private const val API_BASE_URL = "http://10.0.2.2:4000"
-*/
-
-// WiFi (débogage sans fil / QR code) : le téléphone atteint le backend du PC via son IP LAN.
-// Le PC et le téléphone doivent être sur le MÊME réseau WiFi. Mettre à jour cette IP si elle
-// change (DHCP) — la voir avec `ipconfig` (Adresse IPv4). Le backend écoute sur 0.0.0.0:4000.
-// En USB : repasser à "http://127.0.0.1:4000" + `adb reverse tcp:4000 tcp:4000`.
-private const val API_BASE_URL = "http://172.17.10.135:4000"
+private val API_BASE_URL = BuildConfig.API_BASE_URL
 
 
 
@@ -196,7 +183,8 @@ class AppContainer(context: Context) {
     }
 
     // --- Lot feed + live ---
-    private val tokenService = LiveKitTokenService(api)
+    // Identité LiveKit par appareil (voir LiveKitTokenRequest.deviceId).
+    private val tokenService = LiveKitTokenService(api, deviceId = com.dualmusic.core.media.DeviceIdentity.get(appContext))
     private val feedRepository = FeedRepository(api)
     private val liveRepository = LiveRepository(api)
     // Le fournisseur de JWT alimente le handshake Socket.IO à chaud (token courant).
@@ -263,6 +251,26 @@ class AppContainer(context: Context) {
     /** Date (ISO) de suppression programmée du compte, ou null si actif. */
     suspend fun accountDeletionScheduledAt(): String? =
         runCatching { profileRepository.me().user.deletionScheduledAt }.getOrNull()
+
+    /**
+     * Nombre d'invitations de duel reçues encore en attente — pour le badge du menu "Duels"
+     * (artiste). Chargé au montage du menu profil, pas seulement à l'ouverture de l'écran Duels.
+     */
+    suspend fun pendingDuelInvitesCount(): Int = runCatching {
+        val myId = profileRepository.me().user.id
+        val requests = api.request(
+            com.dualmusic.core.network.Endpoint.get(com.dualmusic.domain.creator.CreatorEndpoints.DUEL_REQUESTS_MINE),
+            kotlinx.serialization.builtins.ListSerializer(com.dualmusic.domain.creator.DuelRequestItem.serializer()),
+        )
+        requests.count { it.opponentId == myId && it.status == "pending" }
+    }.getOrDefault(0)
+
+    /**
+     * Nombre cumulé de candidats en attente sur toutes les compétitions du manager — pour le
+     * badge du menu "Compétitions" (manager). Chargé au montage du menu profil, comme
+     * [pendingDuelInvitesCount], pas seulement à l'ouverture de l'écran de gestion.
+     */
+    suspend fun pendingCandidatesCount(): Int = competitionRepository.pendingCandidatesCount()
 
     /** Programme la suppression du compte (grâce 20 jours). */
     suspend fun requestAccountDeletion() = profileRepository.requestAccountDeletion()
@@ -447,16 +455,13 @@ class AppContainer(context: Context) {
      * [LiveRoomClient] (une connexion SFU par live affiché).
      */
     fun makeLiveViewModel(live: Live): LiveViewModel {
-        // Contexte EGL partagé par la room principale + les rooms d'invités (une par invité actif,
-        // créées à la demande) : sans EGL commun, les pistes des rooms invitées sont souscrites
-        // mais ne s'affichent pas (cases transparentes) — même contrainte que le multi-room duel.
-        val sharedEgl = livekit.org.webrtc.EglBase.create()
-        val media = LiveRoomClient(appContext, tokenService, appScope, sharedEgl)
+        // Room UNIQUE `live-<id>` : hôte et invités publient tous dedans → un seul client média.
+        val media = LiveRoomClient(appContext, tokenService, appScope)
         return LiveViewModel(
             liveId = live.id,
             roomName = live.liveKitRoom,
+            hostUserId = live.artistId,
             media = media,
-            mediaFactory = { LiveRoomClient(appContext, tokenService, appScope, sharedEgl) },
             realtime = realtimeClient,
             repository = liveRepository,
             sponsorAds = sponsorAdRepository,
@@ -469,13 +474,12 @@ class AppContainer(context: Context) {
      * le viewer (chat/cadeaux/présence) + publication caméra/micro. Room dédiée.
      */
     fun makeLiveHostViewModel(live: Live): LiveViewModel {
-        val sharedEgl = livekit.org.webrtc.EglBase.create()
-        val media = LiveRoomClient(appContext, tokenService, appScope, sharedEgl)
+        val media = LiveRoomClient(appContext, tokenService, appScope)
         return LiveViewModel(
             liveId = live.id,
             roomName = live.liveKitRoom,
+            hostUserId = live.artistId,
             media = media,
-            mediaFactory = { LiveRoomClient(appContext, tokenService, appScope, sharedEgl) },
             realtime = realtimeClient,
             repository = liveRepository,
             sponsorAds = sponsorAdRepository,
@@ -572,6 +576,11 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
     var showProfile by remember { mutableStateOf(false) }
     // Sous-navigation du profil (0=profil ; PROFILE_MENU=liste ; sinon = contenu d'un item).
     var profileSub by remember { mutableIntStateOf(0) }
+    // Événement (type à id) présélectionné pour l'écran Sponsoring quand on y arrive via le
+    // bouton "Sponsoriser" d'une affiche (duel/concert/compétition) — verrouille le choix
+    // d'événement au lieu de proposer la liste complète. Réinitialisé dès qu'on quitte
+    // Sponsoring via le menu du profil (voir `onClearSponsorPreselect`).
+    var sponsorPreselect by remember { mutableStateOf<Pair<String, String>?>(null) }
     // Accès rapides de l'accueil : 0=aucun · 1=lifestyle · 2=classement · 3=artistes.
     var homeOpen by remember { mutableIntStateOf(0) }
     // Superposition « messages de notifications » (icône cloche de la barre du haut).
@@ -801,6 +810,8 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                     onSub = { profileSub = it },
                     onSignOut = onSignOut,
                     onStartBroadcast = { broadcastLive = it },
+                    sponsorPreselect = sponsorPreselect,
+                    onClearSponsorPreselect = { sponsorPreselect = null },
                 )
             } else when (tab) {
                 0 -> when (homeOpen) {
@@ -851,7 +862,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                             viewModel = listVm,
                             onOpen = { openDuel = it },
                             onOpenReplay = { openDuelReplay = it },
-                            onRequestSponsor = { _, _ -> profileSub = 11; showProfile = true },
+                            onRequestSponsor = { eventType, eventId -> sponsorPreselect = eventType to eventId; profileSub = 11; showProfile = true },
                         )
                     }
                 }
@@ -870,7 +881,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                             viewModel = concertsVm,
                             onOpen = { openConcert = it },
                             onOpenReplay = { openConcertReplay = it },
-                            onRequestSponsor = { _, _ -> profileSub = 11; showProfile = true },
+                            onRequestSponsor = { eventType, eventId -> sponsorPreselect = eventType to eventId; profileSub = 11; showProfile = true },
                         )
                     }
                 }
@@ -889,7 +900,7 @@ private fun MainShell(container: AppContainer, onSignOut: () -> Unit) {
                             viewModel = listVm,
                             onOpen = { openCompetition = it },
                             onOpenReplay = { openCompetitionReplay = it },
-                            onRequestSponsor = { _, _ -> profileSub = 11; showProfile = true },
+                            onRequestSponsor = { eventType, eventId -> sponsorPreselect = eventType to eventId; profileSub = 11; showProfile = true },
                         )
                     }
                 }
@@ -913,6 +924,8 @@ private fun ProfileSection(
     onSub: (Int) -> Unit,
     onSignOut: () -> Unit,
     onStartBroadcast: (Live) -> Unit,
+    sponsorPreselect: Pair<String, String>? = null,
+    onClearSponsorPreselect: () -> Unit = {},
 ) {
     // Rôles + gating admin, partagés par le profil racine, le dashboard et la page de menu.
     var managerEnabled by remember { mutableStateOf(false) }
@@ -926,6 +939,19 @@ private fun ProfileSection(
     val isManager = roles.any { it == UserRole.MANAGER }
     val canCreate = isArtist || isManager || roles.any { it == UserRole.ADMIN }
     val isAdmin = roles.any { it == UserRole.ADMIN }
+    // Badge du menu "Duels" (artiste) : chargé au montage du profil, pas seulement à
+    // l'ouverture du menu ou de l'écran Duels, pour être visible immédiatement.
+    var pendingDuelInvites by remember { mutableStateOf(0) }
+    LaunchedEffect(isArtist) {
+        if (isArtist) pendingDuelInvites = container.pendingDuelInvitesCount()
+    }
+    // Badge du menu "Compétitions" (manager) : candidats en attente de revue, toutes compétitions
+    // gérées — même chargement eager que pendingDuelInvites (visible dès le montage du profil,
+    // sans attendre l'ouverture du menu ou de l'écran de gestion des compétitions).
+    var pendingCandidates by remember { mutableStateOf(0) }
+    LaunchedEffect(isManager) {
+        if (isManager) pendingCandidates = container.pendingCandidatesCount()
+    }
 
     when (sub) {
         1 -> SubScreen(title = "Mon portefeuille", onBack = { onSub(PROFILE_MENU) }) {
@@ -980,7 +1006,7 @@ private fun ProfileSection(
         }
         11 -> SubScreen(title = "Sponsoring", onBack = { onSub(PROFILE_MENU) }) {
             val sponsorVm: SponsorViewModel = viewModel { container.makeSponsorViewModel() }
-            SponsorScreen(viewModel = sponsorVm)
+            SponsorScreen(viewModel = sponsorVm, preselectedTarget = sponsorPreselect)
         }
         12 -> SubScreen(title = com.dualmusic.core.ui.i18n.LocalStrings.current.navDuels, onBack = { onSub(PROFILE_MENU) }) {
             // Manager (non-artiste) : gestion des duels (créer/organiser). Artiste : « demander un duel ».
@@ -1084,7 +1110,11 @@ private fun ProfileSection(
                 isPureFan = !canCreate,
                 managerEnabled = managerEnabled,
                 isAdmin = isAdmin,
-                onNavigate = { onSub(it) },
+                pendingDuelInvites = pendingDuelInvites,
+                pendingCandidates = pendingCandidates,
+                // Un accès au menu (par opposition au bouton "Sponsoriser" d'une affiche) ne doit
+                // jamais hériter d'un verrouillage d'événement laissé par une navigation précédente.
+                onNavigate = { onClearSponsorPreselect(); onSub(it) },
                 onSignOut = onSignOut,
             )
         }

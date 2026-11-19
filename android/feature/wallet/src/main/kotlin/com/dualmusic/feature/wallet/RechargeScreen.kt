@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -71,6 +72,10 @@ data class RechargeUiState(
     val phone: String = "",
     val loading: Boolean = false,
     val message: String? = null,
+    /** Vrai si [message] est une erreur (rouge) plutôt qu'une info positive (ex. "Ouverture du paiement…"). */
+    val messageIsError: Boolean = false,
+    /** Erreur rattachée au champ montant (bordure rouge) plutôt que le seul `message` en bas. */
+    val amountError: String? = null,
     /** URL de paiement à ouvrir (consommée par l'UI puis remise à null). */
     val paymentUrl: String? = null,
 )
@@ -114,9 +119,9 @@ class RechargeViewModel(private val api: ApiClient) : ViewModel() {
     /** Recharge par carte (Stripe Checkout) : ouvre l'URL hébergée. */
     fun payWithStripe() {
         val amount = _uiState.value.amount.toIntOrNull()
-        if (amount == null || amount < 1) { _uiState.update { it.copy(message = com.dualmusic.core.ui.i18n.appStrings.errEnterValidAmount) }; return }
+        if (amount == null || amount < 1) { _uiState.update { it.copy(amountError = com.dualmusic.core.ui.i18n.appStrings.errEnterValidAmount) }; return }
         viewModelScope.launch {
-            _uiState.update { it.copy(loading = true, message = null) }
+            _uiState.update { it.copy(loading = true, message = null, amountError = null) }
             val body = json.encodeToString(
                 com.dualmusic.domain.payment.StripeCreditsRequest.serializer(),
                 com.dualmusic.domain.payment.StripeCreditsRequest(amount = amount, currency = "usd"),
@@ -127,14 +132,14 @@ class RechargeViewModel(private val api: ApiClient) : ViewModel() {
                     com.dualmusic.domain.payment.StripeCreditsResponse.serializer(),
                 )
             }.onSuccess { res ->
-                _uiState.update { it.copy(loading = false, paymentUrl = res.url, message = com.dualmusic.core.ui.i18n.appStrings.openingPayment) }
+                _uiState.update { it.copy(loading = false, paymentUrl = res.url, message = com.dualmusic.core.ui.i18n.appStrings.openingPayment, messageIsError = false) }
             }.onFailure { e ->
-                _uiState.update { it.copy(loading = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.errRechargeFailed) }
+                _uiState.update { it.copy(loading = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.errRechargeFailed, messageIsError = true) }
             }
         }
     }
 
-    fun onAmountChange(v: String) = _uiState.update { it.copy(amount = v.filter { c -> c.isDigit() }, message = null) }
+    fun onAmountChange(v: String) = _uiState.update { it.copy(amount = v.filter { c -> c.isDigit() }, message = null, amountError = null) }
     fun onPhoneChange(v: String) = _uiState.update { it.copy(phone = v, message = null) }
     fun onCountrySelected(c: CinetpayCountry) =
         _uiState.update { it.copy(selected = c, operator = c.operators.firstOrNull()?.code, message = null) }
@@ -145,10 +150,10 @@ class RechargeViewModel(private val api: ApiClient) : ViewModel() {
         val s = _uiState.value
         val amount = s.amount.toIntOrNull()
         val country = s.selected
-        if (amount == null || amount < 1) { _uiState.update { it.copy(message = com.dualmusic.core.ui.i18n.appStrings.errEnterValidAmount) }; return }
-        if (country == null) { _uiState.update { it.copy(message = com.dualmusic.core.ui.i18n.appStrings.errChooseCountry) }; return }
+        if (amount == null || amount < 1) { _uiState.update { it.copy(amountError = com.dualmusic.core.ui.i18n.appStrings.errEnterValidAmount) }; return }
+        if (country == null) { _uiState.update { it.copy(message = com.dualmusic.core.ui.i18n.appStrings.errChooseCountry, messageIsError = true) }; return }
         viewModelScope.launch {
-            _uiState.update { it.copy(loading = true, message = null) }
+            _uiState.update { it.copy(loading = true, message = null, amountError = null) }
             val body = json.encodeToString(
                 CinetpayInitRequest.serializer(),
                 CinetpayInitRequest(
@@ -165,9 +170,9 @@ class RechargeViewModel(private val api: ApiClient) : ViewModel() {
                     CinetpayInitResponse.serializer(),
                 )
             }.onSuccess { res ->
-                _uiState.update { it.copy(loading = false, paymentUrl = res.paymentUrl, message = com.dualmusic.core.ui.i18n.appStrings.openingPayment) }
+                _uiState.update { it.copy(loading = false, paymentUrl = res.paymentUrl, message = com.dualmusic.core.ui.i18n.appStrings.openingPayment, messageIsError = false) }
             }.onFailure { e ->
-                _uiState.update { it.copy(loading = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.errRechargeFailed) }
+                _uiState.update { it.copy(loading = false, message = e.message ?: com.dualmusic.core.ui.i18n.appStrings.errRechargeFailed, messageIsError = true) }
             }
         }
     }
@@ -204,6 +209,7 @@ fun RechargeScreen(viewModel: RechargeViewModel) {
             .fillMaxSize()
             .background(DualMusicTheme.gradients.hero)
             .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
@@ -240,6 +246,8 @@ fun RechargeScreen(viewModel: RechargeViewModel) {
                     value = ui.amount,
                     onValueChange = viewModel::onAmountChange,
                     label = { Text(s.amountLabel) },
+                    isError = ui.amountError != null,
+                    supportingText = ui.amountError?.let { msg -> { Text(msg, color = colors.destructive) } },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -265,7 +273,7 @@ fun RechargeScreen(viewModel: RechargeViewModel) {
                     )
                 }
 
-                ui.message?.let { Text(it, color = colors.primaryGlow) }
+                ui.message?.let { Text(it, color = if (ui.messageIsError) colors.destructive else colors.primaryGlow) }
 
                 DMButton(
                     when {

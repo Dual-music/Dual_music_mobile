@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -78,6 +79,7 @@ fun SignInScreen(
             .fillMaxSize()
             .background(DualMusicTheme.gradients.hero)
             .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(DualMusicTheme.spacing.lg),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.lg),
@@ -95,7 +97,10 @@ fun SignInScreen(
                 }
 
                 ui.info?.let { Text(it, color = colors.primaryGlow) }
-                ui.error?.let { Text(it, color = colors.destructive) }
+                // Pas de doublon : un email déjà utilisé (409) affiche déjà son message sous le
+                // champ email — seuls les identifiants invalides (401, message générique commun
+                // aux deux champs) doivent encore apparaître ici.
+                if (ui.emailFieldError == null) ui.error?.let { Text(it, color = colors.destructive) }
 
                 DMButton(
                     title = submitLabel(ui.mode, ui.isSubmitting, com.dualmusic.core.ui.i18n.LocalStrings.current),
@@ -130,8 +135,11 @@ fun SignInScreen(
 /** Champs de connexion. */
 @Composable
 private fun LoginFields(ui: SignInUiState, vm: AuthViewModel) {
-    EmailField(ui.email, vm::onEmailChange)
-    PasswordField(ui.password, vm::onPasswordChange, label = com.dualmusic.core.ui.i18n.LocalStrings.current.password)
+    // Identifiants invalides (401) : on ne sait pas LEQUEL des deux champs est fautif, donc les
+    // deux sont marqués en rouge — le message complet ("Email ou mot de passe incorrect.")
+    // reste affiché une seule fois, en bas du formulaire, pas dupliqué sous chaque champ.
+    EmailField(ui.email, vm::onEmailChange, isError = ui.credentialsInvalid)
+    PasswordField(ui.password, vm::onPasswordChange, label = com.dualmusic.core.ui.i18n.LocalStrings.current.password, isError = ui.credentialsInvalid)
 }
 
 /**
@@ -141,17 +149,15 @@ private fun LoginFields(ui: SignInUiState, vm: AuthViewModel) {
  */
 @Composable
 private fun RegisterFields(ui: SignInUiState, vm: AuthViewModel, onOpenLegal: (LegalKind) -> Unit) {
-    EmailField(ui.email, vm::onEmailChange)
+    EmailField(ui.email, vm::onEmailChange, isError = ui.emailFieldError != null, errorText = ui.emailFieldError)
     PasswordField(ui.password, vm::onPasswordChange, label = com.dualmusic.core.ui.i18n.LocalStrings.current.passwordStar, supporting = com.dualmusic.core.ui.i18n.LocalStrings.current.atLeast8)
+    val confirmMismatch = ui.confirmPassword.isNotEmpty() && ui.confirmPassword != ui.password
     PasswordField(
         ui.confirmPassword,
         vm::onConfirmPasswordChange,
         label = com.dualmusic.core.ui.i18n.LocalStrings.current.confirmPasswordStar,
-        supporting = if (ui.confirmPassword.isNotEmpty() && ui.confirmPassword != ui.password) {
-            com.dualmusic.core.ui.i18n.LocalStrings.current.passwordsDontMatch
-        } else {
-            null
-        },
+        supporting = if (confirmMismatch) com.dualmusic.core.ui.i18n.LocalStrings.current.passwordsDontMatch else null,
+        isError = confirmMismatch,
     )
     TermsAcceptance(ui.acceptTerms, vm::onAcceptTermsChange, onOpenLegal)
 }
@@ -205,6 +211,7 @@ private fun ResetFields(ui: SignInUiState, vm: AuthViewModel) {
         value = ui.resetCode,
         onValueChange = vm::onResetCodeChange,
         label = { Text(com.dualmusic.core.ui.i18n.LocalStrings.current.codeFromEmail) },
+        isError = ui.error != null,
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.fillMaxWidth(),
@@ -265,26 +272,35 @@ internal fun CountryField(ui: SignInUiState, vm: AuthViewModel) {
 
 /** Champ email standard. */
 @Composable
-private fun EmailField(value: String, onChange: (String) -> Unit) {
+private fun EmailField(value: String, onChange: (String) -> Unit, isError: Boolean = false, errorText: String? = null) {
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(com.dualmusic.core.ui.i18n.LocalStrings.current.email) },
         placeholder = { Text(com.dualmusic.core.ui.i18n.LocalStrings.current.emailPlaceholder) },
+        isError = isError,
+        supportingText = errorText?.let { msg -> { Text(msg, color = DualMusicTheme.colors.destructive) } },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
         modifier = Modifier.fillMaxWidth(),
     )
 }
 
-/** Champ mot de passe standard (masqué). */
+/**
+ * Champ mot de passe standard (masqué).
+ *
+ * @param isError si vrai, [supporting] s'affiche en rouge avec le contour du champ (ex. mots de
+ *   passe qui ne correspondent pas) plutôt qu'en simple indication neutre (ex. "8 caractères min.").
+ */
 @Composable
-private fun PasswordField(value: String, onChange: (String) -> Unit, label: String, supporting: String? = null) {
+private fun PasswordField(value: String, onChange: (String) -> Unit, label: String, supporting: String? = null, isError: Boolean = false) {
+    val colors = DualMusicTheme.colors
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(label) },
-        supportingText = supporting?.let { msg -> { Text(msg) } },
+        isError = isError,
+        supportingText = supporting?.let { msg -> { Text(msg, color = if (isError) colors.destructive else colors.mutedForeground) } },
         singleLine = true,
         visualTransformation = PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),

@@ -302,9 +302,12 @@ private fun WithdrawTab(vm: WithdrawalViewModel) {
                 onSelectMethod = vm::selectMethod,
                 amount = ui.amount,
                 onAmountChange = vm::onAmountChange,
+                amountError = ui.amountError,
                 feePct = ui.net?.feePct,
                 net = ui.net?.net,
                 submitting = ui.submitting,
+                pinError = ui.pinError,
+                onPinChange = vm::clearPinError,
                 onSubmit = vm::submit,
             )
         }

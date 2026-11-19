@@ -38,6 +38,8 @@ data class DuelGift(
     val name: String?,
     val image: String?,
     val value: Double,
+    /** Nom d'affichage de l'expéditeur (parité web, qui l'affiche déjà sur l'animation). */
+    val fromUserName: String? = null,
 )
 
 /** État du minuteur du duel (persisté serveur → visible aussi pour les arrivants tardifs). */
@@ -169,6 +171,10 @@ class DuelViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    /** Son d'annonce du vainqueur réglé par l'admin — `null` = son par défaut côté client. */
+    private val _soundUrl = MutableStateFlow<String?>(null)
+    val soundUrl: StateFlow<String?> = _soundUrl.asStateFlow()
+
     private val _viewerCount = MutableStateFlow(0)
     val viewerCount: StateFlow<Int> = _viewerCount.asStateFlow()
 
@@ -176,6 +182,14 @@ class DuelViewModel(
     private val _isManager = MutableStateFlow(false)
     val isManager: StateFlow<Boolean> = _isManager.asStateFlow()
     private var myUserId: String? = null
+
+    /** Vrai si le caller est admin (parité web `userRoles.includes("admin")`) — `ScheduledAccessGate`. */
+    private val _isAdmin = MutableStateFlow(false)
+    val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
+
+    /** Vrai si le caller possède déjà un billet pour ce duel (billetterie programmée/payante). */
+    private val _hasTicket = MutableStateFlow(false)
+    val hasTicket: StateFlow<Boolean> = _hasTicket.asStateFlow()
 
     /** Case épinglée par le manager (focus imposé, synchronisé via broadcast) :
      *  "artist1" / "artist2" / "manager", ou null = pas de focus imposé (focus local libre). */
@@ -263,6 +277,7 @@ class DuelViewModel(
 
     /** Démarre : détail du duel, tallies, vidéo, chat, temps réel. */
     fun start() {
+        viewModelScope.launch { _soundUrl.value = repository.winnerSoundUrl() }
         viewModelScope.launch {
             val d = runCatching { repository.duel(duelId) }.getOrNull()
             myUserId = myUserId ?: runCatching { repository.myUserId() }.getOrNull()
@@ -282,6 +297,13 @@ class DuelViewModel(
                 _canPublish.value = myMedia != null
                 _mySlot.value = when (myUserId) {
                     d.artist1Id -> "artist1"; d.artist2Id -> "artist2"; d.managerId -> "manager"; else -> null
+                }
+                // Gate d'accès programmé (ScheduledAccessGate) : l'admin est un acteur (exempté de
+                // billet), mais un participant l'est déjà via `_isManager`/artist1/artist2 côté UI.
+                _isAdmin.value = runCatching { repository.amIAdmin() }.getOrDefault(false)
+                val isParticipant = _isManager.value || myUserId == d.artist1Id || myUserId == d.artist2Id
+                if (!isParticipant && !_isAdmin.value && d.ticketPrice > 0.0) {
+                    _hasTicket.value = runCatching { repository.ticketInfo(duelId) }.getOrNull()?.hasTicket == true
                 }
             }
             // Rejoint les 3 rooms de slot (parité web) : publieur sur MA room, spectateur sur les 2 autres.
@@ -326,9 +348,29 @@ class DuelViewModel(
     fun startBroadcast() {
         val m = myMedia ?: return
         viewModelScope.launch {
-            runCatching { m.startBroadcast() }.onSuccess {
+            // `joinSlot` (appelé depuis `start()`) rejoint ma room dans son propre coroutine, sans
+            // que `start()` n'attende sa fin — un join lent/échoué silencieusement (réseau, timing ;
+            // `LiveRoomClient.join()` avale ses erreurs et passe juste `connectionState` à `Failed`)
+            // laissait alors `startBroadcast()` publier sur une room jamais VRAIMENT connectée, que
+            // le SFU rejette (« insufficient permissions » malgré des droits corrects côté client,
+            // puisqu'ils n'ont jamais atteint le serveur) — sans aucun retour à l'écran (bug signalé
+            // : le manager/artiste clique sur Démarrer, rien ne se passe). Parité compétition/
+            // concert : on (re)joint explicitement si besoin et on ATTEND avant de publier.
+            val slot = _mySlot.value
+            if (m.connectionState.value !is com.dualmusic.core.media.LiveConnectionState.Connected && slot != null) {
+                m.join(roomName = "$baseRoom-$slot", isHost = _isManager.value, canPublish = true)
+            }
+            val started = m.connectionState.value is com.dualmusic.core.media.LiveConnectionState.Connected &&
+                runCatching { m.startBroadcast() }
+                    .onFailure {
+                        android.util.Log.w("DuelRoom", "startBroadcast a échoué room=$baseRoom-$slot", it)
+                    }
+                    .isSuccess
+            if (started) {
                 _broadcasting.value = true; _micOn.value = true; _camOn.value = true
                 broadcastMediaState()
+            } else {
+                _error.value = "Impossible de démarrer la diffusion. Réessaie dans un instant."
             }
         }
     }
@@ -451,6 +493,16 @@ class DuelViewModel(
             runCatching { wallet.vote(duelId = duelId, artistId = artistId, amount = amount) }
                 .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.errVoteFailed }
         }
+    }
+
+    /**
+     * Achète le billet spectateur de ce duel (accès programmé/payant — `ScheduledAccessGate`).
+     * Débit atomique + idempotent côté serveur. Marque l'accès acquis en cas de succès.
+     */
+    suspend fun buyTicket(): Result<Unit> {
+        val result = runCatching { repository.buyTicket(duelId) }
+        if (result.isSuccess) _hasTicket.value = true
+        return result
     }
 
     /** Envoie un message de chat (le serveur diffuse ensuite). */
@@ -596,9 +648,6 @@ class DuelViewModel(
         patchDuel("""{"winnerId":"$artistId"}""")
     }
 
-    /** Dernier winnerId déjà célébré (via `status`) → évite de re-déclencher la célébration. */
-    private var shownWinnerId: String? = null
-
     /** Construit la carte vainqueur (nom/avatar/voix/%) à partir de l'id de l'artiste gagnant. */
     private fun winnerFromId(winnerId: String?): DuelWinner? {
         val d = _duel.value ?: return null
@@ -615,8 +664,12 @@ class DuelViewModel(
 
     /**
      * Annonce AUTOMATIQUEMENT le vainqueur = artiste avec le PLUS de votes (parité web) : sauve
-     * `winnerId` SANS terminer le duel. La propagation à TOUS passe par l'événement `status`
-     * (fiable, room du duel) — cf. handler STATUS — en plus du broadcast immédiat.
+     * `winnerId` SANS terminer le duel. La propagation à TOUS passe UNIQUEMENT par le broadcast
+     * éphémère `winner_announced`/`winner_stopped` (parité compétition) — `patchDuel` persiste
+     * `winnerId` pour l'historique, mais ne pilote plus l'affichage : `winnerId` n'étant jamais
+     * effacé en base, le faire aurait re-déclenché la bannière chez les spectateurs à chaque
+     * événement `status` ultérieur (reconnexion...), même après que le manager ait arrêté
+     * l'annonce (bug signalé : l'arrêt ne fonctionnait que chez le manager).
      */
     fun announceWinnerAuto() {
         val d = _duel.value ?: return
@@ -625,7 +678,6 @@ class DuelViewModel(
         val v2 = _voteTotals.value[a2] ?: 0.0
         val winnerId = if (v1 >= v2) a1 else a2
         val w = winnerFromId(winnerId) ?: return
-        shownWinnerId = winnerId
         patchDuel("""{"winnerId":"$winnerId"}""")
         _winnerInfo.value = w
         liveSession?.emit(
@@ -696,18 +748,10 @@ class DuelViewModel(
             live.on(Realtime.RealtimeEvent.TIMER, TimerPayload.serializer()) { p ->
                 _timer.value = DuelTimer(endsAt = p.endsAt, targetId = p.targetId)
             }
-            // Statut / vainqueur. La désignation d'un `winnerId` déclenche la célébration PLEIN
-            // ÉCRAN chez TOUS (propagation FIABLE via la room du duel, parité web) — pas seulement
-            // via le broadcast éphémère qui pouvait être manqué.
+            // Statut : ne déclenche PLUS la célébration vainqueur depuis ici (voir plus bas pour
+            // le pourquoi) — se contente de synchroniser `winnerId` dans l'état du duel.
             live.on(Realtime.RealtimeEvent.STATUS, StatusPayload.serializer()) { p ->
                 _duel.update { d -> d?.copy(winnerId = p.winnerId ?: d.winnerId) }
-                val wid = p.winnerId
-                if (wid == null) {
-                    shownWinnerId = null
-                } else if (wid != shownWinnerId) {
-                    shownWinnerId = wid
-                    winnerFromId(wid)?.let { _winnerInfo.value = it }
-                }
             }
             // Réglages du duel modifiés par le manager en direct (chat on/off) — visible par tous.
             live.on(Realtime.RealtimeEvent.SETTINGS, EventSettingsPayload.serializer()) { p ->
@@ -718,7 +762,7 @@ class DuelViewModel(
             live.on(Realtime.RealtimeEvent.MODERATOR_REVOKED, EventModeratorPayload.serializer()) { loadModerators() }
             // Cadeaux (alimente l'animation GPU + la bulle top-donateur).
             live.on(Realtime.RealtimeEvent.GIFT, GiftPayload.serializer()) { p ->
-                _giftFeed.update { it + DuelGift(giftCounter++, p.fromUserId, p.giftName, p.giftImage, p.value) }
+                _giftFeed.update { it + DuelGift(giftCounter++, p.fromUserId, p.giftName, p.giftImage, p.value, p.fromUserName) }
                 loadTopDonor()
                 // Si le cadeau m'est destiné → bannière « vous avez reçu un cadeau » (en plus de la
                 // notification durable créée côté backend).

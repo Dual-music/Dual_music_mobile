@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Diffusion en arrière-plan : sans service de premier plan « microphone », Android (12+)
+      coupe la capture micro dès que l'app n'est plus au premier plan (écran verrouillé, autre
+      app) — l'orateur continue d'entendre tout le monde mais plus personne ne l'entend.
+      Permissions requises par `foregroundServiceType="microphone|camera"` (API 34+).
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+
+    <application>
+        <service
+            android:name="com.dualmusic.core.media.LiveBroadcastService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|camera" />
+    </application>
+</manifest>

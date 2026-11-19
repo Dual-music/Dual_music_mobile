@@ -47,9 +47,18 @@ data class SignInUiState(
     val newPassword: String = "",
     // Vérification email (écran dédié).
     val verifyCode: String = "",
+    /** Instant ISO d'expiration du code en cours (10 min côté serveur) — pilote le chrono affiché. */
+    val codeExpiresAt: String? = null,
     val isSubmitting: Boolean = false,
     val error: String? = null,
     val info: String? = null,
+    // Erreurs rattachées à un champ précis (bordure rouge) plutôt que le seul message générique
+    // `error` en bas de formulaire.
+    /** Email déjà utilisé (409, inscription) — message affiché sous le champ email. */
+    val emailFieldError: String? = null,
+    /** Identifiants invalides (401, connexion) — les DEUX champs sont marqués en rouge (on ne
+     *  sait pas lequel est fautif) ; le message complet reste affiché en bas du formulaire. */
+    val credentialsInvalid: Boolean = false,
     // Réglage admin (`google_signin_config`), désactivé par défaut — voir `AuthViewModel.init`.
     val googleSigninEnabled: Boolean = false,
 ) {
@@ -90,8 +99,8 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         }
     }
 
-    fun onEmailChange(v: String) = _uiState.update { it.copy(email = v, error = null) }
-    fun onPasswordChange(v: String) = _uiState.update { it.copy(password = v, error = null) }
+    fun onEmailChange(v: String) = _uiState.update { it.copy(email = v, error = null, emailFieldError = null, credentialsInvalid = false) }
+    fun onPasswordChange(v: String) = _uiState.update { it.copy(password = v, error = null, credentialsInvalid = false) }
     fun onConfirmPasswordChange(v: String) = _uiState.update { it.copy(confirmPassword = v, error = null) }
     fun onFullNameChange(v: String) = _uiState.update { it.copy(fullName = v, error = null) }
     fun onPhoneChange(v: String) = _uiState.update { it.copy(phone = v, error = null) }
@@ -103,6 +112,9 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     fun onResetCodeChange(v: String) = _uiState.update { it.copy(resetCode = v.filter { c -> c.isDigit() }, error = null) }
     fun onNewPasswordChange(v: String) = _uiState.update { it.copy(newPassword = v, error = null) }
     fun onVerifyCodeChange(v: String) = _uiState.update { it.copy(verifyCode = v.filter { c -> c.isDigit() }, error = null) }
+
+    /** Instant ISO 10 minutes dans le futur — durée de vie d'un code OTP (`config.otp.ttlSeconds` côté backend). */
+    private fun otpExpiryIso(): String = java.time.Instant.now().plusSeconds(600).toString()
 
     /** Change de mode (connexion/inscription/oublié/reset), en nettoyant messages. */
     fun setMode(mode: AuthMode) = _uiState.update { it.copy(mode = mode, error = null, info = null) }
@@ -121,11 +133,24 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     /** Remonte une erreur du sélecteur Google (annulation, pas de compte…). */
     fun onGoogleError(message: String?) = _uiState.update { it.copy(error = message) }
 
-    /** Réhydrate la session au lancement (via le refresh token persisté). */
+    /**
+     * Réhydrate la session au lancement (via le refresh token persisté).
+     *
+     * Un compte dont l'email n'est pas encore vérifié (inscription interrompue avant la saisie
+     * du code, ou app fermée/rouverte pendant ce temps) revient sur l'écran de vérification —
+     * avec la possibilité de renvoyer le code — plutôt que d'entrer directement dans l'app
+     * (la vérification n'est plus contournable, voir `skipVerification` retiré).
+     */
     fun bootstrap() {
         viewModelScope.launch {
-            _authState.value = runCatching { AuthState.SignedIn(repository.me().user) }
-                .getOrDefault(AuthState.SignedOut)
+            _authState.value = runCatching { repository.me() }
+                .fold(
+                    onSuccess = {
+                        if (it.user.emailVerified) AuthState.SignedIn(it.user)
+                        else AuthState.PendingEmailVerification(it.user, it.user.email)
+                    },
+                    onFailure = { AuthState.SignedOut },
+                )
         }
     }
 
@@ -134,7 +159,7 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         val s = _uiState.value
         if (!s.canSubmit) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isSubmitting = true, error = null, info = null) }
+            _uiState.update { it.copy(isSubmitting = true, error = null, info = null, emailFieldError = null, credentialsInvalid = false) }
             when (s.mode) {
                 AuthMode.LOGIN -> runCatching { repository.login(s.email.trim(), s.password) }
                     .onSuccess { _authState.value = AuthState.SignedIn(it.user) }
@@ -146,6 +171,7 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
                     repository.register(RegisterRequest(email = s.email.trim(), password = s.password))
                 }.onSuccess {
                     _authState.value = AuthState.PendingEmailVerification(it.user, s.email.trim())
+                    _uiState.update { st -> st.copy(codeExpiresAt = otpExpiryIso()) }
                 }.onFailure { setError(it) }
 
                 AuthMode.FORGOT -> runCatching { repository.forgotPassword(s.email.trim()) }
@@ -168,16 +194,27 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         }
     }
 
-    /** Vérifie le code email ; en cas de succès, passe à la saisie des infos de profil. */
+    /**
+     * Vérifie le code email. Un compte qui a déjà un profil complet (cas d'un compte existant
+     * dont l'email n'avait simplement jamais été vérifié — ex. ancien contournement retiré)
+     * entre directement dans l'app plutôt que de repasser par la saisie du profil.
+     */
     fun verifyEmail() {
-        val pending = _authState.value as? AuthState.PendingEmailVerification ?: return
+        if (_authState.value !is AuthState.PendingEmailVerification) return
         val code = _uiState.value.verifyCode
         if (code.length !in 4..8) return
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmitting = true, error = null) }
-            runCatching { repository.verifyEmailOtp(code) }
-                .onSuccess { _authState.value = AuthState.PendingProfileCompletion(pending.user) }
-                .onFailure { setError(it) }
+            runCatching {
+                repository.verifyEmailOtp(code)
+                repository.me()
+            }.onSuccess { me ->
+                _authState.value = if (!me.profile?.fullName.isNullOrBlank()) {
+                    AuthState.SignedIn(me.user)
+                } else {
+                    AuthState.PendingProfileCompletion(me.user)
+                }
+            }.onFailure { setError(it) }
             _uiState.update { it.copy(isSubmitting = false) }
         }
     }
@@ -222,15 +259,9 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     fun resendEmailCode() {
         viewModelScope.launch {
             runCatching { repository.sendEmailOtp() }
-                .onSuccess { _uiState.update { it.copy(info = "Nouveau code envoyé.") } }
+                .onSuccess { _uiState.update { it.copy(info = "Nouveau code envoyé.", codeExpiresAt = otpExpiryIso()) } }
                 .onFailure { setError(it) }
         }
-    }
-
-    /** Passe la vérification (non bloquante) → saisie des infos de profil. */
-    fun skipVerification() {
-        val pending = _authState.value as? AuthState.PendingEmailVerification ?: return
-        _authState.value = AuthState.PendingProfileCompletion(pending.user)
     }
 
     /** Déconnexion. */
@@ -242,7 +273,18 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         }
     }
 
-    private fun setError(t: Throwable) = _uiState.update { it.copy(error = friendlyMessage(t)) }
+    private fun setError(t: Throwable) {
+        val message = friendlyMessage(t)
+        val is401 = t is DomainError && t.httpStatus == 401
+        val is409 = t is DomainError && t.httpStatus == 409
+        _uiState.update {
+            it.copy(
+                error = message,
+                emailFieldError = if (is409) message else null,
+                credentialsInvalid = is401,
+            )
+        }
+    }
 
     /** Traduit une erreur backend en message utilisateur. */
     private fun friendlyMessage(t: Throwable): String = when {
@@ -250,7 +292,10 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         t is DomainError && t.httpStatus == 409 -> "Cet email est déjà utilisé."
         t is DomainError && (t.code == "OTP_INVALID" || t.code == "OTP_EXPIRED") -> "Code invalide ou expiré."
         t is DomainError && t.code == "VALIDATION_ERROR" -> "Champs invalides (email valide + mot de passe ≥ 8 caractères)."
-        t is DomainError && t.isRetriable -> "Connexion instable. Réessaie."
+        // Erreur réseau (httpStatus 0) : message déjà précis (timeout, hors-ligne…), voir
+        // ApiClient#humanizeNetworkException — ne pas l'écraser par un texte générique.
+        t is DomainError && t.code == com.dualmusic.domain.api.ErrorCode.NETWORK -> t.message
+        t is DomainError && t.isRetriable -> "Le serveur rencontre un problème. Réessaie dans un instant."
         t is DomainError -> t.message
         else -> "Une erreur est survenue. Réessaie."
     }

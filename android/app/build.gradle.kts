@@ -4,6 +4,8 @@
  * Premier jalon : afficher l'identité visuelle Dual Music sur le téléphone (thème,
  * boutons, cadeau animé) avec un minimum de dépendances (uniquement :core:ui).
  */
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -20,12 +22,38 @@ android {
         applicationId = "com.dualmusic.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 3
+        versionName = "0.2.0"
+    }
+
+    // Signature release : lue depuis android/keystore.properties (non versionné). Absent → la
+    // build release reste non signée, sans casser la compilation debug.
+    val keystoreProps = Properties().apply {
+        val f = rootProject.file("keystore.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    signingConfigs {
+        if (keystoreProps.getProperty("storeFile") != null) {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
-        release { isMinifyEnabled = false }
+        debug {
+            // WiFi : IP LAN du PC (à mettre à jour si elle change — `ipconfig`).
+            // Émulateur : "http://10.0.2.2:4000". USB : "http://127.0.0.1:4000" + `adb reverse tcp:4000 tcp:4000`.
+            buildConfigField("String", "API_BASE_URL", "\"http://172.17.10.135:4000\"")
+        }
+        release {
+            isMinifyEnabled = false
+            buildConfigField("String", "API_BASE_URL", "\"https://api.dualmusic.pro\"")
+            signingConfig = signingConfigs.findByName("release")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

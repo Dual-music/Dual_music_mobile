@@ -526,7 +526,9 @@ public struct LiveRoomView: View {
     /// Piste à afficher en plein écran : l'aperçu de l'hôte lui-même, ou le flux du host
     /// pour un spectateur.
     private var displayTrack: VideoTrack? {
-        viewModel.isHost ? viewModel.media.localVideoTrack : viewModel.media.primaryVideoTrack
+        // Room unique : les invités publient aussi dans `media` → on affiche la piste de l'HÔTE
+        // (par userId), jamais « la première reçue » qui pourrait être un invité.
+        viewModel.isHost ? viewModel.media.localVideoTrack : viewModel.hostVideoTrack
     }
 
     /// Bouton central affiché avant que l'hôte n'ait démarré sa diffusion.
@@ -920,11 +922,10 @@ public struct LiveRoomView: View {
 
     // MARK: - Invités sur scène
 
-    /// Tuiles des invités actifs, HORS moi-même — `guestClients` en est déjà la source
-    /// (``LiveViewModel/reconcileGuestSubscriptions`` filtre l'appelant lui-même à la
-    /// construction), pas besoin de connaître mon propre id ici.
+    /// Tuiles des invités actifs, HORS moi-même (``LiveViewModel/otherGuestIds``). Leurs pistes
+    /// viennent de la room unique (`media.remoteTiles`, par userId).
     private var guestTilesStrip: some View {
-        let ids = viewModel.guestClients.keys.sorted()
+        let ids = viewModel.otherGuestIds
         return Group {
             if !ids.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -940,11 +941,11 @@ public struct LiveRoomView: View {
 
     /// Une tuile invité : vidéo si l'invité diffuse, sinon un repli avatar générique.
     private func guestTile(_ userId: String) -> some View {
-        let client = viewModel.guestClients[userId]
+        let track = viewModel.media.remoteTiles[userId]
         let name = viewModel.acceptedGuests.first { $0.userId == userId }?.displayName ?? s.viewerFallback
         return VStack(spacing: 2) {
             ZStack {
-                if let track = client?.primaryVideoTrack {
+                if let track {
                     SwiftUIVideoView(track, layoutMode: .fill)
                 } else {
                     Color.black.opacity(0.4)
@@ -966,10 +967,10 @@ public struct LiveRoomView: View {
     /// descendre de scène. Affiché EN PLUS de la barre d'action normale (le chat continue).
     private var guestSelfControls: some View {
         HStack(spacing: theme.spacing.md) {
-            controlButton(viewModel.guestMedia.isMicrophoneEnabled ? "mic.fill" : "mic.slash.fill") {
+            controlButton(viewModel.media.isMicrophoneEnabled ? "mic.fill" : "mic.slash.fill") {
                 Task { await viewModel.toggleGuestMicrophone() }
             }
-            controlButton(viewModel.guestMedia.isCameraEnabled ? "video.fill" : "video.slash.fill") {
+            controlButton(viewModel.media.isCameraEnabled ? "video.fill" : "video.slash.fill") {
                 Task { await viewModel.toggleGuestCamera() }
             }
             Spacer()

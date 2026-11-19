@@ -550,6 +550,7 @@ private fun CreateConcertForm(
                     DMButton(
                         if (ui.coverUrl != null) strings.changeCover else strings.chooseCover,
                         style = DMButtonStyle.SECONDARY,
+                        enabled = !ui.uploadingCover,
                         onClick = {
                             picker.launch(
                                 androidx.activity.result.PickVisualMediaRequest(

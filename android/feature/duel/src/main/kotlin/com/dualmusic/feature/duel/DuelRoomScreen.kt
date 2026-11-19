@@ -46,6 +46,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -72,6 +74,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Block
@@ -111,6 +114,7 @@ import io.livekit.android.room.track.VideoTrack
 import com.dualmusic.core.ui.celebration.WinnerCelebration
 import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
+import com.dualmusic.core.ui.components.ScheduledAccessGate
 import com.dualmusic.core.ui.gifts.GiftBurst
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.overlay.FloatingReactionsLayer
@@ -154,6 +158,7 @@ fun DuelRoomScreen(
     val mgrMic by viewModel.mediaMgr.remoteMicOn.collectAsStateWithLifecycle()
     val mySlot by viewModel.mySlot.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val winnerSoundUrl by viewModel.soundUrl.collectAsStateWithLifecycle()
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     // Modération manager : artistes coupés d'autorité + spectateurs bannis (synchronisés temps réel).
     val mutedArtists by viewModel.mutedArtists.collectAsStateWithLifecycle()
@@ -169,6 +174,10 @@ fun DuelRoomScreen(
     val moderators by viewModel.moderators.collectAsStateWithLifecycle()
     val myUserId by viewModel.myUserIdFlow.collectAsStateWithLifecycle()
     val isModerator = myUserId != null && moderators.any { it.userId == myUserId }
+    // Gate d'accès programmé (ScheduledAccessGate, parité web) : billet + rôle acteur.
+    val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
+    val hasTicket by viewModel.hasTicket.collectAsStateWithLifecycle()
+    val isActor = isManager || isAdmin || (myUserId != null && (myUserId == duel?.artist1Id || myUserId == duel?.artist2Id))
     var showModeratorsDialog by remember { mutableStateOf(false) }
     val inventory by viewModel.inventory.collectAsStateWithLifecycle()
     val giftCatalog by viewModel.giftCatalog.collectAsStateWithLifecycle()
@@ -216,29 +225,6 @@ fun DuelRoomScreen(
                 kotlinx.coroutines.delay(220)
             }
         }
-    }
-    // Applaudissements pendant la célébration du vainqueur (démarre à l'annonce, s'arrête à l'arrêt).
-    val winnerActive = winnerInfo != null
-    DisposableEffect(winnerActive) {
-        val player = if (winnerActive) {
-            runCatching {
-                android.media.MediaPlayer().apply {
-                    setAudioAttributes(
-                        android.media.AudioAttributes.Builder()
-                            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
-                            .build(),
-                    )
-                    setDataSource("https://assets.mixkit.co/active_storage/sfx/1011/1011-preview.mp3")
-                    isLooping = true
-                    setOnPreparedListener { runCatching { start() } }
-                    prepareAsync()
-                }
-            }.getOrNull()
-        } else {
-            null
-        }
-        onDispose { runCatching { player?.stop() }; runCatching { player?.release() } }
     }
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
@@ -334,7 +320,10 @@ fun DuelRoomScreen(
         )
 
         // --- Cadeau reçu : carte animée façon TikTok (glisse depuis la gauche, au-dessus du chat,
-        // NON-intrusive) puis ressort après ~3,2s. Ne bloque pas le centre du direct. ---
+        // NON-intrusive) puis ressort après ~3,2s. Ne bloque pas le centre du direct. L'affichage
+        // (AnimatedVisibility) est rendu PLUS BAS, APRÈS le rail vertical gauche — pas ici — pour
+        // passer AU-DESSUS de ses icônes si leurs zones se chevauchent sur un petit écran (Compose
+        // empile par ordre de déclaration ; la carte se retrouvait DERRIÈRE le rail, signalé).
         val lastGift = giftFeed.lastOrNull()
         var shownGift by remember { mutableStateOf<DuelGift?>(null) }
         var giftVisible by remember { mutableStateOf(false) }
@@ -343,14 +332,6 @@ fun DuelRoomScreen(
                 shownGift = lastGift; giftVisible = true
                 kotlinx.coroutines.delay(3200); giftVisible = false
             }
-        }
-        AnimatedVisibility(
-            visible = giftVisible && !uiPrefs.reduceAnimations,
-            enter = slideInHorizontally { -it } + fadeIn(),
-            exit = slideOutHorizontally { -it } + fadeOut(),
-            modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 10.dp, bottom = 300.dp),
-        ) {
-            shownGift?.let { GiftReceivedCard(it) }
         }
         // (Réactions flottantes déplacées PLUS BAS, après les vignettes, pour passer AU-DESSUS d'elles.)
 
@@ -528,7 +509,6 @@ fun DuelRoomScreen(
                         }
                     }
                 }
-                error?.let { Text(it, color = colors.destructive) }
                 // Barre d'emojis repliable (ouverte par le bouton 😊 de la rangée du bas).
                 if (showEmojiBar) {
                     Row(
@@ -644,6 +624,19 @@ fun DuelRoomScreen(
                 }
             }
         }
+
+        // Carte « cadeau reçu » — déclarée ICI (après le rail vertical) pour passer AU-DESSUS de
+        // ses icônes si leurs zones se chevauchent (voir commentaire plus haut, état/logique
+        // définis avec `lastGift`/`shownGift`/`giftVisible`).
+        AnimatedVisibility(
+            visible = giftVisible && !uiPrefs.reduceAnimations,
+            enter = slideInHorizontally { -it } + fadeIn(),
+            exit = slideOutHorizontally { -it } + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 10.dp, bottom = 300.dp),
+        ) {
+            shownGift?.let { GiftReceivedCard(it) }
+        }
+
         // Œil flottant : réafficher tout après un ✕ (parité web).
         if (overlaysHidden) {
             Box(
@@ -1016,28 +1009,6 @@ fun DuelRoomScreen(
             }
         }
 
-        // Célébration du vainqueur : PLEIN ÉCRAN pour TOUS (comme une pub), acclamations d'emojis +
-        // confettis, PERSISTANTE jusqu'à ce que le MANAGER l'arrête (n'arrête pas le direct).
-        winnerInfo?.let { w ->
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f))) {
-                WinnerCelebration(
-                    winnerName = w.name,
-                    title = strings.winnerTitle,
-                    subtitle = "${w.votes} voix · ${w.percent}% des votes",
-                    reduceAnimations = uiPrefs.reduceAnimations,
-                )
-                // Emojis d'acclamation ÉPARPILLÉS sur tout l'écran, en mouvement, jusqu'à l'arrêt.
-                if (!uiPrefs.reduceAnimations) ScatteredEmojiLayer(winnerEmojis)
-                // Manager : bouton ARRÊTER remonté (au-dessus de la zone pub) — n'arrête pas le direct.
-                if (isManager) {
-                    DMButton(
-                        "Arrêter l'annonce",
-                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 150.dp),
-                    ) { viewModel.stopWinnerAnnouncement() }
-                }
-            }
-        }
-
         // Sélecteur de pub (ouvert par l'icône 📢 du rail) : choisir la pub à diffuser.
         if (showAdPicker) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showAdPicker = false })
@@ -1060,22 +1031,6 @@ fun DuelRoomScreen(
             }
         }
 
-        // Diffusion pub sponsor : overlay vidéo pour tous + contrôle pour le manager
-        // (masqué si l'organisateur a désactivé les pubs sur ce duel — parité web).
-        SponsorAdLayer(
-            activeAd = sponsorAd,
-            // Masqué pendant l'annonce du vainqueur (pour ne pas cacher « Arrêter l'annonce »).
-            canTrigger = isManager && duel?.allowsSponsorAds != false && winnerInfo == null,
-            ads = sponsorAds,
-            busy = sponsorBusy,
-            onLoadAds = { viewModel.sponsor.loadAds() },
-            onPlay = { viewModel.sponsor.play(it) },
-            onStop = { viewModel.sponsor.stop() },
-            // Le déclencheur est désormais une ICÔNE du rail (voir 📢), pas un bouton bas qui
-            // masquait la ligne de message. L'overlay + l'arrêt restent gérés ici.
-            showTriggerButton = false,
-        )
-
         // --- Panneau cadeaux : destinataire (Artiste 1 / Artiste 2 / Manager) + Mes cadeaux / Boutique ---
         if (showGiftPanel) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { showGiftPanel = false })
@@ -1086,14 +1041,34 @@ fun DuelRoomScreen(
                 duel?.managerId?.let { add(it to "Manager") }
             }
             var target by remember(targets.size) { mutableStateOf(targets.firstOrNull()?.first) }
+            var targetPickerExpanded by remember { mutableStateOf(false) }
+            val targetName = targets.find { it.first == target }?.second
             Column(
                 modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().fillMaxHeight(0.6f).background(colors.background).navigationBarsPadding().padding(DualMusicTheme.spacing.md),
                 verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
             ) {
                 Text("🎁 ${strings.sendGift}", color = colors.foreground, fontWeight = FontWeight.Bold)
-                // Destinataire
-                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
-                    targets.forEach { (id, name) -> GiftPill("🎤 $name", target == id) { target = id } }
+                // Destinataire — champ select (parité web `GiftPanel.tsx`), pas une rangée de
+                // pastilles : plus lisible quand il y a plusieurs destinataires possibles.
+                Text("Destinataire", color = colors.mutedForeground, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Box {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                            .clickable { targetPickerExpanded = true }.padding(horizontal = 12.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(targetName?.let { "🎤 $it" } ?: "Choisir un destinataire", color = colors.foreground)
+                        Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = colors.mutedForeground)
+                    }
+                    DropdownMenu(expanded = targetPickerExpanded, onDismissRequest = { targetPickerExpanded = false }) {
+                        targets.forEach { (id, name) ->
+                            DropdownMenuItem(
+                                text = { Text("🎤 $name") },
+                                onClick = { target = id; targetPickerExpanded = false },
+                            )
+                        }
+                    }
                 }
                 // Onglets Mes cadeaux / Boutique
                 Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
@@ -1103,14 +1078,23 @@ fun DuelRoomScreen(
                 Column(modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
                     if (!giftShop) {
                         if (inventory.isEmpty()) Text(strings.noGiftsBuyInShop, color = colors.mutedForeground, fontSize = 13.sp)
+                        // Icône flèche d'envoi DÉDIÉE devant chaque cadeau (parité compétition) — le
+                        // reste de la ligne n'envoie plus rien au tap, évite la confusion entre
+                        // « je regarde » et « j'envoie ».
                         inventory.forEach { g ->
                             Row(
-                                modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-                                    .clickable { target?.let { viewModel.sendGift(g.giftId, it) }; showGiftPanel = false }.padding(DualMusicTheme.spacing.md),
+                                modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp)).padding(DualMusicTheme.spacing.md),
                                 horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text("${g.imageUrl ?: "🎁"}  ${g.name ?: ""}", color = colors.foreground)
-                                Text("×${g.quantity}", color = colors.accent, fontWeight = FontWeight.Bold)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("${g.imageUrl ?: "🎁"}  ${g.name ?: ""}", color = colors.foreground)
+                                    Text("×${g.quantity}", color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                                Box(
+                                    modifier = Modifier.size(38.dp).background(colors.primary, CircleShape)
+                                        .clickable { target?.let { viewModel.sendGift(g.giftId, it) }; showGiftPanel = false },
+                                    contentAlignment = Alignment.Center,
+                                ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.sendGift, tint = Color.White, modifier = Modifier.size(17.dp)) }
                             }
                         }
                     } else {
@@ -1184,6 +1168,84 @@ fun DuelRoomScreen(
                 DMButton("Quitter", modifier = Modifier.fillMaxWidth(0.7f), onClick = onLeave)
             }
         }
+
+        // Popup moderne (au lieu d'un simple bandeau de texte rouge, peu visible et sans action
+        // possible) pour les échecs d'actions en direct — `error` est un canal générique partagé
+        // (cadeaux, votes...), donc Réessayer n'est proposé QUE pour l'échec de démarrage de
+        // diffusion (seul cas où relancer la MÊME action a un sens ici) ; `Dialog()` flotte de
+        // toute façon au-dessus de tout l'écran (fenêtre système), peu importe sa position ici.
+        error?.let { message ->
+            com.dualmusic.core.ui.components.DMErrorDialog(
+                message = message,
+                onDismiss = { viewModel.clearError() },
+                onRetry = if (message.startsWith("Impossible de démarrer la diffusion")) {
+                    { viewModel.startBroadcast() }
+                } else null,
+            )
+        }
+
+        // Célébration du vainqueur : PLEIN ÉCRAN pour TOUS (comme une pub), acclamations d'emojis +
+        // confettis, PERSISTANTE jusqu'à ce que le MANAGER l'arrête (n'arrête pas le direct).
+        // Comme la pub juste en dessous, rendue tout en bas de l'arbre pour être VRAIMENT imposée
+        // par-dessus tout le reste — avant ce déplacement, un panneau ouvert APRÈS elle (cadeau,
+        // classement, signalement) passait PAR-DESSUS l'annonce, qui n'était donc pas réellement
+        // fixe à l'écran pour un spectateur ayant un panneau ouvert au moment de l'annonce (signalé).
+        winnerInfo?.let { w ->
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f))) {
+                WinnerCelebration(
+                    winnerName = w.name,
+                    title = strings.winnerTitle,
+                    avatarUrl = w.avatar,
+                    subtitle = "${w.votes} voix · ${w.percent}% des votes",
+                    soundUrl = winnerSoundUrl,
+                    reduceAnimations = uiPrefs.reduceAnimations,
+                )
+                // Emojis d'acclamation ÉPARPILLÉS sur tout l'écran, en mouvement, jusqu'à l'arrêt.
+                if (!uiPrefs.reduceAnimations) ScatteredEmojiLayer(winnerEmojis)
+                // Manager : bouton ARRÊTER remonté (au-dessus de la zone pub) — n'arrête pas le direct.
+                if (isManager) {
+                    DMButton(
+                        "Arrêter l'annonce",
+                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 150.dp),
+                    ) { viewModel.stopWinnerAnnouncement() }
+                }
+            }
+        }
+
+        // Diffusion pub sponsor : overlay vidéo pour tous + contrôle pour le manager (masqué si
+        // l'organisateur a désactivé les pubs sur ce duel — parité web) — rendue tout en bas, même
+        // raison que l'annonce du vainqueur ci-dessus : un panneau ouvert (cadeau, classement,
+        // signalement) passait auparavant par-dessus elle, elle n'était donc pas réellement imposée.
+        SponsorAdLayer(
+            activeAd = sponsorAd,
+            // Masqué pendant l'annonce du vainqueur (pour ne pas cacher « Arrêter l'annonce »).
+            canTrigger = isManager && duel?.allowsSponsorAds != false && winnerInfo == null,
+            ads = sponsorAds,
+            busy = sponsorBusy,
+            onLoadAds = { viewModel.sponsor.loadAds() },
+            onPlay = { viewModel.sponsor.play(it) },
+            onStop = { viewModel.sponsor.stop() },
+            // Le déclencheur est désormais une ICÔNE du rail (voir 📢), pas un bouton bas qui
+            // masquait la ligne de message. L'overlay + l'arrêt restent gérés ici.
+            showTriggerButton = false,
+        )
+
+        // --- Gate d'accès programmé (parité web ScheduledAccessGate) : bloque l'entrée tant que
+        //     l'heure programmée n'est pas atteinte — AUCUNE exception pour l'hôte/manager/admin —
+        //     et exige un billet si le duel est déjà en direct, payant, sans billet. Rendu en tout
+        //     dernier → toujours au-dessus (même de la barrière de bannissement). ---
+        ScheduledAccessGate(
+            type = "duel",
+            scheduledAtIso = duel?.scheduledTime,
+            status = duel?.status?.name?.lowercase(),
+            isActor = isActor,
+            hasTicket = hasTicket,
+            ticketPrice = duel?.ticketPrice ?: 0.0,
+            // Cet écran n'est accessible qu'à un utilisateur déjà connecté (navigation en amont).
+            isAuthenticated = true,
+            onPurchase = { viewModel.buyTicket() },
+            onDismiss = onLeave,
+        )
     }
 }
 
@@ -1441,6 +1503,11 @@ private fun GiftReceivedCard(g: DuelGift) {
             fallbackEmoji = g.image?.takeIf { it.isNotBlank() && !it.startsWith("http") } ?: "🎁",
         )
         Column {
+            // Nom du donateur (parité web, qui l'affiche déjà) — absent auparavant, la carte ne
+            // montrait que le cadeau sans dire QUI l'avait envoyé (signalé).
+            g.fromUserName?.takeIf { it.isNotBlank() }?.let {
+                Text(it, color = Color.White.copy(alpha = 0.85f), fontWeight = FontWeight.SemiBold, fontSize = 10.sp, maxLines = 1)
+            }
             Text(g.name ?: "Cadeau reçu", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1)
             Text("+${g.value.toInt()} crédits", color = Color.White.copy(alpha = 0.9f), fontSize = 11.sp)
         }

@@ -35,6 +35,10 @@ data class WithdrawalUiState(
     val submitting: Boolean = false,
     val submitted: Boolean = false,
     val error: String? = null,
+    // Erreurs rattachées à un champ précis (bordure rouge) plutôt que le seul message
+    // générique `error` en bas de formulaire.
+    val amountError: String? = null,
+    val pinError: Boolean = false,
 )
 
 /**
@@ -79,7 +83,7 @@ class WithdrawalViewModel(private val repository: WithdrawalRepository) : ViewMo
 
     /** Met à jour le montant et rafraîchit l'aperçu du net. */
     fun onAmountChange(value: String) {
-        _uiState.update { it.copy(amount = value, error = null) }
+        _uiState.update { it.copy(amount = value, error = null, amountError = null) }
         val amount = value.toDoubleOrNull()
         if (amount == null || amount <= 0) {
             _uiState.update { it.copy(net = null) }
@@ -198,7 +202,7 @@ class WithdrawalViewModel(private val repository: WithdrawalRepository) : ViewMo
         val state = _uiState.value
         val amount = state.amount.toDoubleOrNull()
         if (amount == null || amount <= 0) {
-            _uiState.update { it.copy(error = appStrings.errInvalidAmount) }
+            _uiState.update { it.copy(amountError = appStrings.errInvalidAmount) }
             return
         }
         if (state.selectedMethodId == null) {
@@ -206,11 +210,11 @@ class WithdrawalViewModel(private val repository: WithdrawalRepository) : ViewMo
             return
         }
         if (!pin.matches(Regex("^\\d{6}$"))) {
-            _uiState.update { it.copy(error = appStrings.errPin6) }
+            _uiState.update { it.copy(error = appStrings.errPin6, pinError = true) }
             return
         }
         viewModelScope.launch {
-            _uiState.update { it.copy(submitting = true, error = null) }
+            _uiState.update { it.copy(submitting = true, error = null, amountError = null, pinError = false) }
             runCatching { repository.createRequest(amount, pin, state.selectedMethodId) }
                 .onSuccess {
                     val requests = runCatching { repository.myRequests() }.getOrDefault(state.requests)
@@ -218,12 +222,26 @@ class WithdrawalViewModel(private val repository: WithdrawalRepository) : ViewMo
                         it.copy(submitting = false, submitted = true, amount = "", net = null, requests = requests)
                     }
                 }
-                .onFailure { t -> _uiState.update { it.copy(submitting = false, error = friendly(t)) } }
+                .onFailure { t ->
+                    val isPinIssue = t is DomainError && (t.code == "PIN_WRONG" || t.code == "PIN_LOCKED")
+                    val isAmountIssue = t is DomainError && t.isInsufficientBalance
+                    _uiState.update {
+                        it.copy(
+                            submitting = false,
+                            error = friendly(t),
+                            pinError = isPinIssue,
+                            amountError = if (isAmountIssue) friendly(t) else null,
+                        )
+                    }
+                }
         }
     }
 
     /** Réinitialise le drapeau de succès (après affichage du message). */
     fun consumeSubmitted() = _uiState.update { it.copy(submitted = false) }
+
+    /** Efface l'erreur du champ PIN (l'utilisateur reprend sa saisie). */
+    fun clearPinError() = _uiState.update { it.copy(pinError = false, error = null) }
 
     private fun friendly(t: Throwable): String = when {
         t is DomainError && t.code == "PIN_WRONG" -> "Code PIN incorrect."

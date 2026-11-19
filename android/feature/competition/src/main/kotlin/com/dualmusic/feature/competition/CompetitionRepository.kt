@@ -2,6 +2,7 @@ package com.dualmusic.feature.competition
 
 import com.dualmusic.core.network.ApiClient
 import com.dualmusic.core.network.Endpoint
+import com.dualmusic.domain.competition.CompetitionApplyRequest
 import com.dualmusic.domain.competition.CompetitionCandidate
 import com.dualmusic.domain.competition.CompetitionEndpoints
 import com.dualmusic.domain.competition.CompetitionGiftRequest
@@ -83,6 +84,10 @@ private data class ManualCandidatesConfigSetting(val value: ManualCandidatesConf
 
 @Serializable
 private data class ManualCandidatesConfigValue(val enabled: Boolean? = null)
+
+/** Son d'annonce du vainqueur, réglable par l'admin (`GET /settings/public/winner_sound_url`). */
+@Serializable
+private data class WinnerSoundUrlSetting(val value: String? = null)
 
 /** Corps de `POST /competitions/:id/candidates/manual`. */
 @Serializable
@@ -221,6 +226,19 @@ class CompetitionRepository(private val api: ApiClient) {
         )
 
     /**
+     * Auto-candidature de l'artiste (parité web `CompetitionApplyDialog` → `apply(id, {pitch,
+     * videoDemoUrl})`). Distinct de [addCandidateManually] (ajout direct par le manager, sans
+     * passer par cette candidature en ligne). `POST /competitions/:id/apply`.
+     */
+    suspend fun apply(competitionId: String, pitch: String?, videoDemoUrl: String?) {
+        val body = json.encodeToString(
+            CompetitionApplyRequest.serializer(),
+            CompetitionApplyRequest(pitch = pitch?.ifBlank { null }, videoDemoUrl = videoDemoUrl?.ifBlank { null }),
+        )
+        api.request<Unit>(Endpoint.post(CompetitionEndpoints.apply(competitionId), body))
+    }
+
+    /**
      * Vote payant pour un candidat (débit atomique + idempotent).
      * @param credits nombre entier de crédits (contrainte backend).
      */
@@ -258,6 +276,21 @@ class CompetitionRepository(private val api: ApiClient) {
     suspend fun inventory(): List<InventoryItem> =
         api.request(Endpoint.get(GiftEndpoints.INVENTORY), ListSerializer(InventoryItem.serializer()))
 
+    /** Catalogue des cadeaux virtuels (boutique) — parité concert/live `giftCatalog()`. */
+    suspend fun giftCatalog(): List<com.dualmusic.domain.model.VirtualGift> =
+        api.request(Endpoint.get(GiftEndpoints.CATALOG), ListSerializer(com.dualmusic.domain.model.VirtualGift.serializer()))
+
+    /** Achète un cadeau (débit wallet atomique) — parité concert/live `purchaseGift()`. */
+    suspend fun purchaseGift(giftId: String, quantity: Int = 1) {
+        api.request<Unit>(
+            Endpoint.post(
+                "/wallet/gifts/purchase",
+                """{"giftId":"$giftId","quantity":$quantity}""",
+                idempotencyKey = "buy-$giftId-$quantity-${System.nanoTime()}",
+            ),
+        )
+    }
+
     /** Le caller possède-t-il un billet pour cette compétition ? (`GET /competitions/:id/my-ticket`). */
     suspend fun ticketInfo(id: String): CompetitionTicketInfo =
         api.request(Endpoint.get(CompetitionEndpoints.myTicket(id)), CompetitionTicketInfo.serializer())
@@ -283,6 +316,30 @@ class CompetitionRepository(private val api: ApiClient) {
             ).user?.id
         }.getOrNull()
 
+    /**
+     * Vrai si le caller est admin — parité web `userRoles.includes("admin")`/`isAdmin` dans
+     * `ScheduledAccessGate`/`CompetitionLive.tsx` (acteur exempté de billet, PAS de l'attente).
+     */
+    suspend fun amIAdmin(): Boolean =
+        runCatching {
+            api.request(
+                Endpoint.get(com.dualmusic.domain.user.UserEndpoints.ME),
+                com.dualmusic.domain.auth.MeResponse.serializer(),
+            ).roles.any { it == com.dualmusic.domain.model.UserRole.ADMIN }
+        }.getOrDefault(false)
+
+    /**
+     * Vrai si le caller a le rôle artiste — parité web `roles.includes("artist")` dans
+     * `CompetitionDetail.tsx` (éligibilité au bouton Candidater).
+     */
+    suspend fun amIArtist(): Boolean =
+        runCatching {
+            api.request(
+                Endpoint.get(com.dualmusic.domain.user.UserEndpoints.ME),
+                com.dualmusic.domain.auth.MeResponse.serializer(),
+            ).roles.any { it == com.dualmusic.domain.model.UserRole.ARTIST }
+        }.getOrDefault(false)
+
     /** Compétitions gérées par ce manager (`GET /competitions/mine`). */
     suspend fun myCompetitions(): List<Competition> =
         api.request(Endpoint.get("/competitions/mine"), ListSerializer(Competition.serializer()))
@@ -306,10 +363,41 @@ class CompetitionRepository(private val api: ApiClient) {
 
     // --- Contrôles MANAGER en direct ---
 
-    /** Valide/rejette une candidature (`POST /competitions/candidates/:id/review`). */
-    suspend fun reviewCandidate(candidateId: String, approve: Boolean) {
-        api.request<Unit>(Endpoint.post("/competitions/candidates/$candidateId/review", """{"approve":$approve}"""))
+    /**
+     * Valide/rejette une candidature (`POST /competitions/candidates/:id/review`).
+     * @param rejectionReason motif optionnel, transmis seulement au rejet.
+     */
+    suspend fun reviewCandidate(candidateId: String, approve: Boolean, rejectionReason: String? = null) {
+        val reason = if (!approve) {
+            rejectionReason?.ifBlank { null }?.let { ""","rejectionReason":${it.jsonQuoted()}""" } ?: ""
+        } else {
+            ""
+        }
+        api.request<Unit>(Endpoint.post(CompetitionEndpoints.reviewCandidate(candidateId), """{"approve":$approve$reason}"""))
     }
+
+    /**
+     * Retire un candidat (n'importe quel statut, typiquement un déjà-approuvé). `DELETE
+     * /competitions/candidates/:id` — le serveur rembourse automatiquement les frais d'inscription
+     * s'ils avaient réellement été débités (no-op idempotent sinon, voir doc endpoint).
+     */
+    suspend fun removeCandidate(candidateId: String): com.dualmusic.domain.competition.RemoveCandidateResult =
+        api.request(
+            Endpoint.delete(CompetitionEndpoints.removeCandidate(candidateId)),
+            com.dualmusic.domain.competition.RemoveCandidateResult.serializer(),
+        )
+
+    /**
+     * Compte cumulé des candidats en attente, toutes compétitions gérées par le caller (manager) —
+     * badge du menu « Compétitions ». `GET /competitions/candidates/pending-count/mine`.
+     */
+    suspend fun pendingCandidatesCount(): Int =
+        runCatching {
+            api.request(
+                Endpoint.get(CompetitionEndpoints.PENDING_CANDIDATES_MINE),
+                com.dualmusic.domain.competition.PendingCandidatesCount.serializer(),
+            ).count
+        }.getOrDefault(0)
 
     /**
      * L'ajout manuel de candidat est-il activé (réglage admin, `manual_candidates_config`) ?
@@ -322,6 +410,15 @@ class CompetitionRepository(private val api: ApiClient) {
                 ManualCandidatesConfigSetting.serializer(),
             ).value?.enabled == true
         }.getOrDefault(false)
+
+    /** URL du son d'annonce du vainqueur, `null` = son par défaut côté client. */
+    suspend fun winnerSoundUrl(): String? =
+        runCatching {
+            api.request(
+                Endpoint.get("/settings/public/winner_sound_url").copy(anonymous = true),
+                WinnerSoundUrlSetting.serializer(),
+            ).value
+        }.getOrNull()
 
     /** Annuaire public des artistes (`GET /artists`) — pour le picker d'ajout manuel. */
     suspend fun artistDirectory(): List<com.dualmusic.domain.creator.ArtistDirectoryEntry> =

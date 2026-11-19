@@ -21,13 +21,17 @@ data class SponsorRequest(
     @SerialName("event_id") val eventId: String? = null,
     @SerialName("media_type") val mediaType: String? = null,
     @SerialName("media_duration_seconds") val mediaDurationSeconds: Int? = null,
-    /** `pending` | `approved` | `rejected`. */
+    /**
+     * `pending` (soumise) → `awaiting_payment` (prix fixé par l'admin, paiement requis) →
+     * `paid` (payée, en attente de validation finale) → `approved` (publiée en pub live) ;
+     * ou `rejected`/`cancelled` à tout moment. Voir `sponsor.service.js` côté backend.
+     */
     val status: String = "pending",
     @SerialName("price_credits") val priceCredits: Double = 0.0,
     @SerialName("created_at") val createdAt: String? = null,
 ) {
-    /** Vrai si la demande est approuvée et en attente de paiement. */
-    val payable: Boolean get() = status == "approved"
+    /** Vrai si l'admin a fixé le prix et attend le paiement du demandeur. */
+    val payable: Boolean get() = status == "awaiting_payment"
 }
 
 /**

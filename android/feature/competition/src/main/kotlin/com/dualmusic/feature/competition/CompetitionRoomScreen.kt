@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,6 +46,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import com.dualmusic.core.ui.celebration.WinnerCelebration
 import com.dualmusic.core.ui.components.DMEmptyState
+import com.dualmusic.core.ui.components.ScheduledAccessGate
 import com.dualmusic.core.ui.gifts.GiftBurst
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.overlay.FloatingReactionsLayer
@@ -192,6 +195,10 @@ class CompetitionRoomViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    /** Son d'annonce du vainqueur réglé par l'admin — `null` = son par défaut côté client. */
+    private val _soundUrl = MutableStateFlow<String?>(null)
+    val soundUrl: StateFlow<String?> = _soundUrl.asStateFlow()
+
     /** Compteur local de J'aime + flux de réactions flottantes (relayé à tous). */
     private val _likes = MutableStateFlow(0)
     val likes: StateFlow<Int> = _likes.asStateFlow()
@@ -202,6 +209,10 @@ class CompetitionRoomViewModel(
     /** Inventaire de cadeaux du caller (pour l'offrande à un candidat). */
     private val _inventory = MutableStateFlow<List<com.dualmusic.domain.gift.InventoryItem>>(emptyList())
     val inventory: StateFlow<List<com.dualmusic.domain.gift.InventoryItem>> = _inventory.asStateFlow()
+
+    /** Catalogue de la boutique (onglet « Boutique » du panneau cadeaux, parité concert/live). */
+    private val _giftCatalog = MutableStateFlow<List<com.dualmusic.domain.model.VirtualGift>>(emptyList())
+    val giftCatalog: StateFlow<List<com.dualmusic.domain.model.VirtualGift>> = _giftCatalog.asStateFlow()
 
     /** Vrai si le caller est le manager (organisateur) → contrôles en direct. */
     private val _isManager = MutableStateFlow(false)
@@ -327,6 +338,19 @@ class CompetitionRoomViewModel(
     private val _ticketPrice = MutableStateFlow(0.0)
     val ticketPrice: StateFlow<Double> = _ticketPrice.asStateFlow()
 
+    /** Vrai si le caller possède déjà un billet — pour `ScheduledAccessGate` (indépendant de
+     *  [needsTicket], qui ne se pose que si la compétition est payante ET le caller pas publieur). */
+    private val _hasTicket = MutableStateFlow(false)
+    val hasTicket: StateFlow<Boolean> = _hasTicket.asStateFlow()
+
+    /** Vrai si le caller est admin (parité web `isAdmin`) — `ScheduledAccessGate`. */
+    private val _isAdmin = MutableStateFlow(false)
+    val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
+
+    /** Date/heure de début programmée (`start_at`) — pour `ScheduledAccessGate`. */
+    private val _scheduledAt = MutableStateFlow<String?>(null)
+    val scheduledAt: StateFlow<String?> = _scheduledAt.asStateFlow()
+
     /** Room LiveKit (identique au web : `livekit_room` ou repli `comp-<id>`). */
     private var roomName: String = "comp-$competitionId"
 
@@ -337,6 +361,22 @@ class CompetitionRoomViewModel(
     fun loadInventory() {
         viewModelScope.launch {
             runCatching { repository.inventory() }.getOrNull()?.let { _inventory.value = it }
+        }
+    }
+
+    /** Charge le catalogue de la boutique (onglet « Boutique »). */
+    fun loadGiftCatalog() {
+        viewModelScope.launch {
+            runCatching { repository.giftCatalog() }.getOrNull()?.let { _giftCatalog.value = it }
+        }
+    }
+
+    /** Achète un cadeau (débit wallet) puis recharge l'inventaire — parité concert/live. */
+    fun purchaseGift(giftId: String) {
+        viewModelScope.launch {
+            runCatching { repository.purchaseGift(giftId, 1) }
+                .onSuccess { loadInventory() }
+                .onFailure { _error.value = it.message ?: com.dualmusic.core.ui.i18n.appStrings.sendFailed }
         }
     }
 
@@ -374,11 +414,14 @@ class CompetitionRoomViewModel(
     fun start() {
         refresh()
         loadInventory()
+        loadGiftCatalog()
         loadGiftLeaderboard()
         recordingCtl.startPolling()
+        viewModelScope.launch { _soundUrl.value = repository.winnerSoundUrl() }
         viewModelScope.launch {
             val comp = runCatching { repository.competition(competitionId) }.getOrNull()
             _status.value = comp?.status
+            _scheduledAt.value = comp?.startAt
             _forcedFocusId.value = comp?.forcedFocusParticipantId
             _mode.value = comp?.mode
             _chatEnabled.value = comp?.chatEnabled ?: true
@@ -388,16 +431,21 @@ class CompetitionRoomViewModel(
             _myUserId.value = myId
             val manager = comp?.managerId != null && comp.managerId == myId
             _isManager.value = manager
+            _isAdmin.value = runCatching { repository.amIAdmin() }.getOrDefault(false)
             // Multi-cam : en mode « online », un candidat APPROUVÉ diffuse aussi sa caméra.
             val cands = runCatching { repository.candidates(competitionId) }.getOrNull().orEmpty()
             val approvedCandidate = comp?.mode == "online" && myId != null &&
                 cands.any { it.artistId == myId && it.status == "approved" }
             val publish = manager || approvedCandidate
             _canPublish.value = publish
-            // Billetterie : une compétition payante exige un billet pour les spectateurs (hors publieurs).
-            _ticketPrice.value = comp?.viewerTicketPrice ?: 0.0
-            val needsTicket = comp?.isPublicPaid == true && !publish &&
-                runCatching { repository.ticketInfo(competitionId) }.getOrNull()?.hasTicket != true
+            // Billetterie : une compétition payante exige un billet pour les spectateurs (hors
+            // publieurs). Prix EFFECTIF : 0 si la compétition n'est pas `is_public_paid` (parité web
+            // `ScheduledAccessGate` : `ticketPrice = comp.is_public_paid ? viewer_ticket_price : 0`).
+            _ticketPrice.value = if (comp?.isPublicPaid == true) (comp.viewerTicketPrice) else 0.0
+            if (comp?.isPublicPaid == true && !publish) {
+                _hasTicket.value = runCatching { repository.ticketInfo(competitionId) }.getOrNull()?.hasTicket == true
+            }
+            val needsTicket = comp?.isPublicPaid == true && !publish && !_hasTicket.value
             _needsTicket.value = needsTicket
             // Rejoint la room (sauf blocage billet) : les spectateurs consomment, les publieurs diffusent.
             if (!needsTicket) runCatching { media.join(roomName = roomName, isHost = manager, canPublish = publish) }
@@ -502,16 +550,28 @@ class CompetitionRoomViewModel(
             // Cadeaux : burst central pour tous + resync du classement (un gift à un candidat
             // alimente son score). Parité live/duel/concert.
             live.on(Realtime.RealtimeEvent.GIFT, com.dualmusic.domain.realtime.GiftPayload.serializer()) { p ->
-                // Recharge le classement (met à jour la bulle top-donateur) ET en profite pour
-                // résoudre le NOM de l'expéditeur (déjà hydraté avec les profils) → affiché dans
-                // la carte glissante « cadeau reçu » (SEULE animation — parité concert/live, plus
-                // de burst central ni de bannière séparée).
+                // Nom de l'expéditeur : le backend le résout désormais directement (`from_user_name`,
+                // évite d'attendre le classement — un premier cadeau pouvait y arriver avant d'y être
+                // indexé, laissant le nom vide un instant) ; repli sur le classement fraîchement
+                // rechargé si absent (compat anciens événements / API pas encore redéployée).
+                // Recharge aussi le classement (met à jour la bulle top-donateur) dans tous les cas.
                 viewModelScope.launch {
                     val list = refreshGiftLeaderboard()
-                    val senderName = list.find { it.userId == p.fromUserId }?.displayName
+                    val senderName = p.fromUserName ?: list.find { it.userId == p.fromUserId }?.displayName
                     _giftFeed.update { it + CompGift(giftCounter++, p.fromUserId, senderName, p.giftName, p.giftImage, p.value) }
                 }
                 refresh()
+            }
+            // Resynchronisation du classement (vote payant, vote de jury OU cadeau) émise par le
+            // backend à CHAQUE changement de score d'un candidat — corrige le classement/points de
+            // meilleur donateur qui ne se mettaient à jour QUE pour l'auteur du vote/cadeau (seul
+            // `vote()`/`sendGift()` locaux appelaient `refresh()`) : les AUTRES spectateurs ne
+            // voyaient rien bouger sans quitter/rejoindre la salle.
+            live.on(Realtime.RealtimeEvent.CANDIDATES_UPDATED, com.dualmusic.domain.realtime.CandidatesUpdatedPayload.serializer()) { p ->
+                if (p.competitionId == null || p.competitionId == competitionId) {
+                    refresh()
+                    viewModelScope.launch { refreshGiftLeaderboard() }
+                }
             }
             // Pub sponsor (start/stop) diffusée à toute la room.
             live.on(Realtime.RealtimeEvent.SPONSOR_AD, com.dualmusic.domain.realtime.SponsorAdPayload.serializer()) { p ->
@@ -525,18 +585,41 @@ class CompetitionRoomViewModel(
     /** Publieur : démarre la diffusion caméra/micro. */
     fun startBroadcast() {
         viewModelScope.launch {
+            // Le join initial (dans `start()`) peut avoir échoué SILENCIEUSEMENT (réseau lent,
+            // timing — `LiveRoomClient.join()` avale ses propres erreurs et se contente de
+            // passer `connectionState` à `Failed`, sans jamais lever d'exception, voir son
+            // `catch (e: Throwable)`). `startBroadcast()` appelait alors la publication caméra
+            // sur une room jamais VRAIMENT connectée avec les droits de publication du token —
+            // le SFU rejette avec « insufficient permissions » même si `isManager`/`canPublish`
+            // côté client sont corrects, puisque ce sont ces MÊMES valeurs (déjà correctes) qui
+            // avaient été envoyées au join qui a échoué. On (re)joint explicitement si la room
+            // n'est pas connectée, et on ATTEND cette connexion avant de tenter la publication —
+            // parité `ConcertRoomViewModel#startBroadcast`, qui a déjà ce correctif.
+            if (media.connectionState.value !is com.dualmusic.core.media.LiveConnectionState.Connected) {
+                media.join(roomName = roomName, isHost = _isManager.value, canPublish = _canPublish.value)
+            }
             // `_broadcasting` ne doit passer à true QUE si la caméra/micro a vraiment démarré —
             // sinon l'interface affichait les icônes "en direct" (Réglages, filtres…) alors
             // qu'aucun flux n'était réellement publié, sans le moindre message d'erreur (bug
             // signalé : le manager clique sur Démarrer, rien ne se passe, aucun retour).
-            runCatching { media.startBroadcast() }
-                .onSuccess { _broadcasting.value = true; broadcastMediaState() }
-                .onFailure {
-                    // Diagnostic temporaire (affiché à l'écran, pas seulement en log) — permet de
-                    // confirmer ce qui a réellement été envoyé au join sans dépendre d'un logcat.
-                    _error.value = (it.message ?: "Impossible de démarrer la diffusion (caméra/micro)") +
-                        "  [debug: room=$roomName isManager=${_isManager.value} canPublish=${_canPublish.value}]"
-                }
+            val started = media.connectionState.value is com.dualmusic.core.media.LiveConnectionState.Connected &&
+                runCatching { media.startBroadcast() }
+                    .onFailure {
+                        // Détail technique en logcat uniquement — jamais affiché brut à l'écran
+                        // (convention de l'appli : les erreurs utilisateur sont toujours humanisées).
+                        android.util.Log.w(
+                            "CompetitionRoom",
+                            "startBroadcast a échoué room=$roomName isManager=${_isManager.value} canPublish=${_canPublish.value}",
+                            it,
+                        )
+                    }
+                    .isSuccess
+            if (started) {
+                _broadcasting.value = true
+                broadcastMediaState()
+            } else {
+                _error.value = "Impossible de démarrer la diffusion. Réessaie dans un instant."
+            }
         }
     }
 
@@ -735,6 +818,17 @@ class CompetitionRoomViewModel(
         }
     }
 
+    /**
+     * Achète le billet spectateur (accès programmé — `ScheduledAccessGate`). Distinct de
+     * [buyTicket] (qui rejoint aussi la room vidéo) : le gate programmé peut débloquer l'achat
+     * AVANT même que la compétition soit en direct.
+     */
+    suspend fun buyTicketForGate(): Result<Unit> {
+        val result = runCatching { repository.buyTicket(competitionId) }
+        if (result.isSuccess) { _needsTicket.value = false; _hasTicket.value = true }
+        return result
+    }
+
     /** J'aime : incrémente le compteur (persisté + diffusé) + fait flotter un cœur pour tous. */
     fun sendLike() {
         _likes.value += 1
@@ -880,8 +974,10 @@ fun CompetitionRoomScreen(
     val candidates by viewModel.candidates.collectAsStateWithLifecycle()
     val status by viewModel.status.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val winnerSoundUrl by viewModel.soundUrl.collectAsStateWithLifecycle()
     val emojiFeed by viewModel.emojiFeed.collectAsStateWithLifecycle()
     val inventory by viewModel.inventory.collectAsStateWithLifecycle()
+    val giftCatalog by viewModel.giftCatalog.collectAsStateWithLifecycle()
     val likes by viewModel.likes.collectAsStateWithLifecycle()
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val topDonor by viewModel.topDonor.collectAsStateWithLifecycle()
@@ -927,10 +1023,21 @@ fun CompetitionRoomScreen(
     val viewers by viewModel.viewers.collectAsStateWithLifecycle()
     val myUserId by viewModel.myUserId.collectAsStateWithLifecycle()
     val isModerator = myUserId != null && moderators.any { it.userId == myUserId }
+    // Gate d'accès programmé (ScheduledAccessGate, parité web) : billet + rôle acteur + date.
+    val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
+    val hasTicket by viewModel.hasTicket.collectAsStateWithLifecycle()
+    val scheduledAt by viewModel.scheduledAt.collectAsStateWithLifecycle()
+    // `canPublish` couvre aussi le candidat APPROUVÉ (mode online) : un performeur ne doit jamais
+    // se voir réclamer un billet spectateur pour sa propre compétition une fois celle-ci en direct.
+    val isActor = isManager || isAdmin || canPublish
     val colors = DualMusicTheme.colors
     val strings = LocalStrings.current
     val context = LocalContext.current
     var giftTargetCandidate by remember { mutableStateOf<String?>(null) }
+    // Candidat pour lequel le manager choisit une durée avant de le désigner performeur (parité
+    // web `PerformerController` — mobile appelait `setPerformer(id, 120)` avec une durée figée,
+    // sans possibilité de la choisir, signalé par l'utilisateur).
+    var performerDialogCandidateId by remember { mutableStateOf<String?>(null) }
     var showLeaderboard by remember { mutableStateOf(false) }
     var showCompSettings by remember { mutableStateOf(false) }
     var showVotePanel by remember { mutableStateOf(false) }
@@ -997,29 +1104,6 @@ fun CompetitionRoomScreen(
             }
         }
     }
-    // Applaudissements en boucle tant que le vainqueur est annoncé.
-    val winnerActive = winnerInfo != null
-    DisposableEffect(winnerActive) {
-        val player = if (winnerActive) {
-            runCatching {
-                android.media.MediaPlayer().apply {
-                    setAudioAttributes(
-                        android.media.AudioAttributes.Builder()
-                            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
-                            .build(),
-                    )
-                    setDataSource("https://assets.mixkit.co/active_storage/sfx/1011/1011-preview.mp3")
-                    isLooping = true
-                    setOnPreparedListener { runCatching { start() } }
-                    prepareAsync()
-                }
-            }.getOrNull()
-        } else {
-            null
-        }
-        onDispose { runCatching { player?.stop() }; runCatching { player?.release() } }
-    }
     // Multi-cam avec identité LiveKit (focus imposé synchronisé). Tuile = (identité publieur, piste).
     // La tuile locale porte l'identité locale (= userId) pour être épinglable comme les autres.
     val localIdentity = viewModel.media.localIdentity()
@@ -1028,10 +1112,23 @@ fun CompetitionRoomScreen(
         remoteTiles.filter { it.first !in bannedUserIds } +
             (localTrack?.let { listOf((localIdentity ?: "local") to it) } ?: emptyList())
     }
-    // Piste principale : focus imposé par le manager > focus local (tap) > piste primaire.
+    // Piste principale : focus imposé par le manager > focus local (tap) > sélection « collante »
+    // (mémorisée) > repli sur la 1ère tuile. La sélection collante évite qu'un NOUVEAU publieur
+    // qui rejoint la salle (ex. un candidat qui commence à diffuser) ne bascule brutalement l'écran
+    // principal — auparavant `allTiles.firstOrNull()` était recalculé à chaque arrivée de tuile
+    // distante, et comme la tuile LOCALE est ajoutée en DERNIER dans `allTiles`, la caméra du
+    // publieur déjà connecté (main jusque-là) était instantanément reléguée en vignette dès qu'un
+    // remote apparaissait — un nouveau `SurfaceViewRenderer` devait alors s'initialiser pour elle,
+    // d'où le scintillement signalé côté « personne déjà connectée » à l'arrivée d'un concurrent.
+    var stickyMainIdentity by remember { mutableStateOf<String?>(null) }
     val mainTile = forcedFocusId?.let { fid -> allTiles.find { it.first == fid } }
         ?: focusedTrack?.let { ft -> allTiles.find { it.second === ft } }
+        ?: stickyMainIdentity?.let { key -> allTiles.find { it.first == key } }
         ?: allTiles.firstOrNull()
+    // Mémorise la tuile principale courante ; si elle disparaît (le publieur quitte), le prochain
+    // recalcul retombe sur `allTiles.firstOrNull()` ci-dessus, qui redevient alors la nouvelle
+    // sélection collante.
+    LaunchedEffect(mainTile?.first) { stickyMainIdentity = mainTile?.first }
     val mainTrack = mainTile?.second ?: primaryTrack ?: localTrack
     val thumbs = allTiles.filter { it.second !== mainTrack }
     // Vignettes multi-cam affichées (compétition en ligne, plusieurs candidats) — décale la bulle
@@ -1065,16 +1162,44 @@ fun CompetitionRoomScreen(
             Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent, Color.Black.copy(alpha = 0.6f))),
         ))
 
-        // Réactions montantes + célébration du vainqueur. (Le burst central de cadeau est
-        // retiré — parité concert/live : la carte glissante au-dessus des messages suffit déjà,
-        // le burst + la bannière « vous avez reçu un cadeau » faisaient doublon et encombraient
-        // l'écran.)
-        FloatingReactionsLayer(reactions = emojiFeed, reduceAnimations = uiPrefs.reduceAnimations)
+        // Badge nom + micro de la tuile PRINCIPALE (candidat en plein écran/focus) — manquait
+        // jusqu'ici (seules les vignettes en avaient un) alors qu'un candidat épinglé/en focus y
+        // passe le plus clair du temps ; le mute imposé par le manager doit s'y voir aussi
+        // (`mutedArtists` prioritaire sur `mediaStates`, voir note plus bas sur les vignettes).
+        mainTile?.first?.let { mainIdentity ->
+            val mainName = candidates.find { it.artistId == mainIdentity }?.artist?.displayName
+            val mainMicOn = if (mutedArtists.contains(mainIdentity)) false else (mediaStates[mainIdentity]?.isMicOn ?: true)
+            Row(
+                modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding()
+                    // Décalé au-dessus de la barre d'action/chat ancrée en bas (même ordre de
+                    // grandeur que les autres offsets « au-dessus du bas » de cet écran).
+                    .padding(start = DualMusicTheme.spacing.md, bottom = 110.dp)
+                    .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(999.dp))
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    if (mainMicOn) Icons.Filled.Mic else Icons.Filled.MicOff,
+                    contentDescription = null,
+                    tint = if (mainMicOn) Color(0xFF22C55E) else Color(0xFFEF4444),
+                    modifier = Modifier.size(13.dp),
+                )
+                if (mainName != null) Text(mainName, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+
+        // Célébration du vainqueur. (Le burst central de cadeau est retiré — parité concert/live :
+        // la carte glissante au-dessus des messages suffit déjà, le burst + la bannière « vous avez
+        // reçu un cadeau » faisaient doublon et encombraient l'écran.) Les réactions flottantes,
+        // elles, sont rendues PLUS BAS, APRÈS les vignettes multi-cam (voir note là-bas) — pas ici.
         if (status == "finished" && candidates.isNotEmpty()) {
             WinnerCelebration(
                 winnerName = candidates.first().artist?.displayName ?: strings.winnerGeneric,
                 title = strings.winnerTitle,
+                avatarUrl = candidates.first().artist?.avatarUrl,
                 subtitle = strings.winnerCongrats,
+                soundUrl = winnerSoundUrl,
                 reduceAnimations = uiPrefs.reduceAnimations,
             )
         }
@@ -1091,13 +1216,13 @@ fun CompetitionRoomScreen(
 
         // Bulle du meilleur donateur (parité web) — APRÈS le early-return ci-dessus : elle doit
         // disparaître avec le reste de l'interface quand on masque tout (œil du rail), sinon elle
-        // restait visible seule à l'écran (bug signalé). Décalée sous les vignettes multi-cam
-        // quand elles sont affichées, pour ne pas s'y superposer.
+        // restait visible seule à l'écran (bug signalé). Les vignettes multi-cam sont maintenant
+        // en bas-droite (plus en haut) : plus besoin de la décaler pour leur laisser la place.
         TopDonorBubble(
             donor = topDonor,
             mode = uiPrefs.topDonorMode,
             animation = uiPrefs.topDonorAnimation,
-            topOffset = if (thumbsVisible) 152.dp else 56.dp,
+            topOffset = 56.dp,
         )
 
         // --- Header live unifié (mêmes icônes que le web) ---
@@ -1136,24 +1261,36 @@ fun CompetitionRoomScreen(
             ) { Icon(Icons.Filled.PushPin, contentDescription = "Libérer le focus", tint = Color.White, modifier = Modifier.size(20.dp)) }
         }
 
-        // Vignettes multi-cam (sous le header) : tap = focus local ; icône épingle (manager) = focus imposé.
-        // Quand le manager a ÉPINGLÉ une caméra (focus imposé), les autres petites cases sont masquées
-        // pour TOUT LE MONDE (vue « spotlight » nette) ; seul le manager les garde pour pouvoir
-        // ré-épingler une autre caméra ou libérer le focus. (`thumbsVisible` calculé plus haut,
-        // réutilisé aussi par la bulle donateur et le rail vertical pour ne pas s'y superposer.)
+        // Vignettes multi-cam : EN BAS À DROITE, empilées verticalement (parité web
+        // `CompetitionLiveStage.tsx`, rail repositionné de top-right vers bottom-right). Comme le
+        // rail d'icônes vertical et la bulle du meilleur donateur n'ont plus besoin d'être décalés
+        // pour laisser la place aux vignettes en haut, leurs offsets conditionnels ont été retirés
+        // (voir plus haut `TopDonorBubble` et plus bas le rail `CompCircleBtn`) — ils remontent
+        // d'autant. Décalage bas de 110dp pour rester au-dessus de la barre d'action (chat/erreur)
+        // ancrée en bas — à ajuster si un chevauchement est signalé sur un petit écran.
+        // Tap = focus local ; icône épingle (manager) = focus imposé. Quand le manager a ÉPINGLÉ
+        // une caméra (focus imposé), les autres petites cases sont masquées pour TOUT LE MONDE (vue
+        // « spotlight » nette) ; seul le manager les garde pour pouvoir ré-épingler une autre
+        // caméra ou libérer le focus.
         if (thumbsVisible) {
-            Row(
-                modifier = Modifier.align(Alignment.TopStart).statusBarsPadding()
-                    .padding(top = 56.dp, start = DualMusicTheme.spacing.md, end = DualMusicTheme.spacing.md)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            Column(
+                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding()
+                    .padding(bottom = 110.dp, end = DualMusicTheme.spacing.md)
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 thumbs.forEach { tile ->
                     key(tile.first, tile.second) {
                         val tileName = candidates.find { it.artistId == tile.first }?.artist?.displayName
                         val ms = mediaStates[tile.first]
-                        // Micro ON = état média diffusé (défaut : présumé ON si pas d'info) ; cam ON = piste présente.
-                        val tileMicOn = ms?.isMicOn ?: true
+                        // Le hard-mute du manager (`mutedArtists`) est PRIORITAIRE sur `mediaStates` :
+                        // ce dernier ne se met à jour qu'après que le candidat coupé ait lui-même
+                        // traité le FORCE_MUTE et rediffusé son état (aller-retour) — en attendant,
+                        // le badge restait à tort sur "micro allumé" chez tous les autres spectateurs
+                        // (mute/démute du manager "invisible" pour eux, bug signalé). `mutedArtists`
+                        // est mis à jour IMMÉDIATEMENT chez tout le monde à la réception du broadcast.
+                        val tileMicOn = if (mutedArtists.contains(tile.first)) false else (ms?.isMicOn ?: true)
                         Box(modifier = Modifier.width(72.dp).height(96.dp)) {
                             AndroidView(
                                 modifier = Modifier.fillMaxSize()
@@ -1199,13 +1336,35 @@ fun CompetitionRoomScreen(
             }
         }
 
+        // Réactions flottantes (cœurs/emojis) — déclarées APRÈS les vignettes multi-cam ci-dessus
+        // → passent AU-DESSUS d'elles (Compose empile par ordre de déclaration : élément déclaré
+        // plus tard = plus haut dans la pile ; parité duel). Une tentative précédente les avait
+        // placées AVANT en misant sur des zones d'écran disjointes une fois les vignettes
+        // repositionnées en bas-droite — mais les réactions montent depuis le bas et traversent
+        // bien cette zone en début d'animation, donc l'ordre correct reste après (bug signalé,
+        // identique sur web à l'overlay `FloatingEmojis`).
+        FloatingReactionsLayer(reactions = emojiFeed, reduceAnimations = uiPrefs.reduceAnimations)
+
         // --- Bas : erreur + chat + réactions + barre d'action ---
+        // Popup moderne (au lieu d'un simple bandeau de texte rouge, peu visible et sans action
+        // possible) pour les échecs d'actions en direct — `error` est un canal générique partagé
+        // (cadeaux, votes, chargement des candidats, démarrage de diffusion...), donc le bouton
+        // Réessayer n'est proposé QUE pour l'échec de démarrage de diffusion (seul cas où relancer
+        // la MÊME action a un sens ici) ; les autres échecs affichent la popup sans ce bouton.
+        error?.let { message ->
+            com.dualmusic.core.ui.components.DMErrorDialog(
+                message = message,
+                onDismiss = { viewModel.clearError() },
+                onRetry = if (message.startsWith("Impossible de démarrer la diffusion")) {
+                    { viewModel.startBroadcast() }
+                } else null,
+            )
+        }
+
         Column(
             modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().navigationBarsPadding().imePadding().padding(DualMusicTheme.spacing.md),
             verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
         ) {
-            error?.let { Text(it, color = colors.destructive, fontSize = 12.sp) }
-
             // Chat (semi-transparent, auto-scroll).
             val chatState = rememberLazyListState()
             LaunchedEffect(messages.size) { if (messages.isNotEmpty()) chatState.animateScrollToItem(messages.size - 1) }
@@ -1316,13 +1475,12 @@ fun CompetitionRoomScreen(
         // Rail vertical GAUCHE (parité concert/live) : œil « masquer tout » pour TOUT LE MONDE,
         // puis démarrer/Réglages (regroupe caméra/micro/flip/pause, parité concert), filtres,
         // pub (organisateur) et enregistrement (organisateur) — décalé SOUS le nom du meilleur
-        // donateur (qui défile juste sous la barre du haut) pour ne plus s'y mélanger, ET SOUS
-        // les vignettes multi-cam quand elles sont affichées (compétition en ligne, plusieurs
-        // candidats — vignettes top=56dp sur 96dp, puis la bulle donateur décalée à top=152dp
-        // dans ce cas) — sinon rail/vignettes/bulle se chevauchaient tous au même bord gauche.
+        // donateur (qui défile juste sous la barre du haut) pour ne plus s'y mélanger. Les
+        // vignettes multi-cam étant maintenant en bas-droite (plus en haut-gauche), le rail n'a
+        // plus besoin d'un décalage supplémentaire pour leur laisser la place.
         Column(
             modifier = Modifier.align(Alignment.TopStart).statusBarsPadding()
-                .padding(start = DualMusicTheme.spacing.md, top = if (thumbsVisible) 200.dp else 120.dp),
+                .padding(start = DualMusicTheme.spacing.md, top = 120.dp),
             verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
         ) {
             CompCircleBtn(Icons.Filled.VisibilityOff, Color.Black.copy(alpha = 0.4f)) { hideOverlay = true }
@@ -1577,7 +1735,7 @@ fun CompetitionRoomScreen(
                             onGift = { giftTargetCandidate = candidate.id },
                             onApprove = { viewModel.reviewCandidate(candidate.id, true) },
                             onReject = { viewModel.reviewCandidate(candidate.id, false) },
-                            onPerformer = { viewModel.setPerformer(candidate.id, 120) },
+                            onPerformer = { performerDialogCandidateId = candidate.id },
                             onToggleMute = { viewModel.toggleMuteArtist(candidate.artistId) },
                             onOpenArtist = { onOpenArtist(candidate.artistId) },
                             onSetJuryVotes = { v -> viewModel.setJuryVotes(candidate.id, v) },
@@ -1588,51 +1746,105 @@ fun CompetitionRoomScreen(
             }
         }
 
-        // Sélecteur de cadeau : offrande à un candidat (alimente son score). Parité live/duel/web.
+        // Sélecteur de cadeau : offrande à un candidat (alimente son score). Parité live/duel/web —
+        // onglets « Mes cadeaux » / « Boutique » (achat) DANS le même panneau, comme le concert :
+        // avant, un inventaire vide n'affichait qu'un texte mort sans aucun moyen d'acheter, ce qui
+        // rendait l'envoi de cadeau impossible en compétition (signalé par l'utilisateur).
         giftTargetCandidate?.let { candidateId ->
+            var giftShopTab by remember { mutableStateOf(inventory.isEmpty()) }
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { giftTargetCandidate = null })
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .fillMaxHeight(0.5f)
+                    .fillMaxHeight(0.55f)
                     .background(colors.background)
                     .navigationBarsPadding()
                     .padding(DualMusicTheme.spacing.md),
                 verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
             ) {
-                Text(strings.myGifts, color = colors.foreground, fontWeight = FontWeight.Bold)
-                if (inventory.isEmpty()) {
-                    Text(strings.noGiftsBuyInShop, color = colors.mutedForeground, fontSize = 13.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    CompTabPill(strings.myGifts, !giftShopTab) { giftShopTab = false }
+                    CompTabPill(strings.giftShop, giftShopTab) { giftShopTab = true }
                 }
                 Column(
                     modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
                 ) {
-                    // Icône ✉️ dédiée pour envoyer (le reste de la ligne n'envoie plus rien au
-                    // tap — évite la confusion « je clique pour voir » vs « pour envoyer »,
-                    // parité concert/live).
-                    inventory.forEach { g ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-                                .padding(DualMusicTheme.spacing.md),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("${g.imageUrl ?: "🎁"}  ${g.name ?: "Cadeau"}", color = colors.foreground)
-                                Text("×${g.quantity}", color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    if (!giftShopTab) {
+                        if (inventory.isEmpty()) {
+                            Text(strings.noGiftsBuyInShop, color = colors.mutedForeground, fontSize = 13.sp)
+                        }
+                        // Icône ✉️ dédiée pour envoyer (le reste de la ligne n'envoie plus rien au
+                        // tap — évite la confusion « je clique pour voir » vs « pour envoyer »,
+                        // parité concert/live).
+                        inventory.forEach { g ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                    .padding(DualMusicTheme.spacing.md),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("${g.imageUrl ?: "🎁"}  ${g.name ?: "Cadeau"}", color = colors.foreground)
+                                    Text("×${g.quantity}", color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                                Box(
+                                    modifier = Modifier.size(38.dp).background(colors.primary, CircleShape)
+                                        .clickable {
+                                            viewModel.sendGift(candidateId, g.giftId, g.price.toInt())
+                                            giftTargetCandidate = null
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) { Icon(Icons.Filled.Send, contentDescription = "Envoyer", tint = Color.White, modifier = Modifier.size(17.dp)) }
                             }
-                            Box(
-                                modifier = Modifier.size(38.dp).background(colors.primary, CircleShape)
-                                    .clickable {
-                                        viewModel.sendGift(candidateId, g.giftId, g.price.toInt())
-                                        giftTargetCandidate = null
-                                    },
-                                contentAlignment = Alignment.Center,
-                            ) { Icon(Icons.Filled.Send, contentDescription = "Envoyer", tint = Color.White, modifier = Modifier.size(17.dp)) }
+                        }
+                    } else {
+                        // Boutique : grille de cartes (icône, nom, prix, bouton Acheter dédié) —
+                        // parité visuelle avec `GiftShopDialog` (web, déjà utilisé pour duel/concert/
+                        // compétition) au lieu d'une simple ligne cliquable (signalé : la boutique
+                        // mobile ne ressemblait pas à celle des concerts).
+                        giftCatalog.chunked(2).forEach { rowGifts ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm),
+                            ) {
+                                rowGifts.forEach { gift ->
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .background(Color.Black.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                            .padding(DualMusicTheme.spacing.sm),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .aspectRatio(1f)
+                                                .background(
+                                                    Brush.linearGradient(listOf(colors.primary.copy(alpha = 0.18f), colors.accent.copy(alpha = 0.18f))),
+                                                    RoundedCornerShape(10.dp),
+                                                ),
+                                            contentAlignment = Alignment.Center,
+                                        ) { Text(gift.emoji ?: "🎁", fontSize = 34.sp) }
+                                        Text(
+                                            gift.name, color = colors.foreground, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text("${gift.price.toInt()} ${strings.credits}", color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        DMButton(
+                                            strings.buyGift,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            onClick = { viewModel.purchaseGift(gift.id); giftShopTab = false },
+                                        )
+                                    }
+                                }
+                                // Rangée impaire (dernier cadeau seul) : garde la carte à la largeur
+                                // d'une colonne au lieu de l'étirer sur toute la ligne.
+                                if (rowGifts.size == 1) Spacer(modifier = Modifier.weight(1f))
+                            }
                         }
                     }
                 }
@@ -1677,6 +1889,40 @@ fun CompetitionRoomScreen(
                     showGiftPicker = false
                 })
             }
+        }
+
+        // Durée du passage avant de désigner ce candidat performeur (parité web `PerformerController`
+        // — un manager doit pouvoir choisir la durée, pas seulement la valeur figée à 120s d'avant).
+        performerDialogCandidateId?.let { candidateId ->
+            var durationText by remember(candidateId) { mutableStateOf("180") }
+            AlertDialog(
+                onDismissRequest = { performerDialogCandidateId = null },
+                title = { Text(strings.setPerformerAction) },
+                text = {
+                    OutlinedTextField(
+                        value = durationText,
+                        onValueChange = { durationText = it.filter { c -> c.isDigit() }.take(4) },
+                        label = { Text(strings.performerDurationLabel) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                },
+                confirmButton = {
+                    Box(
+                        modifier = Modifier.clickable {
+                            val duration = durationText.toIntOrNull()?.coerceAtLeast(10) ?: 180
+                            viewModel.setPerformer(candidateId, duration)
+                            performerDialogCandidateId = null
+                        }.padding(8.dp),
+                    ) { Text(strings.confirm, color = colors.primary, fontWeight = FontWeight.Bold) }
+                },
+                dismissButton = {
+                    Box(modifier = Modifier.clickable { performerDialogCandidateId = null }.padding(8.dp)) {
+                        Text(strings.cancel, color = colors.mutedForeground)
+                    }
+                },
+            )
         }
 
         // Panneau de VOTE (spectateur) : sélecteur de candidat par NOM + crédits. Indispensable en
@@ -1764,19 +2010,6 @@ fun CompetitionRoomScreen(
             }
         }
 
-        // Diffusion pub sponsor : overlay vidéo pour tous ; le déclencheur est l'icône 📢 du rail
-        // gauche (showTriggerButton = false) — évite le bouton texte qui recouvrait le chat (parité concert).
-        SponsorAdLayer(
-            activeAd = sponsorAd,
-            canTrigger = isManager,
-            showTriggerButton = false,
-            ads = sponsorAds,
-            busy = sponsorBusy,
-            onLoadAds = { viewModel.sponsor.loadAds() },
-            onPlay = { viewModel.sponsor.play(it) },
-            onStop = { viewModel.sponsor.stop() },
-        )
-
         // Carte « cadeau reçu » glissante (fil) — état hissé HORS de ce `Box` (voir plus haut,
         // juste après `DisposableEffect(Unit){ viewModel.start() }`) : parité concert.
         AnimatedVisibility(
@@ -1788,25 +2021,6 @@ fun CompetitionRoomScreen(
 
         // (La bannière « vous avez reçu un cadeau » est retirée — parité concert/live : la carte
         // glissante ci-dessus, avec le nom de l'expéditeur, suffit déjà comme seule animation.)
-
-        // Célébration du vainqueur annoncé par le manager (n'arrête PAS le direct) + applaudissements.
-        winnerInfo?.let { w ->
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f))) {
-                WinnerCelebration(
-                    winnerName = w.name,
-                    title = strings.winnerTitle,
-                    subtitle = "${w.votes} voix · ${w.percent}%",
-                    reduceAnimations = uiPrefs.reduceAnimations,
-                )
-                if (!uiPrefs.reduceAnimations) ScatteredEmojiLayer(winnerEmojis)
-                if (isManager) {
-                    DMButton(
-                        "Arrêter l'annonce",
-                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 150.dp),
-                    ) { viewModel.stopWinnerAnnouncement() }
-                }
-            }
-        }
 
         // Écran de blocage : le manager m'a banni → je ne peux plus participer ni rejoindre.
         if (iAmBanned) {
@@ -1935,6 +2149,66 @@ fun CompetitionRoomScreen(
                 }
             }
         }
+
+        // Célébration du vainqueur annoncé par le manager (n'arrête PAS le direct) + applaudissements
+        // — comme la pub juste en dessous, rendue tout en bas pour être VRAIMENT imposée par-dessus
+        // tout le reste (avant ce déplacement, un panneau ouvert APRÈS elle dans l'arbre — cadeau,
+        // vote, popup commentaire, dialogue modérateurs, filtres — passait PAR-DESSUS l'annonce,
+        // qui n'était donc pas réellement « fixe à l'écran » pour un spectateur ayant un panneau
+        // ouvert au moment de l'annonce, signalé par l'utilisateur).
+        winnerInfo?.let { w ->
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f))) {
+                WinnerCelebration(
+                    winnerName = w.name,
+                    title = strings.winnerTitle,
+                    avatarUrl = w.avatar,
+                    subtitle = "${w.votes} voix · ${w.percent}%",
+                    soundUrl = winnerSoundUrl,
+                    reduceAnimations = uiPrefs.reduceAnimations,
+                )
+                if (!uiPrefs.reduceAnimations) ScatteredEmojiLayer(winnerEmojis)
+                if (isManager) {
+                    DMButton(
+                        "Arrêter l'annonce",
+                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 150.dp),
+                    ) { viewModel.stopWinnerAnnouncement() }
+                }
+            }
+        }
+
+        // Diffusion pub sponsor : overlay vidéo pour tous — rendue tout en bas (juste avant le
+        // gate d'accès) pour être VRAIMENT imposée par-dessus tout le reste (classement, panneau
+        // cadeau/vote, popup commentaire, dialogue modérateurs, écran banni, filtres…) : avant ce
+        // déplacement elle était déclarée plus haut, donc plusieurs panneaux ouverts APRÈS elle
+        // dans l'arbre passaient PAR-DESSUS la pub au lieu de l'inverse — elle n'était donc pas
+        // réellement « imposée » à un spectateur qui avait un panneau ouvert (signalé). Le
+        // déclencheur reste l'icône 📢 du rail gauche (showTriggerButton = false).
+        SponsorAdLayer(
+            activeAd = sponsorAd,
+            canTrigger = isManager,
+            showTriggerButton = false,
+            ads = sponsorAds,
+            busy = sponsorBusy,
+            onLoadAds = { viewModel.sponsor.loadAds() },
+            onPlay = { viewModel.sponsor.play(it) },
+            onStop = { viewModel.sponsor.stop() },
+        )
+
+        // --- Gate d'accès programmé (parité web ScheduledAccessGate) : bloque l'entrée tant que
+        //     start_at n'est pas atteint (aucune exception organisateur/admin), et exige un billet
+        //     si la compétition est déjà en direct, payante, sans billet. Rendu en dernier → au-dessus. ---
+        ScheduledAccessGate(
+            type = "competition",
+            scheduledAtIso = scheduledAt,
+            status = status,
+            isActor = isActor,
+            hasTicket = hasTicket,
+            ticketPrice = ticketPrice,
+            // Cet écran n'est accessible qu'à un utilisateur déjà connecté (navigation en amont).
+            isAuthenticated = true,
+            onPurchase = { viewModel.buyTicketForGate() },
+            onDismiss = onLeave,
+        )
     }
 }
 
@@ -1998,6 +2272,16 @@ private fun CompCircleBtn(icon: androidx.compose.ui.graphics.vector.ImageVector,
         modifier = Modifier.size(46.dp).background(bg, CircleShape).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp)) }
+}
+
+/** Pastille d'onglet (« Mes cadeaux » / « Boutique ») — parité concert `TabPill`. */
+@Composable
+private fun CompTabPill(label: String, selected: Boolean, onClick: () -> Unit) {
+    val colors = DualMusicTheme.colors
+    Box(
+        modifier = Modifier.background(if (selected) colors.primary else Color.Black.copy(alpha = 0.25f), RoundedCornerShape(999.dp))
+            .clickable(onClick = onClick).padding(horizontal = DualMusicTheme.spacing.lg, vertical = DualMusicTheme.spacing.sm),
+    ) { Text(label, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
 }
 
 /** Ligne pleine largeur de la feuille « Réglages » (icône + libellé, fond coloré) — parité concert/live. */

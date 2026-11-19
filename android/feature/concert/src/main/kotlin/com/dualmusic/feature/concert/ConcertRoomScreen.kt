@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dualmusic.core.ui.components.ScheduledAccessGate
 import com.dualmusic.core.ui.i18n.LocalStrings
 import com.dualmusic.core.ui.overlay.FloatingReactionsLayer
 import com.dualmusic.feature.sponsor.SponsorAdLayer
@@ -141,6 +142,11 @@ fun ConcertRoomScreen(
     val uiPrefs by UiPreferencesStore.state.collectAsStateWithLifecycle()
 
     val isHost by viewModel.isHost.collectAsStateWithLifecycle()
+    // Gate d'accès programmé (ScheduledAccessGate, parité web) : détail concert + billet + admin.
+    val concertState by viewModel.concert.collectAsStateWithLifecycle()
+    val hasTicket by viewModel.hasTicket.collectAsStateWithLifecycle()
+    val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
+    val isActor = isHost || isAdmin
     val bannedUserIds by viewModel.bannedUserIds.collectAsStateWithLifecycle()
     val iAmBanned by viewModel.iAmBanned.collectAsStateWithLifecycle()
     val chatEnabled by viewModel.chatEnabled.collectAsStateWithLifecycle()
@@ -151,6 +157,7 @@ fun ConcertRoomScreen(
     val activeFilter by viewModel.activeFilter.collectAsStateWithLifecycle()
     val recMode by viewModel.recordingCtl.mode.collectAsStateWithLifecycle()
     val recActive by viewModel.recordingCtl.active.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
     val recPaused by viewModel.recordingCtl.paused.collectAsStateWithLifecycle()
     val recFinalizing by viewModel.recordingCtl.finalizing.collectAsStateWithLifecycle()
     val recFailed by viewModel.recordingCtl.failed.collectAsStateWithLifecycle()
@@ -220,6 +227,19 @@ fun ConcertRoomScreen(
     val track = if (isHost) localTrack else remoteTrack
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        // Popup moderne pour les échecs d'action en direct (au lieu de rien du tout jusqu'ici —
+        // voir `ConcertRoomViewModel#startBroadcast`, parité compétition/duel). `Dialog()` flotte
+        // dans sa propre fenêtre système, peu importe sa position dans l'arbre.
+        error?.let { message ->
+            com.dualmusic.core.ui.components.DMErrorDialog(
+                message = message,
+                onDismiss = { viewModel.clearError() },
+                onRetry = if (message.startsWith("Impossible de démarrer la diffusion")) {
+                    { viewModel.startBroadcast() }
+                } else null,
+            )
+        }
+
         // Vidéo.
         if (track != null) {
             AndroidView(
@@ -824,6 +844,23 @@ fun ConcertRoomScreen(
                 ) { Text("Quitter", color = Color.White, fontWeight = FontWeight.Bold) }
             }
         }
+
+        // --- Gate d'accès programmé (parité web ScheduledAccessGate) : bloque l'entrée tant que
+        //     scheduled_date n'est pas atteint (aucune exception artiste/manager/admin), et exige
+        //     un billet si le concert est déjà en direct, payant, sans billet. Rendu en dernier
+        //     → toujours au-dessus. ---
+        ScheduledAccessGate(
+            type = "concert",
+            scheduledAtIso = concertState?.scheduledDate,
+            status = concertState?.status?.name?.lowercase(),
+            isActor = isActor,
+            hasTicket = hasTicket,
+            ticketPrice = concertState?.ticketPrice ?: 0.0,
+            // Cet écran n'est accessible qu'à un utilisateur déjà connecté (navigation en amont).
+            isAuthenticated = true,
+            onPurchase = { viewModel.buyTicketForGate() },
+            onDismiss = onLeave,
+        )
     }
 }
 

@@ -39,7 +39,12 @@ class FeedViewModel(
 
     private var page = 1
     private var hasMore = true
-    private val prewarmed = mutableMapOf<String, LiveKitToken>()
+    /**
+     * Jetons pré-chauffés + instant d'obtention. Le jeton LiveKit expire au bout d'1 h côté
+     * backend : un jeton gardé trop longtemps (feed laissé ouvert) faisait échouer la connexion
+     * en silence → spectateur sans image ni son. On l'écarte bien avant (voir [PREWARM_TTL_MS]).
+     */
+    private val prewarmed = mutableMapOf<String, Pair<LiveKitToken, Long>>()
     private var liveSession: NamespaceSession? = null
 
     /**
@@ -95,8 +100,20 @@ class FeedViewModel(
         if (hasMore && index >= _items.value.size - 3) loadMore()
     }
 
-    /** Jeton pré-chauffé d'un live (null si non prêt). */
-    fun prewarmedToken(liveId: String): LiveKitToken? = prewarmed[liveId]
+    /** Jeton pré-chauffé d'un live (null si non prêt ou trop ancien → le client en redemandera un frais). */
+    fun prewarmedToken(liveId: String): LiveKitToken? {
+        val (token, at) = prewarmed[liveId] ?: return null
+        if (System.currentTimeMillis() - at > PREWARM_TTL_MS) {
+            prewarmed.remove(liveId)
+            return null
+        }
+        return token
+    }
+
+    private companion object {
+        /** 40 min : marge large sous le TTL serveur (1 h). */
+        const val PREWARM_TTL_MS = 40L * 60L * 1000L
+    }
 
     private fun loadMore() {
         if (_isLoading.value) return
@@ -113,10 +130,11 @@ class FeedViewModel(
         val list = _items.value
         for (offset in 0..1) {
             val item = list.getOrNull(index + offset) ?: continue
-            if (prewarmed.containsKey(item.id)) continue
+            val cached = prewarmed[item.id]
+            if (cached != null && System.currentTimeMillis() - cached.second <= PREWARM_TTL_MS) continue
             viewModelScope.launch {
                 runCatching { tokenService.token(roomName = item.liveKitRoom) }
-                    .getOrNull()?.let { prewarmed[item.id] = it }
+                    .getOrNull()?.let { prewarmed[item.id] = it to System.currentTimeMillis() }
             }
         }
     }

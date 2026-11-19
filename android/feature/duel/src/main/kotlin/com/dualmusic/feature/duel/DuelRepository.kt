@@ -18,6 +18,10 @@ import kotlinx.serialization.json.Json
 @Serializable
 private data class DuelLikesResponse(val likes: Int = 0)
 
+/** Réponse de `GET /duels/:id/my-ticket` — le caller a-t-il un billet pour ce duel ? */
+@Serializable
+data class DuelTicketInfo(val hasTicket: Boolean = false, val count: Int = 0)
+
 /** Ligne de `GET /moderation/stream-bans` — on ne retient que l'utilisateur banni. */
 @Serializable
 data class StreamBanRow(
@@ -59,6 +63,10 @@ private data class VoteConfigSetting(val value: VoteConfigValue? = null)
 
 @Serializable
 private data class VoteConfigValue(@SerialName("price_per_vote") val pricePerVote: Double = 1.0)
+
+/** Son d'annonce du vainqueur, réglable par l'admin (`GET /settings/public/winner_sound_url`). */
+@Serializable
+private data class WinnerSoundUrlSetting(val value: String? = null)
 
 class DuelRepository(private val api: ApiClient) {
 
@@ -122,6 +130,29 @@ class DuelRepository(private val api: ApiClient) {
             ).mapNotNull { it.bannedUserId }
         }.getOrDefault(emptyList())
 
+    /** Le caller possède-t-il un billet pour ce duel ? (`GET /duels/:id/my-ticket`). */
+    suspend fun ticketInfo(id: String): DuelTicketInfo =
+        runCatching { api.request(Endpoint.get(DuelEndpoints.myTicket(id)), DuelTicketInfo.serializer()) }
+            .getOrDefault(DuelTicketInfo())
+
+    /** Achète le billet spectateur du duel (débit atomique + idempotent). `POST /wallet/tickets/duel`. */
+    suspend fun buyTicket(duelId: String, idempotencyKey: String = java.util.UUID.randomUUID().toString()) {
+        api.request<Unit>(Endpoint.post("/wallet/tickets/duel", """{"duelId":"$duelId"}""", idempotencyKey = idempotencyKey))
+    }
+
+    /**
+     * Vrai si le caller est admin — parité web `userRoles.includes("admin")` dans
+     * `ScheduledAccessGate`/`DuelLive.tsx` (l'admin est toujours considéré comme acteur, exempté
+     * de billet, mais PAS exempté de l'attente de l'heure programmée).
+     */
+    suspend fun amIAdmin(): Boolean =
+        runCatching {
+            api.request(
+                Endpoint.get(com.dualmusic.domain.user.UserEndpoints.ME),
+                com.dualmusic.domain.auth.MeResponse.serializer(),
+            ).roles.any { it == com.dualmusic.domain.model.UserRole.ADMIN }
+        }.getOrDefault(false)
+
     /**
      * Prix d'UN vote en crédits — configuré par l'admin (`platform_settings.vote_config`), lu via
      * l'endpoint PUBLIC (parité web, défaut 1). `GET /settings/public/vote_config`.
@@ -131,6 +162,15 @@ class DuelRepository(private val api: ApiClient) {
             api.request(Endpoint.get("/settings/public/vote_config"), VoteConfigSetting.serializer())
                 .value?.pricePerVote ?: 1.0
         }.getOrDefault(1.0)
+
+    /** URL du son d'annonce du vainqueur, `null` = son par défaut côté client. */
+    suspend fun winnerSoundUrl(): String? =
+        runCatching {
+            api.request(
+                Endpoint.get("/settings/public/winner_sound_url").copy(anonymous = true),
+                WinnerSoundUrlSetting.serializer(),
+            ).value
+        }.getOrNull()
 
     /**
      * Liste des duels.

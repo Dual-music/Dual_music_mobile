@@ -30,6 +30,8 @@ import com.dualmusic.core.ui.theme.DualMusicTheme
  * @param value valeur courante (chiffres).
  * @param onValueChange rappelé à chaque changement (déjà filtré/tronqué).
  * @param length nombre de cases (6 par défaut).
+ * @param isError si vrai, les cases s'affichent en rouge (ex. code invalide/expiré renvoyé par
+ *   le serveur) au lieu de la bordure neutre habituelle.
  */
 @Composable
 fun OtpBoxes(
@@ -37,6 +39,7 @@ fun OtpBoxes(
     onValueChange: (String) -> Unit,
     length: Int = 6,
     modifier: Modifier = Modifier,
+    isError: Boolean = false,
 ) {
     val colors = DualMusicTheme.colors
     BasicTextField(
@@ -56,8 +59,8 @@ fun OtpBoxes(
                             .size(44.dp, 52.dp)
                             .background(colors.muted.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
                             .border(
-                                width = if (active) 2.dp else 1.dp,
-                                color = if (active) colors.primary else colors.border,
+                                width = if (active || isError) 2.dp else 1.dp,
+                                color = if (isError) colors.destructive else if (active) colors.primary else colors.border,
                                 shape = RoundedCornerShape(10.dp),
                             ),
                         contentAlignment = Alignment.Center,

@@ -22,16 +22,18 @@ import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
 import com.dualmusic.core.ui.components.DMLogo
+import com.dualmusic.core.ui.live.LiveCountdown
 import com.dualmusic.core.ui.theme.DualMusicTheme
 
 /**
  * Écran de vérification de l'email après inscription.
  *
- * Le code a été envoyé automatiquement à l'inscription ; l'utilisateur le saisit ici.
- * La vérification est **non bloquante** : le bouton « Passer » permet d'entrer dans l'app
- * et de valider plus tard.
+ * Le code a été envoyé automatiquement à l'inscription ; l'utilisateur le saisit ici. La
+ * vérification est désormais **obligatoire** — pas de contournement — mais un « Renvoyer le
+ * code » reste toujours disponible, y compris après fermeture/réouverture de l'app tant que
+ * l'email n'est pas vérifié (voir `AuthViewModel.bootstrap`).
  *
- * @param viewModel source d'état + actions (verifyEmail / resendEmailCode / skipVerification).
+ * @param viewModel source d'état + actions (verifyEmail / resendEmailCode).
  * @param email adresse destinataire (affichage).
  */
 @Composable
@@ -63,7 +65,11 @@ fun EmailVerifyScreen(viewModel: AuthViewModel, email: String) {
                     value = ui.verifyCode,
                     onValueChange = viewModel::onVerifyCodeChange,
                     modifier = Modifier.fillMaxWidth(),
+                    isError = ui.error != null,
                 )
+                ui.codeExpiresAt?.let {
+                    LiveCountdown(endsAtIso = it, label = "Expire dans")
+                }
 
                 ui.info?.let { Text(it, color = colors.primaryGlow) }
                 ui.error?.let { Text(it, color = colors.destructive) }
@@ -75,7 +81,6 @@ fun EmailVerifyScreen(viewModel: AuthViewModel, email: String) {
                     onClick = viewModel::verifyEmail,
                 )
                 DMButton("Renvoyer le code", style = DMButtonStyle.SECONDARY, onClick = viewModel::resendEmailCode)
-                DMButton("Passer pour l'instant", style = DMButtonStyle.OUTLINE, onClick = viewModel::skipVerification)
             }
         }
     }

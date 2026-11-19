@@ -9,14 +9,18 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,8 +28,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -35,33 +41,91 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.drawscope.rotate
+import com.dualmusic.core.ui.components.DMRemoteImage
 import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Overlay de **célébration du vainqueur** (parité web) : confettis qui tombent + carte
- * « 🏆 Vainqueur » avec le nom, apparaissant avec un léger rebond.
+ * Overlay de **célébration du vainqueur** (parité web `WinnerAnnouncement.tsx`) : lueur
+ * pulsante en fond, confettis qui tombent, et carte centrale avec couronne, avatar du
+ * vainqueur (bague dorée + pastille trophée), « 🎉 FÉLICITATIONS 🎉 », nom en doré et votes.
  *
- * Non bloquant pour les gestes : les couches (confettis, carte) n'interceptent aucun pointeur,
- * les contrôles sous-jacents (ex. « Terminer ») restent cliquables.
+ * Non bloquant pour les gestes : les couches (lueur, confettis, carte) n'interceptent aucun
+ * pointeur, les contrôles sous-jacents (ex. « Terminer ») restent cliquables.
  *
  * @param winnerName nom affiché du vainqueur.
  * @param title libellé (ex. « 🏆 Vainqueur »).
+ * @param avatarUrl URL de l'avatar du vainqueur (repli sur son initiale si absente).
  * @param subtitle sous-titre optionnel (ex. « Félicitations ! »).
- * @param reduceAnimations respecte la préférence : masque les confettis + le rebond.
+ * @param soundUrl son personnalisé téléversé par l'admin (réglage `winner_sound_url`) ; `null` =
+ *   son par défaut. Voir `CompetitionRepository`/`DuelRepository#winnerSoundUrl`.
+ * @param reduceAnimations respecte la préférence : masque lueur + confettis + le rebond.
  */
 @Composable
 fun WinnerCelebration(
     winnerName: String,
     title: String,
+    avatarUrl: String? = null,
     subtitle: String? = null,
+    soundUrl: String? = null,
     reduceAnimations: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        if (!reduceAnimations) ConfettiLayer()
-        WinnerCard(winnerName = winnerName, title = title, subtitle = subtitle, animate = !reduceAnimations)
+    // Son (par défaut ou personnalisé admin), en boucle tant que la célébration reste affichée
+    // (parité web `WinnerAnnouncement.tsx`) — ce composable n'existe dans l'arbre QUE pendant la
+    // célébration, donc l'arrêt du son suit automatiquement le démontage (manager qui arrête
+    // l'annonce, ou fin de vie de l'écran). Clé sur `soundUrl` : si le réglage admin arrive après
+    // le premier montage (chargement async), on relance proprement avec la bonne source.
+    DisposableEffect(soundUrl) {
+        val player = runCatching {
+            android.media.MediaPlayer().apply {
+                setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build(),
+                )
+                setDataSource(soundUrl?.takeIf { it.isNotBlank() } ?: "https://assets.mixkit.co/active_storage/sfx/2010/2010-preview.mp3")
+                isLooping = true
+                setOnPreparedListener { runCatching { start() } }
+                prepareAsync()
+            }
+        }.getOrNull()
+        onDispose { runCatching { player?.stop() }; runCatching { player?.release() } }
     }
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        if (!reduceAnimations) PulsingGlow()
+        if (!reduceAnimations) ConfettiLayer()
+        WinnerCard(winnerName = winnerName, title = title, avatarUrl = avatarUrl, subtitle = subtitle, animate = !reduceAnimations)
+    }
+}
+
+/** Lueur radiale douce qui pulse en fond (parité web : `radial-gradient` + scale/opacity infinis). */
+@Composable
+private fun PulsingGlow() {
+    val transition = rememberInfiniteTransition(label = "glow")
+    val scale by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.3f,
+        animationSpec = infiniteRepeatable(tween(1500), repeatMode = androidx.compose.animation.core.RepeatMode.Reverse),
+        label = "glowScale",
+    )
+    val alpha by transition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 0.5f,
+        animationSpec = infiniteRepeatable(tween(1500), repeatMode = androidx.compose.animation.core.RepeatMode.Reverse),
+        label = "glowAlpha",
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(Color(0xFFA63DDB).copy(alpha = alpha), Color.Transparent),
+                ),
+            ),
+    )
 }
 
 /** Palette festive des confettis. */
@@ -131,11 +195,18 @@ private fun ConfettiLayer() {
     }
 }
 
-/** Carte centrale annonçant le vainqueur (apparition avec léger rebond). */
+/**
+ * Carte centrale annonçant le vainqueur (parité web : couronne qui rebondit au-dessus de
+ * l'avatar en bague dorée avec pastille trophée, « 🎉 FÉLICITATIONS 🎉 », nom en doré, votes
+ * dans une pastille) — apparition avec léger rebond (spring, une seule valeur cible : voir
+ * `animateFloatAsState` ci-dessous, pas de limite de keyframes contrairement à Framer Motion
+ * côté web, dont l'équivalent JS a justement provoqué le bug d'affichage web signalé).
+ */
 @Composable
 private fun WinnerCard(
     winnerName: String,
     title: String,
+    avatarUrl: String?,
     subtitle: String?,
     animate: Boolean,
 ) {
@@ -146,6 +217,13 @@ private fun WinnerCard(
         animationSpec = if (animate) spring(dampingRatio = Spring.DampingRatioMediumBouncy) else tween(0),
         label = "winnerScale",
     )
+    val crownTransition = rememberInfiniteTransition(label = "crown")
+    val crownY by crownTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -6f,
+        animationSpec = infiniteRepeatable(tween(1000), repeatMode = androidx.compose.animation.core.RepeatMode.Reverse),
+        label = "crownY",
+    )
     Column(
         modifier = Modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
@@ -154,23 +232,56 @@ private fun WinnerCard(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text("🏆", fontSize = 54.sp)
+        Text("👑", fontSize = 44.sp, modifier = Modifier.graphicsLayer { translationY = crownY })
+
+        // Avatar en bague dorée + pastille trophée (parité web : ring-4 ring-yellow-500 + 🏆
+        // en overlay coin haut-droit), repli sur l'emoji trophée si aucun avatar disponible.
+        Box(contentAlignment = Alignment.Center) {
+            if (avatarUrl.isNullOrBlank()) {
+                Box(
+                    modifier = Modifier
+                        .size(92.dp)
+                        .clip(CircleShape)
+                        .background(Brush.linearGradient(listOf(Color(0xFFFFD23D), Color(0xFFFFA53D))))
+                        .border(4.dp, Color(0xFFFFD23D), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(winnerName.take(1).uppercase(), color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Black)
+                }
+            } else {
+                DMRemoteImage(
+                    url = avatarUrl,
+                    contentDescription = winnerName,
+                    modifier = Modifier.size(92.dp).clip(CircleShape).border(4.dp, Color(0xFFFFD23D), CircleShape),
+                    fallbackEmoji = "🏆",
+                )
+            }
+            Text("🏆", fontSize = 26.sp, modifier = Modifier.align(Alignment.TopEnd).graphicsLayer { translationX = 8f; translationY = (-8f) })
+        }
+
         Text(
-            title,
-            color = Color(0xFFFFD23D),
+            "🎉 $title 🎉",
+            color = Color.White,
             fontWeight = FontWeight.Black,
-            fontSize = 16.sp,
+            fontSize = 18.sp,
             textAlign = TextAlign.Center,
         )
         Text(
             winnerName,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
+            color = Color(0xFFFFD23D),
+            fontWeight = FontWeight.Black,
             fontSize = 26.sp,
             textAlign = TextAlign.Center,
         )
         subtitle?.let {
-            Text(it, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, textAlign = TextAlign.Center)
+            Box(
+                modifier = Modifier
+                    .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(999.dp))
+                    .border(1.dp, Color(0xFFFFD23D).copy(alpha = 0.4f), RoundedCornerShape(999.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(it, color = Color(0xFFFFD23D), fontWeight = FontWeight.Bold, fontSize = 13.sp, textAlign = TextAlign.Center)
+            }
         }
     }
 }

@@ -132,7 +132,8 @@ public final class AppContainer {
         realtime = RealtimeClient(baseURL: baseURL) { await store.accessToken() }
 
         mediaUploader = MediaUploader(http: http)
-        liveKitTokens = LiveKitTokenService(http: http)
+        // Identité LiveKit par appareil (voir LiveKitTokenRequest.deviceId).
+        liveKitTokens = LiveKitTokenService(http: http, deviceId: DeviceIdentity.current)
 
         authRepository = AuthRepository(http: http, tokenStore: tokenStore, baseURL: baseURL)
         feedRepository = FeedRepository(http: http)
@@ -456,6 +457,7 @@ public final class AppContainer {
         let viewModel = LiveViewModel(
             liveId: live.id,
             roomName: live.liveKitRoom,
+            hostUserId: live.artistId,
             media: LiveRoomClient(tokenService: liveKitTokens),
             tokenService: liveKitTokens,
             realtime: realtime,
@@ -476,6 +478,7 @@ public final class AppContainer {
         LiveViewModel(
             liveId: live.id,
             roomName: live.liveKitRoom,
+            hostUserId: live.artistId,
             media: LiveRoomClient(tokenService: liveKitTokens),
             tokenService: liveKitTokens,
             realtime: realtime,

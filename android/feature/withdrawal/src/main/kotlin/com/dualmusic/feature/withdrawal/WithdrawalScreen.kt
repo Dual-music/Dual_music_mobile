@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,12 +58,14 @@ fun WithdrawalScreen(viewModel: WithdrawalViewModel) {
             .fillMaxSize()
             .background(DualMusicTheme.gradients.hero)
             .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md),
     ) {
 
         if (ui.isLoading) CircularProgressIndicator(color = colors.primary)
-        ui.error?.let { Text(it, color = colors.destructive) }
+        // Pas de doublon : un montant invalide affiche déjà son message sous le champ montant.
+        if (ui.amountError == null) ui.error?.let { Text(it, color = colors.destructive) }
         if (ui.submitted) Text(strings.withdrawSubmitted, color = colors.primary)
 
         when (ui.hasPin) {
@@ -73,9 +76,12 @@ fun WithdrawalScreen(viewModel: WithdrawalViewModel) {
                 onSelectMethod = viewModel::selectMethod,
                 amount = ui.amount,
                 onAmountChange = viewModel::onAmountChange,
+                amountError = ui.amountError,
                 feePct = ui.net?.feePct,
                 net = ui.net?.net,
                 submitting = ui.submitting,
+                pinError = ui.pinError,
+                onPinChange = viewModel::clearPinError,
                 onSubmit = viewModel::submit,
             )
             null -> Unit // en chargement
@@ -118,9 +124,12 @@ internal fun WithdrawForm(
     onSelectMethod: (String) -> Unit,
     amount: String,
     onAmountChange: (String) -> Unit,
+    amountError: String?,
     feePct: Double?,
     net: Double?,
     submitting: Boolean,
+    pinError: Boolean,
+    onPinChange: () -> Unit,
     onSubmit: (String) -> Unit,
 ) {
     val colors = DualMusicTheme.colors
@@ -161,6 +170,8 @@ internal fun WithdrawForm(
         value = amount,
         onValueChange = onAmountChange,
         label = { Text(strings.amountCredits) },
+        isError = amountError != null,
+        supportingText = amountError?.let { msg -> { Text(msg, color = colors.destructive) } },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.fillMaxWidth(),
     )
@@ -180,7 +191,11 @@ internal fun WithdrawForm(
 
     // PIN (une case par chiffre).
     Text(strings.withdrawPin, color = colors.mutedForeground)
-    com.dualmusic.core.ui.components.OtpBoxes(value = pin, onValueChange = { pin = it })
+    com.dualmusic.core.ui.components.OtpBoxes(
+        value = pin,
+        onValueChange = { pin = it; onPinChange() },
+        isError = pinError,
+    )
     DMButton(
         if (submitting) strings.sending else strings.requestWithdraw,
         enabled = !submitting && pin.length == 6,

@@ -135,7 +135,8 @@ interface Strings {
     val sendApplication: String
     val managerExpLabel: String
     val artistDescMinError: String
-    val managerFieldsRequired: String
+    val managerBioMinError: String
+    val managerExperienceMinError: String
     val sendFailed: String
     val applicationsClosed: String
     val applicationPending: String
@@ -279,6 +280,7 @@ interface Strings {
     val unsupportedMedia: String
     val noEvents: String
     val noEventsHint: String
+    val sponsorEventUnavailable: String
     val noMedia: String
     val changeMedia: String
     val chooseMedia: String
@@ -288,6 +290,8 @@ interface Strings {
     val event: String
     val pay: String
     val sponsorStatusPending: String
+    val sponsorStatusAwaitingPayment: String
+    val sponsorStatusPaid: String
     val sponsorStatusApproved: String
     val coverReady: String
     val mediaReady: String
@@ -510,6 +514,7 @@ interface Strings {
     val approveAction: String
     val rejectAction: String
     val setPerformerAction: String
+    val performerDurationLabel: String
     val pendingApproval: String
     val watchAction: String
     val availableForTx: String
@@ -524,6 +529,7 @@ interface Strings {
     val managerRequestPending: String
     val competitionCreated: String
     val competitionCreateFailed: String
+    val competitionsLoadFailed: String
     val competitionCheckFields: String
     val imageUploadFriendly: String
     val networkSlow: String
@@ -565,6 +571,32 @@ interface Strings {
     val compAddCandidateDisabled: String
     val compAddCandidateAlready: String
     val compAddCandidateSelectRequired: String
+    // Revue des candidatures (détail pitch/vidéo, retrait avec remboursement) — parité web
+    // CompetitionCandidateReview.
+    val compViewDetail: String
+    val compDemoVideo: String
+    val compOpenDemoLink: String
+    val compNoPitch: String
+    val compRejectReasonLabel: String
+    val compRemoveCandidate: String
+    val compRemoveCandidateConfirm: String
+    val compRemovedRefunded: String
+    val compRemovedNoRefund: String
+    val compReviewedSuccess: String
+    // Auto-candidature de l'artiste (parité web CompetitionApplyDialog / CompetitionDetail).
+    val compDetailsTitle: String
+    val compViewJoin: String
+    /** Bouton « Voir les détails » de la carte compétition (à venir) — parité web `compViewDetails`. */
+    val compViewDetails: String
+    val compApply: String
+    val compApplyTitle: String
+    val compApplyPitch: String
+    val compApplyVideo: String
+    val compApplied: String
+    val compApplicationsNotOpenYet: String
+    val compApplyRequiredFields: String
+    val compAlreadyApplied: String
+    val compDeadlinePassed: String
     val compSponsorDeadline: String
     val compEditTitle: String
     val compRewardAmount: String
@@ -579,6 +611,10 @@ interface Strings {
     val compTimezoneHint: String
     val compApplicationOpensAt: String
     val compApplicationOpensAtHint: String
+    val compTitleRequired: String
+    val compDateRequired: String
+    val compStartAfterDeadline: String
+    val compEndAfterStart: String
     val compApplicationDeadline: String
     val compStartAtLabel: String
     val compEndAtLabel: String
@@ -682,6 +718,16 @@ interface Strings {
     val notifAssignments: String
     val notifSystem: String
     val notifRequired: String
+    // Gate d'accès programmé (parité web ScheduledAccessGate) — duel/concert/compétition.
+    val scheduledNotStartedTitle: String
+    val scheduledNotStartedMsgDuel: String
+    val scheduledNotStartedMsgConcert: String
+    val scheduledNotStartedMsgCompetition: String
+    val scheduledPaidAccessTitle: String
+    val scheduledPaidAccessMsg: String
+    val scheduledPayAccess: String
+    val scheduledBackHome: String
+    val scheduledAccessAlready: String
 }
 
 /** Chaînes françaises (langue par défaut). */
@@ -797,7 +843,8 @@ object FrStrings : Strings {
     override val sendApplication = "Envoyer ma candidature"
     override val managerExpLabel = "Expérience"
     override val artistDescMinError = "Décris ton projet (au moins 10 caractères)."
-    override val managerFieldsRequired = "Renseigne ta bio et ton expérience."
+    override val managerBioMinError = "Ta bio doit faire au moins 10 caractères."
+    override val managerExperienceMinError = "Ton expérience doit faire au moins 5 caractères."
     override val sendFailed = "Envoi impossible."
     override val applicationsClosed = "Les candidatures sont actuellement fermées. L'administrateur désigne directement les promotions."
     override val applicationPending = "⏳ Ta demande est en attente de validation."
@@ -935,6 +982,7 @@ object FrStrings : Strings {
     override val unsupportedMedia = "Type de média non supporté."
     override val noEvents = "Aucun événement disponible"
     override val noEventsHint = "Reviens quand des événements seront programmés."
+    override val sponsorEventUnavailable = "Cet évènement n'est plus disponible pour le sponsoring (délai dépassé ou sponsors désactivés)."
     override val noMedia = "Aucun média."
     override val changeMedia = "Changer le média"
     override val chooseMedia = "Choisir un média"
@@ -944,7 +992,9 @@ object FrStrings : Strings {
     override val event = "Événement"
     override val pay = "Payer"
     override val sponsorStatusPending = "En attente de validation"
-    override val sponsorStatusApproved = "Approuvé — à payer"
+    override val sponsorStatusAwaitingPayment = "Prix fixé — paiement requis"
+    override val sponsorStatusPaid = "Payée — en attente de validation finale"
+    override val sponsorStatusApproved = "Approuvée — en ligne"
     override val coverReady = "✅ Pochette prête."
     override val mediaReady = "✅ Média prêt"
     override val step1ChooseEvent = "1. Choisir l'événement"
@@ -1152,6 +1202,7 @@ object FrStrings : Strings {
     override val approveAction = "Valider"
     override val rejectAction = "Rejeter"
     override val setPerformerAction = "Faire performer"
+    override val performerDurationLabel = "Durée (secondes)"
     override val pendingApproval = "Concerts en attente d'approbation"
     override val watchAction = "Regarder"
     override val availableForTx = "Disponible pour vos transactions"
@@ -1166,6 +1217,7 @@ object FrStrings : Strings {
     override val managerRequestPending = "Vous avez une demande pour devenir manager en cours de validation."
     override val competitionCreated = "Compétition créée"
     override val competitionCreateFailed = "La compétition n'a pas pu être créée. Réessaie dans un instant."
+    override val competitionsLoadFailed = "Impossible de charger tes compétitions. Réessaie dans un instant."
     override val competitionCheckFields = "Vérifie les informations du formulaire (titre, dates…)."
     override val imageUploadFriendly = "L'image n'a pas pu être envoyée (connexion lente ou fichier trop lourd). Réessaie."
     override val networkSlow = "Connexion lente ou interrompue. Vérifie ta connexion et réessaie."
@@ -1206,6 +1258,28 @@ object FrStrings : Strings {
     override val compAddCandidateDisabled = "Cette fonctionnalité est désactivée par l'administrateur."
     override val compAddCandidateAlready = "Cet artiste est déjà candidat."
     override val compAddCandidateSelectRequired = "Sélectionnez un artiste"
+    override val compViewDetail = "Voir le détail"
+    override val compDemoVideo = "Vidéo de démonstration"
+    override val compOpenDemoLink = "Ouvrir le lien de la démo"
+    override val compNoPitch = "Aucune présentation fournie"
+    override val compRejectReasonLabel = "Motif du rejet (optionnel)"
+    override val compRemoveCandidate = "Retirer"
+    override val compRemoveCandidateConfirm = "Retirer ce candidat de la compétition ?"
+    override val compRemovedRefunded = "Candidat retiré (remboursé)"
+    override val compRemovedNoRefund = "Candidat retiré"
+    override val compReviewedSuccess = "Candidature traitée"
+    override val compDetailsTitle = "Détails de la compétition"
+    override val compViewJoin = "Voir / Rejoindre"
+    override val compViewDetails = "Voir les détails"
+    override val compApply = "Candidater"
+    override val compApplyTitle = "Déposer ma candidature"
+    override val compApplyPitch = "Présentation"
+    override val compApplyVideo = "Lien vidéo démo"
+    override val compApplied = "Candidature envoyée"
+    override val compApplicationsNotOpenYet = "Candidatures pas encore ouvertes"
+    override val compApplyRequiredFields = "Tous les champs sont obligatoires"
+    override val compAlreadyApplied = "Vous avez déjà candidaté"
+    override val compDeadlinePassed = "Date limite dépassée"
     override val compSponsorDeadline = "Date limite des candidatures sponsor"
     override val compEditTitle = "Modifier la compétition"
     override val compRewardAmount = "Valeur (crédits)"
@@ -1220,6 +1294,10 @@ object FrStrings : Strings {
     override val compTimezoneHint = "Les heures saisies sont interprétées dans votre fuseau :"
     override val compApplicationOpensAt = "Ouverture des candidatures"
     override val compApplicationOpensAtHint = "Optionnel — les artistes ne pourront postuler qu'à partir de cette date."
+    override val compTitleRequired = "Le titre est requis."
+    override val compDateRequired = "Cette date est requise."
+    override val compStartAfterDeadline = "Le début doit être après la date limite des candidatures."
+    override val compEndAfterStart = "La fin doit être après le début."
     override val compApplicationDeadline = "Date limite des candidatures"
     override val compStartAtLabel = "Début de la compétition"
     override val compEndAtLabel = "Fin de la compétition"
@@ -1318,6 +1396,15 @@ object FrStrings : Strings {
     override val notifAssignments = "Assignations"
     override val notifSystem = "Emails système"
     override val notifRequired = "Requis"
+    override val scheduledNotStartedTitle = "L'évènement n'a pas encore commencé"
+    override val scheduledNotStartedMsgDuel = "Ce duel démarre le {date}. Revenez à ce moment-là pour y participer."
+    override val scheduledNotStartedMsgConcert = "Ce concert démarre le {date}. Revenez à ce moment-là pour y participer."
+    override val scheduledNotStartedMsgCompetition = "Cette compétition démarre le {date}. Revenez à ce moment-là pour y participer."
+    override val scheduledPaidAccessTitle = "Accès payant requis"
+    override val scheduledPaidAccessMsg = "Cet événement est déjà en cours. Pour y accéder, vous devez régler votre billet."
+    override val scheduledPayAccess = "Payer mon accès"
+    override val scheduledBackHome = "Retour"
+    override val scheduledAccessAlready = "Vous avez déjà votre accès ✓"
 }
 
 /** Chaînes anglaises. */
@@ -1433,7 +1520,8 @@ object EnStrings : Strings {
     override val sendApplication = "Submit my application"
     override val managerExpLabel = "Experience"
     override val artistDescMinError = "Describe your project (at least 10 characters)."
-    override val managerFieldsRequired = "Fill in your bio and experience."
+    override val managerBioMinError = "Your bio must be at least 10 characters."
+    override val managerExperienceMinError = "Your experience must be at least 5 characters."
     override val sendFailed = "Could not send."
     override val applicationsClosed = "Applications are currently closed. The administrator designates promotions directly."
     override val applicationPending = "⏳ Your application is pending review."
@@ -1571,6 +1659,7 @@ object EnStrings : Strings {
     override val unsupportedMedia = "Unsupported media type."
     override val noEvents = "No event available"
     override val noEventsHint = "Come back when events are scheduled."
+    override val sponsorEventUnavailable = "This event is no longer available for sponsoring (deadline passed or sponsors disabled)."
     override val noMedia = "No media."
     override val changeMedia = "Change media"
     override val chooseMedia = "Choose media"
@@ -1580,7 +1669,9 @@ object EnStrings : Strings {
     override val event = "Event"
     override val pay = "Pay"
     override val sponsorStatusPending = "Pending review"
-    override val sponsorStatusApproved = "Approved — to pay"
+    override val sponsorStatusAwaitingPayment = "Price set — payment required"
+    override val sponsorStatusPaid = "Paid — awaiting final approval"
+    override val sponsorStatusApproved = "Approved — live"
     override val coverReady = "✅ Cover ready."
     override val mediaReady = "✅ Media ready"
     override val step1ChooseEvent = "1. Choose the event"
@@ -1788,6 +1879,7 @@ object EnStrings : Strings {
     override val approveAction = "Approve"
     override val rejectAction = "Reject"
     override val setPerformerAction = "Set as performer"
+    override val performerDurationLabel = "Duration (seconds)"
     override val pendingApproval = "Concerts pending approval"
     override val watchAction = "Watch"
     override val availableForTx = "Available for your transactions"
@@ -1802,6 +1894,7 @@ object EnStrings : Strings {
     override val managerRequestPending = "You have a pending request to become a manager."
     override val competitionCreated = "Competition created"
     override val competitionCreateFailed = "The competition could not be created. Please try again in a moment."
+    override val competitionsLoadFailed = "Unable to load your competitions. Please try again in a moment."
     override val competitionCheckFields = "Check the form fields (title, dates…)."
     override val imageUploadFriendly = "The image could not be uploaded (slow connection or file too large). Please try again."
     override val networkSlow = "Slow or interrupted connection. Check your connection and try again."
@@ -1842,6 +1935,28 @@ object EnStrings : Strings {
     override val compAddCandidateDisabled = "This feature has been disabled by the administrator."
     override val compAddCandidateAlready = "This artist is already a candidate."
     override val compAddCandidateSelectRequired = "Select an artist"
+    override val compViewDetail = "View detail"
+    override val compDemoVideo = "Demo video"
+    override val compOpenDemoLink = "Open the demo link"
+    override val compNoPitch = "No pitch provided"
+    override val compRejectReasonLabel = "Rejection reason (optional)"
+    override val compRemoveCandidate = "Remove"
+    override val compRemoveCandidateConfirm = "Remove this candidate from the competition?"
+    override val compRemovedRefunded = "Candidate removed (refunded)"
+    override val compRemovedNoRefund = "Candidate removed"
+    override val compReviewedSuccess = "Application reviewed"
+    override val compDetailsTitle = "Competition details"
+    override val compViewJoin = "View / Join"
+    override val compViewDetails = "View details"
+    override val compApply = "Apply"
+    override val compApplyTitle = "Submit my application"
+    override val compApplyPitch = "Pitch"
+    override val compApplyVideo = "Demo video link"
+    override val compApplied = "Application submitted"
+    override val compApplicationsNotOpenYet = "Applications not open yet"
+    override val compApplyRequiredFields = "All fields are required"
+    override val compAlreadyApplied = "You already applied"
+    override val compDeadlinePassed = "Deadline passed"
     override val compSponsorDeadline = "Sponsor application deadline"
     override val compEditTitle = "Edit competition"
     override val compRewardAmount = "Value (credits)"
@@ -1856,6 +1971,10 @@ object EnStrings : Strings {
     override val compTimezoneHint = "Times you enter are interpreted in your timezone:"
     override val compApplicationOpensAt = "Applications open at"
     override val compApplicationOpensAtHint = "Optional — artists can only apply from this date."
+    override val compTitleRequired = "Title is required."
+    override val compDateRequired = "This date is required."
+    override val compStartAfterDeadline = "The start must be after the application deadline."
+    override val compEndAfterStart = "The end must be after the start."
     override val compApplicationDeadline = "Application deadline"
     override val compStartAtLabel = "Competition start"
     override val compEndAtLabel = "Competition end"
@@ -1954,6 +2073,15 @@ object EnStrings : Strings {
     override val notifAssignments = "Assignments"
     override val notifSystem = "System emails"
     override val notifRequired = "Required"
+    override val scheduledNotStartedTitle = "The event hasn't started yet"
+    override val scheduledNotStartedMsgDuel = "This duel starts on {date}. Please come back at that time to join."
+    override val scheduledNotStartedMsgConcert = "This concert starts on {date}. Please come back at that time to join."
+    override val scheduledNotStartedMsgCompetition = "This competition starts on {date}. Please come back at that time to join."
+    override val scheduledPaidAccessTitle = "Paid access required"
+    override val scheduledPaidAccessMsg = "This event is already live. To join, you must purchase your ticket."
+    override val scheduledPayAccess = "Pay for access"
+    override val scheduledBackHome = "Back"
+    override val scheduledAccessAlready = "You already have access ✓"
 }
 
 /** Renvoie la table de chaînes d'une langue. */

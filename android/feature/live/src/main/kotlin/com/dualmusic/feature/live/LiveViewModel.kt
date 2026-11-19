@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -104,15 +105,16 @@ data class LiveGift(
 class LiveViewModel(
     private val liveId: String,
     private val roomName: String,
-    val media: LiveRoomClient,
+    /** Artiste hôte du live : sa piste vidéo est celle affichée en grand par défaut. */
+    private val hostUserId: String,
     /**
-     * Fabrique un [LiveRoomClient] SUPPLÉMENTAIRE, partageant le même contexte EGL que [media]
-     * (indispensable : sans EGL partagé, les pistes distantes d'une AUTRE room sont souscrites
-     * mais ne s'affichent pas — case transparente). Sert à publier/s'abonner aux rooms **par
-     * invité** (`live-guest-<liveId>-<userId>`), exactement comme le web (voir [guestMedia] et
-     * [reconcileGuestSubscriptions]) — la room principale [media] est réservée à l'ARTISTE.
+     * L'UNIQUE client LiveKit du live : room `live-<id>` partagée par l'hôte, les invités (qui y
+     * publient) et les spectateurs. Avant, chaque invité publiait dans SA room et chaque
+     * appareil ouvrait une connexion par invité : un événement manqué ou une connexion tombée
+     * rendait UN participant inaudible pour UN appareil seulement. Une seule room = tout le
+     * monde entend tout le monde, par construction (et N fois moins de connexions).
      */
-    private val mediaFactory: () -> LiveRoomClient,
+    val media: LiveRoomClient,
     private val realtime: RealtimeClient,
     private val repository: LiveRepository,
     sponsorAds: com.dualmusic.feature.sponsor.SponsorAdRepository,
@@ -121,38 +123,38 @@ class LiveViewModel(
     val isHost: Boolean = false,
 ) : ViewModel() {
 
-    /**
-     * Client dédié à MA PROPRE publication en tant qu'INVITÉ (room `live-guest-<liveId>-<monId>`)
-     * — parité EXACTE avec le web (`GuestVideoBox` y publie sous ce même nom de room). Créé
-     * paresseusement (jamais `.join()`é pour l'hôte ou un simple spectateur) pour que l'UI puisse
-     * l'observer dès le départ sans gérer un état nullable transitoire.
-     *
-     * AVANT ce fix, un invité publiait dans la room PRINCIPALE (`media`, la même que l'hôte) —
-     * une architecture différente de celle du web, qui isole chaque invité dans SA PROPRE room.
-     * Résultat : le web (et tout spectateur qui régarde via le mécanisme web) ne recevait JAMAIS
-     * la caméra/micro d'un invité mobile, quel que soit le réseau — elles n'étaient tout
-     * simplement pas dans la room que le web écoutait.
-     */
-    val guestMedia: LiveRoomClient by lazy { mediaFactory() }
+    // Message d'erreur humanisé pour la popup `DMErrorDialog` — avant ceci, un échec de
+    // démarrage de diffusion (réseau, salle pas encore prête) ne montrait RIEN (parité
+    // compétition/duel/concert, mêmes bug et correctif).
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+    fun clearError() { _error.value = null }
+
+    /** Piste vidéo de l'HÔTE (par `userId`), `null` tant qu'il ne publie pas / caméra coupée. */
+    val hostVideoTrack: StateFlow<io.livekit.android.room.track.VideoTrack?> by lazy {
+        media.remoteTiles
+            .map { tiles -> tiles.firstOrNull { it.first == hostUserId }?.second }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    }
 
     /**
-     * Pistes vidéo des AUTRES invités actifs (identité = userId), indexées par leur id. La
-     * valeur est `null` quand l'invité est présent (abonné) mais caméra coupée — l'entrée reste
-     * dans la map (au lieu d'être retirée) pour que sa case affiche un placeholder plutôt que de
-     * disparaître : il est toujours invité, juste caméra off (parité duel `SlotContent`).
+     * Pistes vidéo des AUTRES invités actifs, indexées par `userId`. `null` = invité présent
+     * (accepté) mais caméra coupée — l'entrée reste dans la map pour afficher un placeholder.
+     * Dérivé de la liste des invités acceptés × pistes distantes de la room unique.
+     * (`by lazy` : les flows sources sont déclarés plus bas dans la classe.)
      */
-    private val _guestVideos = MutableStateFlow<Map<String, io.livekit.android.room.track.VideoTrack?>>(emptyMap())
-    val guestVideos: StateFlow<Map<String, io.livekit.android.room.track.VideoTrack?>> = _guestVideos.asStateFlow()
+    val guestVideos: StateFlow<Map<String, io.livekit.android.room.track.VideoTrack?>> by lazy {
+        combine(_acceptedGuests, media.remoteTiles, _myUserId) { guests, tiles, me ->
+            guests.map { it.userId }.filterNot { it == me }
+                .associateWith { uid -> tiles.firstOrNull { it.first == uid }?.second }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+    }
 
-    /** Client LiveKit par invité (room de vue dédiée) — exposé pour lire `remoteMicOn` par tuile. */
-    private val _guestClients = MutableStateFlow<Map<String, LiveRoomClient>>(emptyMap())
-    val guestClients: StateFlow<Map<String, LiveRoomClient>> = _guestClients.asStateFlow()
+    /** État micro de chaque participant distant (badge des tuiles), par `userId`. */
+    val guestMicOn: StateFlow<Map<String, Boolean>> get() = media.remoteMicByUser
 
-    private val guestViewClients = mutableMapOf<String, LiveRoomClient>()
-    private val guestViewJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
-
-    /** Client de MA diffusion : la room principale si je suis l'hôte, ma room d'invité sinon. */
-    private fun selfMedia(): LiveRoomClient = if (isHost) media else guestMedia
+    /** Client de MA diffusion : toujours la room unique (hôte comme invité). */
+    private fun selfMedia(): LiveRoomClient = media
 
     /** État + actions de diffusion pub sponsor (overlay vidéo + contrôle hôte). */
     val sponsor = com.dualmusic.feature.sponsor.SponsorAdHolder("live", liveId, sponsorAds, viewModelScope)
@@ -313,13 +315,20 @@ class LiveViewModel(
             _myUserId.value = repository.myUserId()
             _bannedUserIds.value = runCatching { repository.listStreamBans(liveId) }.getOrDefault(emptyList()).toSet()
         }
-        // Réconcilie mes abonnements aux rooms des AUTRES invités actifs (hôte, spectateur ou
-        // invité — tout le monde doit les voir/entendre) à chaque changement de la liste ou
-        // dès que MON id est connu (pour ne pas s'auto-abonner à ma propre room).
+        // Resynchronisation PÉRIODIQUE de la liste des invités (pilote les cases d'invités) :
+        // elle ne se mettait à jour que sur les événements socket `join:*`, un événement manqué
+        // laissait une case fantôme ou manquante. 20 s = compromis charge serveur / rattrapage.
         viewModelScope.launch {
-            combine(_acceptedGuests, _myUserId) { list, _ -> list }.collect { reconcileGuestSubscriptions(it) }
+            while (true) {
+                kotlinx.coroutines.delay(GUEST_RESYNC_MS)
+                if (isHost) loadJoinRequests() else loadAcceptedGuests()
+            }
         }
         connectRealtime()
+    }
+
+    private companion object {
+        const val GUEST_RESYNC_MS = 20_000L
     }
 
     /**
@@ -491,47 +500,14 @@ class LiveViewModel(
     }
 
     /**
-     * TOUT LE MONDE (spectateur ou invité) : (re)charge la liste des invités actifs — nécessaire
-     * pour savoir à QUELLES rooms d'invités s'abonner (voir [reconcileGuestSubscriptions]).
+     * TOUT LE MONDE (spectateur ou invité) : (re)charge la liste des invités actifs — elle pilote
+     * les cases d'invités ([guestVideos]) ; leurs pistes arrivent d'elles-mêmes par la room unique.
      * Contrairement à [loadJoinRequests] (réservé à l'hôte), ne charge pas les demandes en attente
      * (non actionnables par un simple spectateur).
      */
     private fun loadAcceptedGuests() {
         viewModelScope.launch {
             _acceptedGuests.value = runCatching { repository.joinRequests(liveId, "accepted") }.getOrDefault(emptyList())
-        }
-    }
-
-    /**
-     * Recalcule mes connexions d'ABONNEMENT (vue seule) aux rooms des invités actifs, hors
-     * moi-même : ouvre une room `live-guest-<liveId>-<userId>` par invité et en extrait la piste
-     * vidéo primaire. Ferme/retire celles des invités qui ne sont plus actifs — c'est ce qui fait
-     * disparaître la case d'un invité qui descend ou est retiré, chez TOUT LE MONDE (y compris
-     * l'hôte, qui suit désormais la MÊME logique qu'un spectateur pour voir les invités).
-     */
-    private fun reconcileGuestSubscriptions(list: List<LiveJoinRequest>) {
-        val wanted = list.map { it.userId }.filterNot { it == myUserId }.toSet()
-        val stale = guestViewClients.keys - wanted
-        stale.forEach { uid ->
-            guestViewJobs.remove(uid)?.cancel()
-            guestViewClients.remove(uid)?.leave()
-            _guestVideos.update { it - uid }
-            _guestClients.update { it - uid }
-        }
-        val toAdd = wanted - guestViewClients.keys
-        toAdd.forEach { uid ->
-            val client = mediaFactory()
-            guestViewClients[uid] = client
-            _guestClients.update { it + (uid to client) }
-            // Case créée tout de suite (piste `null` = caméra coupée) : reste affichée en
-            // placeholder tant que l'invité est présent, au lieu de disparaître.
-            _guestVideos.update { it + (uid to null) }
-            guestViewJobs[uid] = viewModelScope.launch {
-                runCatching { client.join(roomName = "live-guest-$liveId-$uid", canPublish = false) }
-                client.primaryVideoTrack.collect { track ->
-                    _guestVideos.update { m -> m + (uid to track) }
-                }
-            }
         }
     }
 
@@ -605,12 +581,11 @@ class LiveViewModel(
                 if (target == myUserId) viewModelScope.launch { runCatching { selfMedia().setMicEnabled(!mute) } }
             }
             "kick" -> if (target == myUserId) {
-                // Retiré par l'artiste : j'arrête de publier dans ma room d'invité (ma tuile
-                // disparaît chez tous). Je reste connecté à la room principale (jamais quittée) →
-                // je continue de regarder le live sans interruption.
+                // Retiré par l'artiste : j'arrête de publier (ma tuile disparaît chez tous) mais je
+                // reste dans la room unique en simple spectateur → le live continue sans coupure.
                 _isGuestAccepted.value = false
                 _myJoinRequestId.value = null
-                viewModelScope.launch { runCatching { guestMedia.leave() } }
+                viewModelScope.launch { runCatching { media.stopBroadcast() } }
             }
         }
     }
@@ -642,31 +617,40 @@ class LiveViewModel(
     }
 
     /**
-     * Invité accepté : monte sur scène — publie caméra/micro dans MA PROPRE room d'invité
-     * (`live-guest-<liveId>-<monId>`, [guestMedia]), **sans jamais toucher** [media] (je reste
-     * connecté à la room principale comme spectateur, je continue donc de voir/entendre
-     * l'artiste pendant que je diffuse). C'est cette room dédiée — et non la room principale —
-     * que le web (et tout autre spectateur) écoute pour un invité, via la même convention de nom.
+     * Invité accepté : monte sur scène — publie caméra/micro dans la room UNIQUE `live-<id>`
+     * (la même que l'hôte et les spectateurs). Le backend accorde le droit de publier à chaud à
+     * l'acceptation ; s'il n'est pas (encore) effectif sur ma connexion, on se reconnecte UNE fois
+     * avec un jeton qui l'inclut (brève coupure d'image pour moi seul).
      * La permission caméra/micro est demandée par l'écran avant l'appel.
      */
     fun goOnStage() {
-        val uid = myUserId ?: return
+        if (myUserId == null) return
         viewModelScope.launch {
-            runCatching { guestMedia.join(roomName = "live-guest-$liveId-$uid", canPublish = true) }
-            runCatching { guestMedia.startBroadcast() }
-            // Micro + caméra COUPÉS par défaut à l'entrée en scène (`startBroadcast` les active
-            // toujours) : c'est à l'invité d'activer consciemment ce qu'il veut montrer, pour
-            // éviter toute surprise (parité avec l'esprit « accepté ≠ diffusé publiquement »).
-            runCatching { guestMedia.setMicEnabled(false) }
-            runCatching { guestMedia.setCamEnabled(false) }
+            if (!media.hasPublishPermission()) {
+                // Laisse 1,5 s à la mise à jour de permission côté SFU avant de se reconnecter.
+                kotlinx.coroutines.delay(1500)
+                if (!media.hasPublishPermission()) {
+                    media.leave()
+                    media.join(roomName = roomName, isHost = false, canPublish = true)
+                }
+            }
+            if (media.connectionState.value !is com.dualmusic.core.media.LiveConnectionState.Connected) {
+                _error.value = "Impossible de monter sur scène. Réessaie dans un instant."
+                return@launch
+            }
+            runCatching { media.startBroadcast() }
+                .onFailure { _error.value = "Impossible de monter sur scène. Réessaie dans un instant." }
+            // Caméra COUPÉE par défaut à l'entrée en scène (l'invité choisit s'il se montre) mais
+            // MICRO OUVERT : monter sur scène = venir parler. Le badge micro de la tuile reflète
+            // l'état réel ; un tap suffit pour se couper.
+            runCatching { media.setCamEnabled(false) }
         }
     }
 
     /**
-     * Invité : DESCEND du direct sans le quitter — arrête de publier dans sa room d'invité (sa
-     * caméra/tuile disparaît chez TOUS, via [reconcileGuestSubscriptions] qui suit la liste des
-     * invités actifs), clôt sa demande (l'hôte le retire de la liste). Il reste connecté à la
-     * room principale (jamais quittée) → il continue de regarder le live sans interruption.
+     * Invité : DESCEND du direct sans le quitter — arrête de publier (sa caméra/tuile disparaît
+     * chez TOUS), clôt sa demande (l'hôte le retire de la liste). Il reste dans la room unique en
+     * simple spectateur → il continue de regarder le live sans interruption.
      */
     fun leaveStage() {
         _isGuestAccepted.value = false
@@ -679,7 +663,7 @@ class LiveViewModel(
             // que soit le statut courant (pending OU accepted). Sans ce bon endpoint, la demande
             // restait "accepted" côté serveur → case fantôme chez tous, ré-acceptation au retour.
             rid?.let { runCatching { repository.cancelJoin(it) } }
-            runCatching { guestMedia.leave() }
+            runCatching { media.stopBroadcast() }
         }
     }
 
@@ -702,9 +686,29 @@ class LiveViewModel(
         _emojiFeed.update { (it + FloatingEmoji(emojiCounter++, emoji)).takeLast(12) }
     }
 
-    /** Démarre la diffusion caméra/micro (hôte) — déclenché par « Démarrer le Live ». */
+    /**
+     * Démarre la diffusion caméra/micro (hôte) — déclenché par « Démarrer le Live ».
+     *
+     * Le join initial (`start()`) rejoint [media] dans sa propre coroutine sans l'attendre — un
+     * join lent/échoué silencieusement (réseau, timing ; `LiveRoomClient.join()` avale ses
+     * erreurs et passe juste `connectionState` à `Failed`) laissait alors ce point publier sur
+     * une room jamais VRAIMENT connectée, rejetée par le SFU, sans le moindre retour à l'écran
+     * (bug signalé, parité compétition/duel/concert : on (re)joint explicitement si besoin et on
+     * ATTEND avant de publier).
+     */
     fun startBroadcast() {
-        viewModelScope.launch { runCatching { media.startBroadcast() } }
+        viewModelScope.launch {
+            if (media.connectionState.value !is com.dualmusic.core.media.LiveConnectionState.Connected) {
+                media.join(roomName = roomName, isHost = true)
+            }
+            val started = media.connectionState.value is com.dualmusic.core.media.LiveConnectionState.Connected &&
+                runCatching { media.startBroadcast() }
+                    .onFailure { android.util.Log.w("LiveRoom", "startBroadcast a échoué room=$roomName", it) }
+                    .isSuccess
+            if (!started) {
+                _error.value = "Impossible de démarrer la diffusion. Réessaie dans un instant."
+            }
+        }
     }
 
     /** Coupe/rétablit le micro (hôte : room principale ; invité : sa room dédiée). */
@@ -744,7 +748,7 @@ class LiveViewModel(
         }
     }
 
-    /** Arrête tout (sortie d'écran) : room principale, ma room d'invité + tous les abonnements. */
+    /** Arrête tout (sortie d'écran) : temps réel + la room unique. */
     fun stop() {
         // Quitter le live EST une expulsion : si j'étais un invité ACCEPTÉ, ma demande passe
         // "ended" côté serveur — sinon ma case restait visible pour tout le monde (placeholder
@@ -760,11 +764,6 @@ class LiveViewModel(
         liveSession?.disconnect()
         chatSession?.disconnect()
         media.leave()
-        runCatching { guestMedia.leave() }
-        guestViewJobs.values.forEach { it.cancel() }
-        guestViewJobs.clear()
-        guestViewClients.values.forEach { it.leave() }
-        guestViewClients.clear()
     }
 
     /** Envoie un message de chat (le serveur diffuse ensuite), optionnellement en réponse à `parentId`. */

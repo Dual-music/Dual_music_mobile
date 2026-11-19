@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "663210356103-ac7kvk23eu9nli1kiape06gfbhlbemhc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dualmusic.app",
+            "certificate_hash": "8d6358d4caababe6c8e9e3cc9d513271480d6c31"
+          }
+        },
+        {
           "client_id": "663210356103-v58nnug4q09fms3slpm438hs9l9rh4lp.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

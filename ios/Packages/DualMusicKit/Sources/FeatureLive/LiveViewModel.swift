@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import LiveKit
 import CoreLiveMedia
 import CoreNetwork
 import CoreRealtime
@@ -77,25 +78,26 @@ public final class LiveViewModel {
     public private(set) var dedicationFeedback: String?
     public func clearDedicationFeedback() { dedicationFeedback = nil }
 
-    /// Client média dédié à MA PROPRE publication en tant qu'INVITÉ (room
-    /// `live-guest-<liveId>-<monId>`) — jamais la room principale (``media``), qui reste
-    /// réservée à l'hôte. Parité `LiveViewModel.kt`.
-    public let guestMedia: LiveRoomClient
+    /// Artiste hôte du live : sa piste vidéo est celle affichée en grand par défaut.
+    public let hostUserId: String
+    /// Piste vidéo de l'HÔTE dans la room unique (`nil` tant qu'il ne publie pas / caméra coupée).
+    public var hostVideoTrack: VideoTrack? { media.remoteTiles[hostUserId] }
+    /// Ids des AUTRES invités actifs (hors moi-même) — pilote les tuiles d'invités.
+    public var otherGuestIds: [String] {
+        acceptedGuests.map(\.userId).filter { $0 != callerId }.sorted()
+    }
     /// Hôte : demandes d'invité EN ATTENTE (« lever la main ») — alimente le badge.
     public private(set) var joinRequests: [LiveJoinRequest] = []
-    /// TOUT LE MONDE : invités actuellement acceptés (sur scène) — pilote les abonnements
-    /// de visionnage (``guestClients``), pas seulement affiché à l'hôte.
+    /// TOUT LE MONDE : invités actuellement acceptés (sur scène) — pilote les tuiles d'invités
+    /// (leurs pistes arrivent d'elles-mêmes par la room unique), pas seulement affiché à l'hôte.
     public private(set) var acceptedGuests: [LiveJoinRequest] = []
     /// Hôte : ids des invités actuellement coupés (mise à jour optimiste locale, cf.
     /// `mutedGuests` de `LiveRoomScreen.kt`) — pilote l'icône micro dans ``guestsSheet``.
     public private(set) var mutedGuests: Set<String> = []
     /// Spectateur : id de MA demande en cours, `nil` si aucune.
     public private(set) var myJoinRequestId: String?
-    /// Spectateur : vrai une fois ma demande acceptée (je publie alors dans ``guestMedia``).
+    /// Spectateur : vrai une fois ma demande acceptée (je publie alors dans la room unique ``media``).
     public private(set) var isGuestAccepted = false
-    /// Clients de VISIONNAGE des invités actifs (hors moi-même) — un par invité, room
-    /// `live-guest-<liveId>-<userId>`, `canPublish: false`.
-    public private(set) var guestClients: [String: LiveRoomClient] = [:]
 
     /// Modérateurs désignés de ce live (hôte + jusqu'à ``maxEventModerators`` spectateurs) —
     /// visible par tous, pour que chacun sache qui d'autre a le pouvoir de bannir.
@@ -128,7 +130,9 @@ public final class LiveViewModel {
     private var liveSession: NamespaceSession?
     private var chatSession: NamespaceSession?
     private var started = false
-    private var guestViewTasks: [String: Task<Void, Never>] = [:]
+    /// Resynchronisation PÉRIODIQUE de la liste des invités (voir ``start(prewarmedToken:)``).
+    private var guestResyncTask: Task<Void, Never>?
+    private static let guestResyncSeconds: UInt64 = 20
 
     /// - Parameters:
     ///   - liveId: identifiant du live (contexte chat/cadeaux).
@@ -147,6 +151,7 @@ public final class LiveViewModel {
     public init(
         liveId: String,
         roomName: String,
+        hostUserId: String,
         media: LiveRoomClient,
         tokenService: LiveKitTokenService,
         realtime: RealtimeClient,
@@ -159,9 +164,9 @@ public final class LiveViewModel {
     ) {
         self.liveId = liveId
         self.roomName = roomName
+        self.hostUserId = hostUserId
         self.media = media
         self.tokenService = tokenService
-        self.guestMedia = LiveRoomClient(tokenService: tokenService)
         self.realtime = realtime
         self.repository = repository
         self.wallet = wallet
@@ -208,6 +213,17 @@ public final class LiveViewModel {
         } else {
             Task { [weak self] in await self?.loadAcceptedGuests() }
         }
+        // La liste des invités ne se mettait à jour que sur les événements socket `join:*` : un
+        // événement manqué (socket en reconnexion, retour d'arrière-plan) laissait cet appareil
+        // sans la room d'un invité → « A entend B, B n'entend pas A ». Rattrapage toutes les 20 s.
+        guestResyncTask?.cancel()
+        guestResyncTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: Self.guestResyncSeconds * 1_000_000_000)
+                guard let self, !Task.isCancelled else { return }
+                if self.isHost { await self.loadJoinRequests() } else { await self.loadAcceptedGuests() }
+            }
+        }
         await connectRealtime()
     }
 
@@ -238,14 +254,11 @@ public final class LiveViewModel {
         }
         subscriptions.forEach { $0.cancel() }
         subscriptions.removeAll()
+        guestResyncTask?.cancel()
+        guestResyncTask = nil
         liveSession?.disconnect()
         chatSession?.disconnect()
         await media.leave()
-        await guestMedia.leave()
-        guestViewTasks.values.forEach { $0.cancel() }
-        guestViewTasks.removeAll()
-        for client in guestClients.values { await client.leave() }
-        guestClients.removeAll()
         started = false
     }
 
@@ -483,34 +496,8 @@ public final class LiveViewModel {
     /// Contrairement à ``loadJoinRequests()`` (réservé à l'hôte), ne charge pas les demandes
     /// en attente (non actionnables par un simple spectateur).
     private func loadAcceptedGuests() async {
+        // Room unique : les pistes des invités arrivent d'elles-mêmes ; la liste ne sert qu'aux tuiles.
         acceptedGuests = (try? await repository.joinRequests(liveId: liveId, status: "accepted")) ?? []
-        await reconcileGuestSubscriptions()
-    }
-
-    /// Recalcule mes abonnements de VISIONNAGE aux rooms des invités actifs, hors moi-même :
-    /// ouvre une room `live-guest-<liveId>-<userId>` par invité et en extrait la piste vidéo
-    /// primaire (exposée par le `LiveRoomClient` lui-même, observable). Ferme celles des
-    /// invités qui ne sont plus actifs — c'est ce qui fait disparaître la tuile d'un invité
-    /// qui descend ou est retiré, chez TOUT LE MONDE (y compris l'hôte, qui suit désormais la
-    /// même logique qu'un spectateur pour voir les invités).
-    private func reconcileGuestSubscriptions() async {
-        let wanted = Set(acceptedGuests.map(\.userId).filter { $0 != callerId })
-        let stale = Set(guestClients.keys).subtracting(wanted)
-        for uid in stale {
-            guestViewTasks.removeValue(forKey: uid)?.cancel()
-            if let client = guestClients.removeValue(forKey: uid) {
-                await client.leave()
-            }
-        }
-        let toAdd = wanted.subtracting(guestClients.keys)
-        for uid in toAdd {
-            let client = LiveRoomClient(tokenService: tokenService)
-            guestClients[uid] = client
-            let room = "live-guest-\(liveId)-\(uid)"
-            guestViewTasks[uid] = Task {
-                await client.join(roomName: room, isHost: false, canPublish: false)
-            }
-        }
     }
 
     /// Hôte : accepte/refuse une demande EN ATTENTE, puis recharge.
@@ -538,23 +525,30 @@ public final class LiveViewModel {
         )
     }
 
-    /// Invité accepté : monte sur scène — publie caméra/micro dans MA PROPRE room d'invité
-    /// (``guestMedia``), **sans jamais toucher** ``media`` (je reste connecté à la room
-    /// principale comme spectateur, je continue donc de voir/entendre l'artiste pendant que
-    /// je diffuse). Micro + caméra coupés par défaut à l'entrée en scène : c'est à l'invité
-    /// d'activer consciemment ce qu'il veut montrer.
+    /// Invité accepté : monte sur scène — publie micro (caméra coupée par défaut, l'invité choisit
+    /// s'il se montre) dans la room UNIQUE ``media``, la même que l'hôte et les spectateurs. Le
+    /// backend accorde le droit de publier à chaud à l'acceptation ; s'il n'est pas (encore)
+    /// effectif sur ma connexion, on se reconnecte UNE fois avec un jeton qui l'inclut.
     private func goOnStage() async {
-        guard let uid = callerId else { return }
-        await guestMedia.join(roomName: "live-guest-\(liveId)-\(uid)", isHost: false, canPublish: true)
-        await guestMedia.startBroadcast()
-        await guestMedia.setMicrophone(enabled: false)
-        await guestMedia.setCamera(enabled: false)
+        guard callerId != nil else { return }
+        if !media.hasPublishPermission {
+            // Laisse 1,5 s à la mise à jour de permission côté SFU avant de se reconnecter.
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if !media.hasPublishPermission {
+                await media.leave()
+                await media.join(roomName: roomName, isHost: false, canPublish: true)
+            }
+        }
+        guard case .connected = media.connectionState else {
+            errorMessage = "Impossible de monter sur scène. Réessaie dans un instant."
+            return
+        }
+        await media.setMicrophone(enabled: true)
     }
 
-    /// Invité : descend du direct sans le quitter — arrête de publier dans sa room d'invité (sa
-    /// tuile disparaît chez tous, via ``reconcileGuestSubscriptions``), clôt sa demande (l'hôte
-    /// le retire de la liste). Reste connecté à la room principale (jamais quittée) → continue
-    /// de regarder le live sans interruption.
+    /// Invité : descend du direct sans le quitter — arrête de publier (sa tuile disparaît chez
+    /// tous), clôt sa demande (l'hôte le retire de la liste). Reste dans la room unique en simple
+    /// spectateur → continue de regarder le live sans interruption.
     public func leaveStage() async {
         isGuestAccepted = false
         let rid = myJoinRequestId
@@ -563,27 +557,27 @@ public final class LiveViewModel {
         // clôt SA PROPRE demande doit passer par l'annulation (DELETE), qui autorise le
         // demandeur lui-même quel que soit le statut courant (pending OU accepted).
         if let rid { try? await repository.cancelJoin(requestId: rid) }
-        await guestMedia.leave()
+        await media.stopBroadcast()
     }
 
-    /// Coupe/rétablit MON micro (hôte : room principale ; invité : sa room dédiée).
+    /// Coupe/rétablit MON micro (invité sur scène, room unique).
     public func toggleGuestMicrophone() async {
-        await guestMedia.setMicrophone(enabled: !guestMedia.isMicrophoneEnabled)
+        await media.setMicrophone(enabled: !media.isMicrophoneEnabled)
     }
 
-    /// Coupe/rétablit MA caméra (invité, sa room dédiée).
+    /// Coupe/rétablit MA caméra (invité sur scène, room unique).
     public func toggleGuestCamera() async {
-        await guestMedia.setCamera(enabled: !guestMedia.isCameraEnabled)
+        await media.setCamera(enabled: !media.isCameraEnabled)
     }
 
     /// Applique une action `guest_action` reçue (émetteur exclu côté serveur). Seul `toggle_mic`
     /// est géré (portée de la parité) : si JE suis la cible, coupe/rétablit MA propre piste dans
-    /// ``guestMedia``. Miroir de `onGuestAction` (`LiveViewModel.kt`).
+    /// la room unique ``media``. Miroir de `onGuestAction` (`LiveViewModel.kt`).
     private func onGuestAction(_ payload: BroadcastPayload) {
         guard payload.action == "toggle_mic",
               let target = payload.targetUserId, target == callerId,
               let mute = payload.value else { return }
-        Task { await guestMedia.setMicrophone(enabled: !mute) }
+        Task { await media.setMicrophone(enabled: !mute) }
     }
 
     /// Hôte : active/désactive le chat pour ce live, en direct — pouvoir EXCLUSIF de l'hôte,
@@ -744,7 +738,7 @@ public final class LiveViewModel {
                 // "cancelled" = auto-retrait (leaveStage/stop) ; "ended"/"rejected" = décision
                 // de l'hôte.
                 self.isGuestAccepted = false
-                Task { await self.guestMedia.leave() }
+                Task { await self.media.stopBroadcast() }
             default:
                 break
             }

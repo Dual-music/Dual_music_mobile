@@ -65,6 +65,12 @@ class CompetitionsViewModel(private val repository: CompetitionRepository) : Vie
         val replays: List<ReplayVideo> = emptyList(),
         val perCreditEur: Double = 0.0,
         val loading: Boolean = false,
+        /** Le caller a-t-il le rôle artiste ? (éligibilité au bouton Candidater). */
+        val isArtist: Boolean = false,
+        /** Ids des compétitions où le caller (artiste) a déjà une candidature. */
+        val appliedCompetitionIds: Set<String> = emptySet(),
+        /** Résultat transitoire de la dernière candidature (dialogue de détails). */
+        val applying: Boolean = false,
     )
 
     private val _ui = MutableStateFlow(UiState())
@@ -82,11 +88,42 @@ class CompetitionsViewModel(private val repository: CompetitionRepository) : Vie
             val upcoming = all.filterNot { isLiveNow(it, now) }
             val replays = runCatching { repository.competitionReplays() }.getOrDefault(emptyList())
             val rate = runCatching { repository.perCreditEur() }.getOrDefault(0.0)
-            _ui.update { it.copy(live = live, upcoming = upcoming, replays = replays, perCreditEur = rate, loading = false) }
+            // Éligibilité à candidater : rôle artiste + candidatures déjà déposées (badge "déjà candidaté").
+            val isArtist = runCatching { repository.amIArtist() }.getOrDefault(false)
+            val appliedIds = if (isArtist) {
+                runCatching { repository.myCandidacies() }.getOrDefault(emptyList()).map { it.competitionId }.toSet()
+            } else {
+                emptySet()
+            }
+            _ui.update {
+                it.copy(
+                    live = live, upcoming = upcoming, replays = replays, perCreditEur = rate, loading = false,
+                    isArtist = isArtist, appliedCompetitionIds = appliedIds,
+                )
+            }
         }
     }
 
-    /** En direct = statut `live`, ou `published` dont la fenêtre [start, end) contient maintenant. */
+    /**
+     * Auto-candidature de l'artiste à une compétition à venir (parité web
+     * `CompetitionApplyDialog`). Met à jour [UiState.appliedCompetitionIds] en cas de succès.
+     */
+    fun apply(competitionId: String, pitch: String?, videoDemoUrl: String?, onResult: (Throwable?) -> Unit) {
+        viewModelScope.launch {
+            _ui.update { it.copy(applying = true) }
+            runCatching { repository.apply(competitionId, pitch, videoDemoUrl) }
+                .onSuccess {
+                    _ui.update { it.copy(applying = false, appliedCompetitionIds = it.appliedCompetitionIds + competitionId) }
+                    onResult(null)
+                }
+                .onFailure { e ->
+                    _ui.update { it.copy(applying = false) }
+                    onResult(e)
+                }
+        }
+    }
+
+    /** En direct = statut `live`, ou `published` dont la fenêtre (start inclus, end exclu) contient maintenant. */
     private fun isLiveNow(c: Competition, now: java.time.Instant): Boolean {
         if (c.status == "live") return true
         if (c.status != "published") return false
@@ -118,6 +155,10 @@ fun CompetitionsListScreen(
     LaunchedEffect(Unit) { viewModel.load() }
 
     var tab by remember { mutableStateOf(0) }
+    // Compétition « à venir » dont on affiche le détail (parité web /competition/:id) — ouvert
+    // depuis la carte AU LIEU d'aller directement dans la room (le gate bloquerait de toute façon
+    // trop tôt, mais l'utilisateur doit pouvoir voir les infos et candidater avant l'heure).
+    var detailsFor by remember { mutableStateOf<Competition?>(null) }
 
     Column(
         modifier = Modifier
@@ -137,9 +178,23 @@ fun CompetitionsListScreen(
 
         when (tab) {
             0 -> if (ui.live.isEmpty()) EmptyComp(s.noCompetitionsLive) else ui.live.forEach { CompetitionCard(it, ui.perCreditEur, isLive = true, onOpen = onOpen, onRequestSponsor = onRequestSponsor) }
-            1 -> if (ui.upcoming.isEmpty()) EmptyComp(s.noCompetitionsUpcoming) else ui.upcoming.forEach { CompetitionCard(it, ui.perCreditEur, isLive = false, onOpen = onOpen, onRequestSponsor = onRequestSponsor) }
+            // À venir : la carte ouvre le détail (infos + candidature) plutôt que la room directement.
+            1 -> if (ui.upcoming.isEmpty()) EmptyComp(s.noCompetitionsUpcoming) else ui.upcoming.forEach { CompetitionCard(it, ui.perCreditEur, isLive = false, onOpen = { detailsFor = it }, onRequestSponsor = onRequestSponsor) }
             else -> if (ui.replays.isEmpty()) EmptyComp(s.noConcertReplays) else ui.replays.forEach { CompetitionReplayCard(it, onOpenReplay) }
         }
+    }
+
+    detailsFor?.let { comp ->
+        CompetitionDetailsDialog(
+            competition = comp,
+            perCreditEur = ui.perCreditEur,
+            isArtist = ui.isArtist,
+            hasApplied = comp.id in ui.appliedCompetitionIds,
+            applying = ui.applying,
+            onApply = { pitch, videoDemoUrl, onResult -> viewModel.apply(comp.id, pitch, videoDemoUrl, onResult) },
+            onJoin = { detailsFor = null; onOpen(comp) },
+            onDismiss = { detailsFor = null },
+        )
     }
 }
 
@@ -204,16 +259,30 @@ private fun CompetitionCard(
             Text(competition.title, color = colors.foreground, fontWeight = FontWeight.Bold)
             competition.description?.takeIf { it.isNotBlank() }?.let { Text(it, color = colors.mutedForeground, fontSize = 13.sp, maxLines = 2) }
             competition.startAt?.let { Text("📅 ${com.dualmusic.core.ui.datetime.formatTz(it, "dd MMMM yyyy '•' HH:mm")}", color = colors.mutedForeground, fontSize = 12.sp) }
-            DMButton(
-                if (canWatch) s.watchLive else s.buyTicket,
-                style = if (isLive) DMButtonStyle.DESTRUCTIVE else DMButtonStyle.PRIMARY,
-                modifier = Modifier.fillMaxWidth(),
-            ) { onOpen(competition) }
-            if (competition.status != "ended" && competition.status != "cancelled" &&
-                competition.acceptsSponsors && !isDeadlinePassed(competition.sponsorSubmissionDeadline)
-            ) {
-                DMButton(s.requestSponsorBtn, style = DMButtonStyle.OUTLINE, modifier = Modifier.fillMaxWidth()) {
-                    onRequestSponsor("competition", competition.id)
+            if (isLive) {
+                // En direct : un seul bouton pleine largeur (parité web).
+                DMButton(
+                    if (canWatch) s.watchLive else s.buyTicket,
+                    style = DMButtonStyle.DESTRUCTIVE,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { onOpen(competition) }
+            } else {
+                // Avant le direct : "Voir les détails" (candidature, règlement, achat de ticket) et
+                // "Sponsoriser" côte à côte — parité web `Competitions.tsx` (bouton "Acheter un
+                // ticket" seul était trompeur pour un artiste qui veut d'abord candidater).
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                    DMButton(
+                        s.compViewDetails,
+                        style = DMButtonStyle.PRIMARY,
+                        modifier = Modifier.weight(1f),
+                    ) { onOpen(competition) }
+                    if (competition.status != "ended" && competition.status != "cancelled" &&
+                        competition.acceptsSponsors && !isDeadlinePassed(competition.sponsorSubmissionDeadline)
+                    ) {
+                        DMButton(s.requestSponsorBtn, style = DMButtonStyle.OUTLINE, modifier = Modifier.weight(1f)) {
+                            onRequestSponsor("competition", competition.id)
+                        }
+                    }
                 }
             }
         }
@@ -251,5 +320,183 @@ private fun CompetitionReplayCard(replay: ReplayVideo, onOpen: (ReplayVideo) -> 
             replay.recordedDate?.let { Text("📅 ${com.dualmusic.core.ui.datetime.formatTz(it, "dd MMMM yyyy")}", color = colors.mutedForeground, fontSize = 12.sp) }
             DMButton(s.watchLive, modifier = Modifier.fillMaxWidth()) { onOpen(replay) }
         }
+    }
+}
+
+/**
+ * Détail d'une compétition « à venir » (parité web `/competition/:id`) : dates de candidature et
+ * de direct, description, frais éventuels, puis actions selon l'éligibilité :
+ *  - « Candidater » (ouvre [CompetitionApplyDialog]) si artiste, pas déjà candidat, candidatures
+ *    ouvertes et pas encore fermées, compétition publiée.
+ *  - « Voir / Rejoindre » (ouvre la room — le [com.dualmusic.core.ui.components.ScheduledAccessGate]
+ *    s'y charge de bloquer l'accès si l'heure programmée n'est pas encore atteinte).
+ *
+ * Choix d'architecture : un dialogue (AlertDialog) plutôt qu'un écran dédié — la carte de la
+ * liste "À venir" l'ouvre à la place d'appeler `onOpen` directement, ce qui s'intègre sans
+ * toucher la navigation (`MainActivity`) ni casser le chemin direct des compétitions en direct.
+ */
+@Composable
+private fun CompetitionDetailsDialog(
+    competition: Competition,
+    perCreditEur: Double,
+    isArtist: Boolean,
+    hasApplied: Boolean,
+    applying: Boolean,
+    onApply: (pitch: String?, videoDemoUrl: String?, onResult: (Throwable?) -> Unit) -> Unit,
+    onJoin: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val s = LocalStrings.current
+    val colors = DualMusicTheme.colors
+    val currency = LocalCurrency.current
+    var applyOpen by remember { mutableStateOf(false) }
+
+    val deadlinePassed = isDeadlinePassed(competition.applicationDeadline)
+    val applicationsNotOpenYet = competition.applicationOpensAt != null && !isDeadlinePassed(competition.applicationOpensAt)
+    val canApply = isArtist && !hasApplied && !deadlinePassed && competition.status == "published"
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(competition.title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
+                    DetailBadgeChip(if (competition.mode == "onsite") "📍 ${s.compOnsite}" else "🌐 ${s.compOnline}")
+                    if (competition.viewerTicketPrice > 0) {
+                        DetailBadgeChip("🪙 ${formatCredits(competition.viewerTicketPrice)} ≈ ${currency.format(competition.viewerTicketPrice * perCreditEur)}")
+                    } else {
+                        DetailBadgeChip("🎁 ${s.duelFree}")
+                    }
+                }
+                competition.description?.takeIf { it.isNotBlank() }?.let { Text(it, color = colors.mutedForeground, fontSize = 13.sp) }
+
+                competition.applicationOpensAt?.let { InfoLine("📅 ${s.compApplicationOpensAt}", com.dualmusic.core.ui.datetime.formatTz(it, "dd MMMM yyyy HH:mm")) }
+                InfoLine("📅 ${s.compApplicationDeadline}", competition.applicationDeadline?.let { com.dualmusic.core.ui.datetime.formatTz(it, "dd MMMM yyyy HH:mm") })
+                InfoLine("📅 ${s.compStartAtLabel}", competition.startAt?.let { com.dualmusic.core.ui.datetime.formatTz(it, "dd MMMM yyyy HH:mm") })
+                InfoLine("📅 ${s.compEndAtLabel}", competition.endAt?.let { com.dualmusic.core.ui.datetime.formatTz(it, "dd MMMM yyyy HH:mm") })
+                InfoLine("👥 ${s.maxCandidatesLabel}", competition.maxCandidates?.toString())
+                InfoLine("🏆 ${s.compRewardDesc}", competition.rewardDescription)
+                if (competition.entryFeeRequired) {
+                    InfoLine("💰 ${s.compEntryFeeAmount}", formatCredits(competition.entryFeeAmount))
+                }
+
+                when {
+                    hasApplied -> Text("✅ ${s.compApplied}", color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    isArtist && deadlinePassed -> Text(s.compDeadlinePassed, color = colors.destructive, fontSize = 12.sp)
+                }
+
+                if (canApply) {
+                    DMButton(
+                        if (applicationsNotOpenYet) s.compApplicationsNotOpenYet else s.compApply,
+                        style = DMButtonStyle.SECONDARY,
+                        enabled = !applicationsNotOpenYet,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { applyOpen = true },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            DMButton(s.compViewJoin, onClick = onJoin)
+        },
+        dismissButton = {
+            DMButton(s.compCancel, style = DMButtonStyle.OUTLINE, onClick = onDismiss)
+        },
+    )
+
+    if (applyOpen) {
+        CompetitionApplyDialog(
+            applying = applying,
+            onSubmit = { pitch, videoDemoUrl, onResult -> onApply(pitch, videoDemoUrl, onResult) },
+            onDismiss = { applyOpen = false },
+            onApplied = { applyOpen = false; onDismiss() },
+        )
+    }
+}
+
+/**
+ * Popup « Déposer ma candidature » — auto-candidature de l'artiste (`POST /competitions/:id/apply`).
+ * Distincte de `AddCandidateDialog` (`ManagerCompetitionsScreen.kt`) qui est l'ajout MANUEL par le
+ * manager (`/candidates/manual`) : ici l'artiste candidate lui-même. Parité web
+ * `CompetitionApplyDialog` : pitch + lien vidéo démo, tous deux requis avant envoi.
+ */
+@Composable
+private fun CompetitionApplyDialog(
+    applying: Boolean,
+    onSubmit: (pitch: String?, videoDemoUrl: String?, onResult: (Throwable?) -> Unit) -> Unit,
+    onDismiss: () -> Unit,
+    onApplied: () -> Unit,
+) {
+    val s = LocalStrings.current
+    val colors = DualMusicTheme.colors
+    var pitch by remember { mutableStateOf("") }
+    var videoUrl by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    val canSubmit = pitch.isNotBlank() && videoUrl.isNotBlank() && !applying
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { if (!applying) onDismiss() },
+        title = { Text(s.compApplyTitle) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.sm)) {
+                androidx.compose.material3.OutlinedTextField(
+                    value = pitch,
+                    onValueChange = { pitch = it; error = null },
+                    label = { Text(s.compApplyPitch) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                androidx.compose.material3.OutlinedTextField(
+                    value = videoUrl,
+                    onValueChange = { videoUrl = it; error = null },
+                    label = { Text(s.compApplyVideo) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                error?.let { Text(it, color = colors.destructive, fontSize = 12.sp) }
+            }
+        },
+        confirmButton = {
+            DMButton(if (applying) s.sending else s.compApply, enabled = canSubmit) {
+                if (pitch.isBlank() || videoUrl.isBlank()) {
+                    error = s.compApplyRequiredFields
+                    return@DMButton
+                }
+                onSubmit(pitch.trim(), videoUrl.trim()) { err ->
+                    if (err == null) {
+                        onApplied()
+                    } else {
+                        val de = err as? com.dualmusic.domain.api.DomainError
+                        error = when (de?.details?.get("reason")) {
+                            "deadline_passed" -> s.compDeadlinePassed
+                            "already_applied" -> s.compAlreadyApplied
+                            else -> de?.message?.takeIf { it.isNotBlank() } ?: s.networkSlow
+                        }
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            DMButton(s.compCancel, style = DMButtonStyle.OUTLINE, enabled = !applying, onClick = onDismiss)
+        },
+    )
+}
+
+/** Pilule de badge compacte du dialogue de détail. */
+@Composable
+private fun DetailBadgeChip(label: String) {
+    val colors = DualMusicTheme.colors
+    Box(modifier = Modifier.background(colors.primary.copy(alpha = 0.15f), RoundedCornerShape(999.dp)).padding(horizontal = 10.dp, vertical = 4.dp)) {
+        Text(label, color = colors.foreground, fontSize = 11.sp)
+    }
+}
+
+/** Ligne d'information « label : valeur » du dialogue de détail (masquée si valeur nulle). */
+@Composable
+private fun InfoLine(label: String, value: String?) {
+    if (value.isNullOrBlank()) return
+    val colors = DualMusicTheme.colors
+    Row(horizontalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.xs)) {
+        Text(label, color = colors.mutedForeground, fontSize = 12.sp)
+        Text(value, color = colors.foreground, fontSize = 12.sp)
     }
 }

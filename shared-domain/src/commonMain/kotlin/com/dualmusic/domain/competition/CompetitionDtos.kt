@@ -23,10 +23,28 @@ data class CompetitionCandidate(
     @SerialName("jury_votes") val juryVotes: Int = 0,
     /** Profil d'affichage de l'artiste (hydraté serveur quand disponible). */
     val artist: DisplayProfile? = null,
+    /** Présentation libre fournie par l'artiste à la candidature (`POST .../apply`). */
+    val pitch: String? = null,
+    /** Lien vidéo de démonstration fourni à la candidature. */
+    @SerialName("video_demo_url") val videoDemoUrl: String? = null,
+    /** Motif du rejet saisi par le manager (présent seulement si `status == "rejected"`). */
+    @SerialName("rejection_reason") val rejectionReason: String? = null,
 ) {
     /** Score d'engagement affiché (votes + cadeaux + voix de jury). */
     val score: Double get() = totalVotes + totalGiftsCredits + juryVotes
 }
+
+/** Réponse de `DELETE /competitions/candidates/:id` — retrait d'un candidat (remboursement éventuel). */
+@Serializable
+data class RemoveCandidateResult(
+    val removed: Boolean = false,
+    /** Vrai si des frais d'inscription réellement débités ont été remboursés (souvent faux : voir doc endpoint). */
+    val refunded: Boolean = false,
+)
+
+/** Réponse de `GET /competitions/candidates/pending-count/mine` — badge menu manager. */
+@Serializable
+data class PendingCandidatesCount(val count: Int = 0)
 
 /** Compétition allégée jointe à une candidature (`GET /competitions/candidacies/mine`). */
 @Serializable
@@ -64,6 +82,18 @@ data class CompetitionVoteRequest(
 )
 
 /**
+ * Corps de `POST /competitions/:id/apply` — auto-candidature de l'artiste (distinct de l'ajout
+ * manuel par le manager, `/candidates/manual`). Champs camelCase envoyés tels quels : le backend
+ * (`applyToCompetition`) les remappe lui-même vers `pitch`/`video_demo_url`. Parité web
+ * `CompetitionApplyDialog` (`apply(id, { pitch, videoDemoUrl })`).
+ */
+@Serializable
+data class CompetitionApplyRequest(
+    val pitch: String? = null,
+    val videoDemoUrl: String? = null,
+)
+
+/**
  * Corps de `POST /competitions/:id/gifts` — cadeau à un candidat OU au manager.
  * Exactement un des deux destinataires doit être fourni (contrainte backend `xor`).
  */
@@ -98,6 +128,9 @@ object CompetitionEndpoints {
     /** Vote payant pour un candidat (débit atomique). */
     fun vote(id: String) = "/competitions/$id/vote"
 
+    /** Auto-candidature de l'artiste (distinct de l'ajout manuel `/candidates/manual`). */
+    fun apply(id: String) = "/competitions/$id/apply"
+
     /** Cadeau (candidat ou manager). */
     fun gifts(id: String) = "/competitions/$id/gifts"
 
@@ -106,4 +139,13 @@ object CompetitionEndpoints {
 
     /** Billet du caller pour cette compétition. */
     fun myTicket(id: String) = "/competitions/$id/my-ticket"
+
+    /** Valide/rejette une candidature (manager). */
+    fun reviewCandidate(candidateId: String) = "/competitions/candidates/$candidateId/review"
+
+    /** Retire un candidat (remboursement automatique si des frais avaient réellement été débités). */
+    fun removeCandidate(candidateId: String) = "/competitions/candidates/$candidateId"
+
+    /** Compte cumulé des candidats en attente, toutes compétitions du manager (badge menu). */
+    const val PENDING_CANDIDATES_MINE = "/competitions/candidates/pending-count/mine"
 }

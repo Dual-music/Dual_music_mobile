@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -42,6 +43,11 @@ data class BecomeRoleUiState(
     val managerPending: Boolean = false,
     val submitting: Boolean = false,
     val message: String? = null,
+    // Erreurs de validation par champ — affichées sous le champ concerné (bordure rouge),
+    // plutôt qu'un message générique en bas de formulaire qui ne dit pas quoi corriger.
+    val descriptionError: String? = null,
+    val bioError: String? = null,
+    val experienceError: String? = null,
 )
 
 /**
@@ -76,9 +82,10 @@ class BecomeRoleViewModel(private val repository: ProfileRepository) : ViewModel
     /** Soumet une candidature artiste (description ≥ 10 caractères) — mêmes champs que le web. */
     fun applyArtist(description: String, documentUrl: String, socialLinks: Map<String, String>) {
         if (description.trim().length < 10) {
-            _uiState.update { it.copy(message = com.dualmusic.core.ui.i18n.appStrings.artistDescMinError) }
+            _uiState.update { it.copy(descriptionError = com.dualmusic.core.ui.i18n.appStrings.artistDescMinError) }
             return
         }
+        _uiState.update { it.copy(descriptionError = null) }
         submit {
             repository.applyArtist(
                 ApplyArtistRequest(
@@ -92,10 +99,13 @@ class BecomeRoleViewModel(private val repository: ProfileRepository) : ViewModel
 
     /** Soumet une candidature manager (bio + expérience requises). */
     fun applyManager(bio: String, experience: String) {
-        if (bio.trim().length < 10 || experience.trim().length < 5) {
-            _uiState.update { it.copy(message = com.dualmusic.core.ui.i18n.appStrings.managerFieldsRequired) }
+        val bioError = if (bio.trim().length < 10) com.dualmusic.core.ui.i18n.appStrings.managerBioMinError else null
+        val experienceError = if (experience.trim().length < 5) com.dualmusic.core.ui.i18n.appStrings.managerExperienceMinError else null
+        if (bioError != null || experienceError != null) {
+            _uiState.update { it.copy(bioError = bioError, experienceError = experienceError) }
             return
         }
+        _uiState.update { it.copy(bioError = null, experienceError = null) }
         submit { repository.applyManager(ApplyManagerRequest(bio = bio.trim(), experience = experience.trim())) }
     }
 
@@ -141,6 +151,8 @@ fun BecomeArtistScreen(viewModel: BecomeRoleViewModel) {
                 value = description,
                 onValueChange = { description = it },
                 label = { Text(strings.artistProjectLabel) },
+                isError = ui.descriptionError != null,
+                supportingText = { ui.descriptionError?.let { Text(it, color = colors.destructive) } },
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
@@ -214,12 +226,16 @@ fun BecomeManagerScreen(viewModel: BecomeRoleViewModel) {
                 value = bio,
                 onValueChange = { bio = it },
                 label = { Text(strings.bio) },
+                isError = ui.bioError != null,
+                supportingText = { ui.bioError?.let { Text(it, color = colors.destructive) } },
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = experience,
                 onValueChange = { experience = it },
                 label = { Text(strings.managerExpLabel) },
+                isError = ui.experienceError != null,
+                supportingText = { ui.experienceError?.let { Text(it, color = colors.destructive) } },
                 modifier = Modifier.fillMaxWidth(),
             )
             DMButton(
@@ -240,6 +256,7 @@ private fun RoleColumn(content: @Composable androidx.compose.foundation.layout.C
             .fillMaxSize()
             .background(DualMusicTheme.gradients.hero)
             .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(DualMusicTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.lg),
         content = content,

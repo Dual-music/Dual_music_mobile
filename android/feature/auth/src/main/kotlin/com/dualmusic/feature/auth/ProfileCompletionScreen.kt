@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -25,6 +26,7 @@ import com.dualmusic.core.ui.components.DMButton
 import com.dualmusic.core.ui.components.DMButtonStyle
 import com.dualmusic.core.ui.components.DMCard
 import com.dualmusic.core.ui.components.DMLogo
+import com.dualmusic.core.ui.components.DatePickerField
 import com.dualmusic.core.ui.theme.DualMusicTheme
 
 /**
@@ -44,6 +46,7 @@ fun ProfileCompletionScreen(viewModel: AuthViewModel) {
             .fillMaxSize()
             .background(DualMusicTheme.gradients.hero)
             .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(DualMusicTheme.spacing.lg),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.lg),
@@ -58,10 +61,13 @@ fun ProfileCompletionScreen(viewModel: AuthViewModel) {
 
         DMCard {
             Column(verticalArrangement = Arrangement.spacedBy(DualMusicTheme.spacing.md)) {
+                val nameError = ui.error == com.dualmusic.core.ui.i18n.appStrings.errNameRequired
                 OutlinedTextField(
                     value = ui.fullName,
                     onValueChange = viewModel::onFullNameChange,
                     label = { Text("Nom complet *") },
+                    isError = nameError,
+                    supportingText = if (nameError) { { Text(ui.error ?: "", color = colors.destructive) } } else null,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -75,13 +81,11 @@ fun ProfileCompletionScreen(viewModel: AuthViewModel) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                // Date de naissance (AAAA-MM-JJ).
-                OutlinedTextField(
+                // Date de naissance — sélecteur (parité web), pas de saisie libre.
+                DatePickerField(
                     value = ui.birthDate,
                     onValueChange = viewModel::onBirthDateChange,
-                    label = { Text("Date de naissance") },
-                    placeholder = { Text("AAAA-MM-JJ") },
-                    singleLine = true,
+                    label = "Date de naissance",
                     modifier = Modifier.fillMaxWidth(),
                 )
                 // Sexe (pilules sélectionnables).
@@ -99,7 +103,8 @@ fun ProfileCompletionScreen(viewModel: AuthViewModel) {
                 }
 
                 ui.info?.let { Text(it, color = colors.primaryGlow) }
-                ui.error?.let { Text(it, color = colors.destructive) }
+                // Pas de doublon : l'erreur "nom requis" est déjà affichée sous le champ concerné.
+                if (!nameError) ui.error?.let { Text(it, color = colors.destructive) }
 
                 DMButton(
                     title = if (ui.isSubmitting) "Enregistrement…" else "Terminer",
